@@ -1,0 +1,215 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
+class BuyersMenu extends StatefulWidget {
+  final bool isDesktop;
+  final String userName;
+  final String userEmail;
+
+  const BuyersMenu({
+    super.key,
+    this.isDesktop = false,
+    required this.userName,
+    required this.userEmail,
+  });
+
+  @override
+  State<BuyersMenu> createState() => _BuyersMenuState();
+}
+
+class _BuyersMenuState extends State<BuyersMenu> {
+  File? _imageFile;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _imageFile = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      debugPrint("Error picking image: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: widget.isDesktop ? 280 : MediaQuery.of(context).size.width * 0.75,
+      height: double.infinity,
+      color: Colors.white,
+      child: Column(
+        children: [
+          _buildUserHeader(context),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              children: [
+                _buildMenuItem(Icons.home_outlined, "Home", onTap: () {}),
+                _buildMenuItem(
+                  Icons.person_outline,
+                  "My Profile",
+                  onTap: () {},
+                ),
+                _buildMenuItem(
+                  Icons.favorite_outline,
+                  "Favorites",
+                  onTap: () {},
+                ),
+                _buildMenuItem(
+                  Icons.chat_bubble_outline,
+                  "Messages",
+                  onTap: () {},
+                ),
+                const Divider(
+                  height: 40,
+                  thickness: 1,
+                  indent: 20,
+                  endIndent: 20,
+                ),
+                _buildMenuItem(
+                  Icons.settings_outlined,
+                  "Settings",
+                  onTap: () {},
+                ),
+                _buildMenuItem(
+                  Icons.logout_outlined,
+                  "Logout",
+                  color: Colors.red,
+                  onTap: () {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  },
+                ),
+              ],
+            ),
+          ),
+          _buildFooter(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 50, 20, 20),
+      color: const Color(0xFFFF6B35),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: _pickImage,
+            child: CircleAvatar(
+              radius: 30,
+              backgroundColor: Colors.white24,
+              backgroundImage: _imageFile != null
+                  ? FileImage(_imageFile!)
+                  : null,
+              child: _imageFile == null
+                  ? const Icon(Icons.person, color: Colors.white, size: 35)
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.userName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  widget.userEmail,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    "Buyer",
+                    style: TextStyle(color: Colors.white, fontSize: 10),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () {
+              if (Scaffold.of(context).isDrawerOpen) {
+                Navigator.pop(context);
+              }
+            },
+            icon: const Icon(Icons.close, color: Colors.white, size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // UPDATED: Text weight changed to w600 for a "little bold" look
+  Widget _buildMenuItem(
+    IconData icon,
+    String title, {
+    Color? color,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: color ?? Colors.black54, size: 22),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: color ?? Colors.black87,
+          fontSize: 14,
+          fontWeight: FontWeight.w600, // Increased from w500
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+
+  // UPDATED: Added bold weight to the version text
+  Widget _buildFooter() {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        children: [
+          Image.asset(
+            'assets/images/logo.png',
+            height: 30,
+            errorBuilder: (context, error, stackTrace) =>
+                const Icon(Icons.hub_rounded, color: Colors.orange, size: 30),
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            "Version 1.1",
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 10,
+              fontWeight: FontWeight.bold, // Added bold
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

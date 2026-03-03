@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/account_selection_screen.dart';
+import 'buyer/screens/account_selection_screen.dart';
 
 void main() {
   runApp(const SbraiSolutionsApp());
