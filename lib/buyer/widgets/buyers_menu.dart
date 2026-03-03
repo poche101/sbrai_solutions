@@ -1,6 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:sbrai_solutions/buyer/screens/profile_screen.dart';
+import 'package:sbrai_solutions/buyer/screens/favorite_screen.dart';
+// Ensure this import path matches your actual file location
+import 'package:sbrai_solutions/buyer/screens/message_screen.dart';
 
 class BuyersMenu extends StatefulWidget {
   final bool isDesktop;
@@ -56,17 +60,49 @@ class _BuyersMenuState extends State<BuyersMenu> {
                 _buildMenuItem(
                   Icons.person_outline,
                   "My Profile",
-                  onTap: () {},
+                  onTap: () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ProfileScreen(),
+                      ),
+                    );
+                  },
                 ),
                 _buildMenuItem(
                   Icons.favorite_outline,
                   "Favorites",
-                  onTap: () {},
+                  onTap: () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const FavoriteScreen(),
+                      ),
+                    );
+                  },
                 ),
                 _buildMenuItem(
                   Icons.chat_bubble_outline,
                   "Messages",
-                  onTap: () {},
+                  onTap: () {
+                    // 1. Close the drawer/menu
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                    // 2. Navigate to the Messages Screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const MessageScreen(),
+                      ),
+                    );
+                  },
                 ),
                 const Divider(
                   height: 40,
@@ -166,7 +202,6 @@ class _BuyersMenuState extends State<BuyersMenu> {
     );
   }
 
-  // UPDATED: Text weight changed to w600 for a "little bold" look
   Widget _buildMenuItem(
     IconData icon,
     String title, {
@@ -180,14 +215,13 @@ class _BuyersMenuState extends State<BuyersMenu> {
         style: TextStyle(
           color: color ?? Colors.black87,
           fontSize: 14,
-          fontWeight: FontWeight.w600, // Increased from w500
+          fontWeight: FontWeight.w600,
         ),
       ),
       onTap: onTap,
     );
   }
 
-  // UPDATED: Added bold weight to the version text
   Widget _buildFooter() {
     return Padding(
       padding: const EdgeInsets.all(20.0),
@@ -205,7 +239,7 @@ class _BuyersMenuState extends State<BuyersMenu> {
             style: TextStyle(
               color: Colors.grey,
               fontSize: 10,
-              fontWeight: FontWeight.bold, // Added bold
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
