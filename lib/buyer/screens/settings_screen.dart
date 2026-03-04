@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/models/settings_model.dart';
+import 'package:sbrai_solutions/buyer/screens/buyers_terms_page.dart';
+import 'package:sbrai_solutions/buyer/screens/privacy_policy_page.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -42,6 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSection(
               title: 'Notifications',
               icon: Icons.notifications_none_outlined,
+              iconColor: Colors.orange,
               description: 'Manage your notification preferences',
               children: [
                 _buildSwitchTile(
@@ -114,16 +117,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Legal Section
             _buildSection(
               children: [
+                // 1. Terms & Conditions Tile
                 _buildActionTile(
                   'Terms & Conditions',
                   Icons.description_outlined,
-                  () {},
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const BuyersTermsPage(),
+                      ),
+                    );
+                  },
                 ),
-                _buildActionTile('Privacy Policy', Icons.lock_outline, () {}),
-                _buildActionTile('Help & Support', Icons.help_outline, () {}),
+
+                // 2. Privacy Policy Tile
+                _buildActionTile('Privacy Policy', Icons.lock_outline, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const PrivacyPolicyPage(),
+                    ),
+                  );
+                }),
+
+                // 3. Help & Support Tile
+                _buildActionTile('Help & Support', Icons.help_outline, () {
+                  // Logic for support (e.g., email or chat) goes here
+                }),
               ],
             ),
-
             // Danger Zone
             _buildSection(
               title: 'Danger Zone',

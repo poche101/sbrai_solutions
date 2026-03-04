@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'buyer/screens/account_selection_screen.dart';
-import 'package:sbrai_solutions/buyer/screens/favorite_screen.dart'; // Ensure this matches your file path
+import 'package:sbrai_solutions/buyer/screens/favorite_screen.dart';
+import 'package:sbrai_solutions/buyer/screens/buyers_terms_page.dart'; // Import your new terms page
 
 void main() {
   runApp(const SbraiSolutionsApp());
@@ -16,21 +17,31 @@ class SbraiSolutionsApp extends StatelessWidget {
       title: 'Sbrai Solutions',
       theme: ThemeData(
         useMaterial3: true,
-        // Using the specific orange from your screenshot button
+        // Using the specific orange branding for Sbrai Solutions
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFFF6B35),
           primary: const Color(0xFFFF7043),
         ),
-        // Ensuring scaffolds default to the clean white background
+        // Clean white background across the app
         scaffoldBackgroundColor: Colors.white,
+        // Optional: Ensure AppBar looks consistent globally
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          iconTheme: IconThemeData(color: Colors.black),
+        ),
       ),
-      // Set this to FavoriteScreen() if you want to see the favorites page immediately on launch
+
+      // Starting point of the application
       home: const AccountSelectionScreen(),
 
-      // Adding routes so you can navigate using Navigator.pushNamed(context, '/favorites')
+      // Centralized route management
       routes: {
         '/favorites': (context) => const FavoriteScreen(),
         '/account-selection': (context) => const AccountSelectionScreen(),
+        '/terms': (context) =>
+            const BuyersTermsPage(), // Named route for Terms & Conditions
       },
     );
   }
