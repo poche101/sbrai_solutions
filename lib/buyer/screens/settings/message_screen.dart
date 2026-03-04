@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/models/message_model.dart';
-import 'package:sbrai_solutions/buyer/screens/chat_screen.dart';
+import 'package:sbrai_solutions/buyer/screens/settings/chat_screen.dart';
 
 class MessageScreen extends StatefulWidget {
   // Pass the list of messages into the screen to make it fully dynamic

@@ -2,10 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sbrai_solutions/buyer/screens/profile_screen.dart';
-import 'package:sbrai_solutions/buyer/screens/favorite_screen.dart';
-import 'package:sbrai_solutions/buyer/screens/message_screen.dart';
+import 'package:sbrai_solutions/buyer/screens/settings/favorite_screen.dart';
+import 'package:sbrai_solutions/buyer/screens/settings/message_screen.dart';
 // New Import for Settings Screen
-import 'package:sbrai_solutions/buyer/screens/settings_screen.dart';
+import 'package:sbrai_solutions/buyer/screens/settings/settings_screen.dart';
 
 class BuyersMenu extends StatefulWidget {
   final bool isDesktop;

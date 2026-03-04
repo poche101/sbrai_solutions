@@ -1,8 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/models/settings_model.dart';
-import 'package:sbrai_solutions/buyer/screens/buyers_terms_page.dart';
-import 'package:sbrai_solutions/buyer/screens/privacy_policy_page.dart';
+import 'package:sbrai_solutions/buyer/screens/settings/buyers_terms_page.dart';
+import 'package:sbrai_solutions/buyer/screens/settings/privacy_policy_page.dart';
+import 'package:sbrai_solutions/buyer/screens/settings/help_support_page.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -143,7 +144,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 // 3. Help & Support Tile
                 _buildActionTile('Help & Support', Icons.help_outline, () {
-                  // Logic for support (e.g., email or chat) goes here
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const HelpSupportPage(),
+                    ),
+                  );
                 }),
               ],
             ),

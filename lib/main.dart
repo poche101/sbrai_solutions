@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'buyer/screens/account_selection_screen.dart';
-import 'package:sbrai_solutions/buyer/screens/favorite_screen.dart';
-import 'package:sbrai_solutions/buyer/screens/buyers_terms_page.dart'; // Import your new terms page
+import 'package:sbrai_solutions/buyer/screens/settings/favorite_screen.dart';
+import 'package:sbrai_solutions/buyer/screens/settings/buyers_terms_page.dart'; // Import your new terms page
 
 void main() {
   runApp(const SbraiSolutionsApp());
