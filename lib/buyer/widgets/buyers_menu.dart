@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sbrai_solutions/buyer/screens/profile_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/favorite_screen.dart';
-// Ensure this import path matches your actual file location
 import 'package:sbrai_solutions/buyer/screens/message_screen.dart';
+// New Import for Settings Screen
+import 'package:sbrai_solutions/buyer/screens/settings_screen.dart';
 
 class BuyersMenu extends StatefulWidget {
   final bool isDesktop;
@@ -91,11 +92,9 @@ class _BuyersMenuState extends State<BuyersMenu> {
                   Icons.chat_bubble_outline,
                   "Messages",
                   onTap: () {
-                    // 1. Close the drawer/menu
                     if (Navigator.canPop(context)) {
                       Navigator.pop(context);
                     }
-                    // 2. Navigate to the Messages Screen
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -113,7 +112,19 @@ class _BuyersMenuState extends State<BuyersMenu> {
                 _buildMenuItem(
                   Icons.settings_outlined,
                   "Settings",
-                  onTap: () {},
+                  onTap: () {
+                    // 1. Close the drawer/menu
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                    // 2. Navigate to the Settings Screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsScreen(),
+                      ),
+                    );
+                  },
                 ),
                 _buildMenuItem(
                   Icons.logout_outlined,
