@@ -9,8 +9,8 @@ class HomeScreen extends StatelessWidget {
     final bool isDesktop = MediaQuery.of(context).size.width > 900;
 
     // These values could eventually come from your Login logic
-    const String currentUserName = "Emmanuel Igwe";
-    const String currentUserEmail = "mikefavour07@gmail.com";
+    const String currentUserName = "";
+    const String currentUserEmail = "";
 
     return Scaffold(
       // Mobile Drawer - PASSING REQUIRED ARGUMENTS HERE
@@ -48,7 +48,7 @@ class HomeScreen extends StatelessWidget {
           const Expanded(
             child: Center(
               child: Text(
-                "Welcome to the Dashboard",
+                "Welcome to the Sbrai",
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
             ),
