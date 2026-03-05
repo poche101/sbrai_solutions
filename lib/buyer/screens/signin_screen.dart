@@ -63,6 +63,39 @@ class _SigninScreenState extends State<SigninScreen> {
                 ),
                 const SizedBox(height: 32),
 
+                // Social Logins
+                _buildSocialButton(
+                  "Continue with Google",
+                  'assets/icons/google.png',
+                ),
+                const SizedBox(height: 12),
+                _buildSocialButton(
+                  "Continue with Facebook",
+                  'assets/icons/facebook.png',
+                ),
+
+                const SizedBox(height: 24),
+
+                // OR Divider
+                const Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.black12)),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        "OR SIGN IN WITH EMAIL",
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.black12)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
                 // Email Field
                 _buildInputLabel("Email Address"),
                 TextField(decoration: _inputDecoration("Email Address")),
@@ -82,14 +115,12 @@ class _SigninScreenState extends State<SigninScreen> {
                   height: 52,
                   child: ElevatedButton(
                     onPressed: () {
-                      // Navigates to HomeScreen and clears the navigation history
                       Navigator.pushAndRemoveUntil(
                         context,
                         MaterialPageRoute(
                           builder: (context) => const HomeScreen(),
                         ),
-                        (route) =>
-                            false, // This line ensures the user can't go back to Login
+                        (route) => false,
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -135,10 +166,65 @@ class _SigninScreenState extends State<SigninScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 12),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // Social Button Helper
+  Widget _buildSocialButton(String text, String assetPath) {
+    // Determine brand colors based on the button text
+    final bool isGoogle = text.contains("Google");
+    final Color brandColor = isGoogle
+        ? const Color.fromARGB(255, 154, 5, 45) // Google Blue
+        : const Color(0xFF1877F2); // Facebook Blue
+
+    return Container(
+      width: double.infinity,
+      height: 50,
+      decoration: BoxDecoration(
+        // We keep a light border for Google (as per their brand guidelines for white buttons)
+        // But we can make the Facebook border match its brand color slightly
+        border: Border.all(
+          color: isGoogle ? Colors.black12 : brandColor.withOpacity(0.2),
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: InkWell(
+        onTap: () {
+          // Add Social Login Logic here
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              assetPath,
+              height: 22,
+              width: 22,
+              // The errorBuilder now uses the specific brand colors
+              errorBuilder: (context, error, stackTrace) => Icon(
+                isGoogle ? Icons.g_mobiledata : Icons.facebook,
+                color: brandColor,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              text,
+              style: TextStyle(
+                // Google usually uses a dark grey/black text
+                // Facebook can use its own brand color for the text if you want it to pop
+                color: isGoogle ? Colors.black87 : brandColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ],
         ),
       ),
     );

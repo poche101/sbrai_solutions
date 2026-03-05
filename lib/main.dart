@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'buyer/screens/account_selection_screen.dart';
+import 'account_selection_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/favorite_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/buyers_terms_page.dart'; // Import your new terms page
 

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-// Important: Make sure this path matches your folder structure!
-import '../widgets/selection_card.dart';
-import 'signup_page.dart';
+import 'buyer/widgets/selection_card.dart';
+import 'buyer/screens/signup_page.dart';
+// Ensure this path is correct for your project
+import 'vendor/register_screen.dart';
 
 class AccountSelectionScreen extends StatelessWidget {
   const AccountSelectionScreen({super.key});
@@ -51,7 +52,7 @@ class AccountSelectionScreen extends StatelessWidget {
                   children: [
                     _buildBuyerCard(context),
                     const SizedBox(width: 24),
-                    _buildVendorCard(),
+                    _buildVendorCard(context), // Pass context here
                   ],
                 )
               else
@@ -59,7 +60,7 @@ class AccountSelectionScreen extends StatelessWidget {
                   children: [
                     _buildBuyerCard(context),
                     const SizedBox(height: 20),
-                    _buildVendorCard(),
+                    _buildVendorCard(context), // Pass context here
                   ],
                 ),
 
@@ -69,7 +70,9 @@ class AccountSelectionScreen extends StatelessWidget {
                 style: TextStyle(color: Colors.grey),
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () {
+                  // You can add logic to go to a login page here later
+                },
                 child: const Text(
                   "Sign In to Your Account",
                   style: TextStyle(
@@ -91,7 +94,6 @@ class AccountSelectionScreen extends StatelessWidget {
     );
   }
 
-  // Add 'BuildContext context' as a parameter
   Widget _buildBuyerCard(BuildContext context) {
     return SelectionCard(
       title: "I'm a Buyer",
@@ -116,7 +118,8 @@ class AccountSelectionScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildVendorCard() {
+  // UPDATED: Added BuildContext context
+  Widget _buildVendorCard(BuildContext context) {
     return SelectionCard(
       title: "I'm a Vendor",
       description: "List products, offer services, and grow your business",
@@ -131,7 +134,13 @@ class AccountSelectionScreen extends StatelessWidget {
         "Get verified badge",
         "Manage customer chats",
       ],
-      onPressed: () {},
+      onPressed: () {
+        // NAVIGATES TO THE REGISTER SCREEN
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const RegisterScreen()),
+        );
+      },
     );
   }
 }

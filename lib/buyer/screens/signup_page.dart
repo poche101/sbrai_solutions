@@ -9,8 +9,6 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
-  // Controllers to match the pre-filled data in your screenshot
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -31,10 +29,15 @@ class _SignupPageState extends State<SignupPage> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
           child: Container(
-            constraints: const BoxConstraints(
-              maxWidth: 500,
-            ), // Better for Desktop
+            constraints: const BoxConstraints(maxWidth: 500),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade100),
+            ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 // Circular Icon Header
                 Container(
@@ -61,6 +64,45 @@ class _SignupPageState extends State<SignupPage> {
                 ),
                 const SizedBox(height: 32),
 
+                // Social Logins
+                _buildSocialButton(
+                  "Continue with Google",
+                  'assets/icons/google.png',
+                  () {
+                    // TODO: Implement Google Sign Up
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildSocialButton(
+                  "Continue with Facebook",
+                  'assets/icons/facebook.png',
+                  () {
+                    // TODO: Implement Facebook Sign Up
+                  },
+                ),
+
+                const SizedBox(height: 24),
+
+                // OR Divider
+                const Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.black12)),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        "OR SIGN UP WITH EMAIL",
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.black12)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
                 // Form Fields
                 _buildField("Full Name", "Full Name", Icons.person_outline),
                 _buildField("Email Address", "Email", Icons.email_outlined),
@@ -76,13 +118,13 @@ class _SignupPageState extends State<SignupPage> {
                 ),
                 _buildField(
                   "Password",
-                  "",
+                  "Enter Password",
                   Icons.lock_outline,
                   isPassword: true,
                 ),
                 _buildField(
                   "Confirm Password",
-                  "",
+                  "Confirm Password",
                   Icons.lock_outline,
                   isPassword: true,
                 ),
@@ -123,7 +165,6 @@ class _SignupPageState extends State<SignupPage> {
                     ),
                     GestureDetector(
                       onTap: () {
-                        // This takes you to the Sign In screen specifically
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -144,6 +185,53 @@ class _SignupPageState extends State<SignupPage> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // Social Button Helper
+  Widget _buildSocialButton(String text, String assetPath, VoidCallback onTap) {
+    final bool isGoogle = text.contains("Google");
+    final Color brandColor = isGoogle
+        ? const Color.fromARGB(255, 201, 4, 24)
+        : const Color(0xFF1877F2);
+
+    return Container(
+      width: double.infinity,
+      height: 50,
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: isGoogle ? Colors.black12 : brandColor.withOpacity(0.2),
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              assetPath,
+              height: 22,
+              width: 22,
+              errorBuilder: (context, error, stackTrace) => Icon(
+                isGoogle ? Icons.g_mobiledata : Icons.facebook,
+                color: brandColor,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              text,
+              style: const TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -173,9 +261,7 @@ class _SignupPageState extends State<SignupPage> {
               hintText: hint,
               prefixIcon: Icon(icon, color: Colors.grey, size: 20),
               filled: true,
-              fillColor: const Color(
-                0xFFEDF2F9,
-              ), // Light blueish-grey from screenshot
+              fillColor: const Color(0xFFEDF2F9),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
