@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/vendor/register_screen.dart';
+import 'package:sbrai_solutions/vendor/home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -145,7 +146,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     if (_formKey.currentState!.validate()) {
-                      // Login Logic Here
+                      // Logic to transition to the home page
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const HomeScreen(),
+                        ),
+                      );
                     }
                   },
                   style: ElevatedButton.styleFrom(

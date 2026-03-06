@@ -16,7 +16,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _businessNameController = TextEditingController();
-  final _ninController = TextEditingController(); // NIN Controller
+  final _ninController = TextEditingController();
   final _addressController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -117,7 +117,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               _buildLabel("Business Name"),
               _buildTextField(_businessNameController, "Enter business name"),
 
-              // NIN FIELD (Required)
               _buildLabel("NIN (National Identification Number)"),
               _buildTextField(
                 _ninController,
@@ -165,6 +164,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               const SizedBox(height: 30),
 
+              // Create Account Button
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -192,7 +192,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
+
+              // --- Social Login Section ---
+              Row(
+                children: const [
+                  Expanded(child: Divider(color: Colors.grey, thickness: 0.5)),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      "Or sign up with",
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                  ),
+                  Expanded(child: Divider(color: Colors.grey, thickness: 0.5)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _socialButton(Icons.g_mobiledata, Colors.red, () {
+                    // Google Signup
+                  }),
+                  const SizedBox(width: 20),
+                  _socialButton(Icons.facebook, Colors.blueAccent, () {
+                    // Facebook Signup
+                  }),
+                ],
+              ),
+
+              // -----------------------------
+              const SizedBox(height: 24),
+
               // Sign In Link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -203,7 +235,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   GestureDetector(
                     onTap: () {
-                      // Navigates to the Login Screen
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -225,6 +256,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // Social Button Helper Widget
+  Widget _socialButton(IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: color, size: 30),
       ),
     );
   }
@@ -267,9 +314,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         decoration: InputDecoration(
           hintText: hint,
           filled: true,
-          fillColor: const Color(
-            0xFFE8F0FE,
-          ), // Consistent blue tint for all required fields
+          fillColor: const Color(0xFFE8F0FE),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 16,
