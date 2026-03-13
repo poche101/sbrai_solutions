@@ -66,5 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+<string>This app requires access to your photo library to let you upload images for your ad listings.</string>
+<key>NSCameraUsageDescription</key>
+<string>This app requires access to your camera so you can take photos of your products directly.</string>
+<key>NSMicrophoneUsageDescription</key>
+<string>This app requires access to your microphone if you decide to record video descriptions for your ads.</string>
 </dict>
 </plist>

@@ -2,28 +2,45 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
-class ProductsScreen extends StatefulWidget {
-  const ProductsScreen({super.key});
+// Ensure this import points to your actual Vendor Home Screen file
+// import 'vendor/vendor_home_screen.dart';
+
+class PostAdScreen extends StatefulWidget {
+  const PostAdScreen({super.key});
 
   @override
-  State<ProductsScreen> createState() => _ProductsScreenState();
+  State<PostAdScreen> createState() => _PostAdScreenState();
 }
 
-class _ProductsScreenState extends State<ProductsScreen> {
+class _PostAdScreenState extends State<PostAdScreen> {
   final PageController _pageController = PageController();
   final ImagePicker _picker = ImagePicker();
   int _currentStep = 1;
+  bool _isPublishing = false;
 
-  // Form State
-  String _selectedType = 'Product';
+  // --- FORM STATE ---
+  String _selectedType = 'Property';
+  String _propertyStatus = 'For Rent';
   String? _selectedCategory;
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
-
-  // Image State
   List<XFile> _selectedImages = [];
 
-  final List<String> _categories = [
+  // --- CONTROLLERS ---
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _bedroomController = TextEditingController();
+  final TextEditingController _sqftController = TextEditingController();
+  final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _priceUnitController = TextEditingController(
+    text: 'per year',
+  );
+  final TextEditingController _locationController = TextEditingController();
+
+  final List<String> _propertyCategories = [
+    'Apartment',
+    'House',
+    'Commercial',
+    'Land',
+  ];
+  final List<String> _productCategories = [
     'Sharp Sand',
     'Granite',
     'Blocks',
@@ -33,508 +50,110 @@ class _ProductsScreenState extends State<ProductsScreen> {
     'Furniture',
     'Scaffolding',
   ];
+  final List<String> _serviceCategories = [
+    'Logistics',
+    'Borehole',
+    'Cleaning',
+    'Fumigation',
+  ];
 
-  // --- LOGIC ---
-
-  void _showCustomToast(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: Colors.white,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 4,
-        duration: const Duration(seconds: 3),
-        content: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(2),
-              decoration: const BoxDecoration(
-                color: Colors.black,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.check, color: Colors.white, size: 16),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _titleController.addListener(_updateState);
+    _priceController.addListener(_updateState);
+    _locationController.addListener(_updateState);
+    _bedroomController.addListener(_updateState);
+    _sqftController.addListener(_updateState);
   }
 
-  Future<void> _pickImages() async {
-    if (_selectedImages.length >= 5) {
-      _showCustomToast('Maximum 5 photos allowed');
-      return;
-    }
-
-    final List<XFile> images = await _picker.pickMultiImage();
-
-    if (images.isNotEmpty) {
-      setState(() {
-        _selectedImages.addAll(images);
-        if (_selectedImages.length > 5) {
-          _selectedImages = _selectedImages.sublist(0, 5);
-        }
-      });
-      _showCustomToast('Photos added successfully');
-    }
-  }
-
-  void _removeImage(int index) {
-    setState(() {
-      _selectedImages.removeAt(index);
-    });
-    _showCustomToast('Photo removed');
-  }
-
-  void _nextStep() {
-    if (_currentStep < 3) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-      setState(() => _currentStep++);
-    }
-  }
-
-  void _previousStep() {
-    if (_currentStep > 1) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-      setState(() => _currentStep--);
-    }
-  }
-
-  void _handlePublish() {
-    _showCustomToast('Ad Published Successfully!');
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted) Navigator.pop(context);
-    });
+  void _updateState() {
+    if (mounted) setState(() {});
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFBFBFB),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
+  void dispose() {
+    _pageController.dispose();
+    _titleController.dispose();
+    _bedroomController.dispose();
+    _sqftController.dispose();
+    _priceController.dispose();
+    _priceUnitController.dispose();
+    _locationController.dispose();
+    super.dispose();
+  }
+
+  bool _isStepValid() {
+    if (_currentStep == 1) return _selectedCategory != null;
+    if (_currentStep == 2) return _selectedImages.isNotEmpty;
+
+    bool commonFields =
+        _titleController.text.trim().isNotEmpty &&
+        _priceController.text.trim().isNotEmpty &&
+        _locationController.text.trim().isNotEmpty;
+
+    if (_selectedType == 'Property') {
+      return commonFields &&
+          _bedroomController.text.trim().isNotEmpty &&
+          _sqftController.text.trim().isNotEmpty;
+    }
+    return commonFields;
+  }
+
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> images = await _picker.pickMultiImage();
+      if (images.isNotEmpty) {
+        setState(() {
+          int spaceLeft = 5 - _selectedImages.length;
+          if (spaceLeft > 0) {
+            _selectedImages.addAll(images.take(spaceLeft));
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error picking images: $e");
+    }
+  }
+
+  void _showCustomToast() {
+    final scaffold = ScaffoldMessenger.of(context);
+    scaffold.showSnackBar(
+      SnackBar(
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Post an Ad',
-              style: TextStyle(
-                color: Colors.black87,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              'Step $_currentStep of 3',
-              style: const TextStyle(color: Colors.black45, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          const SizedBox(height: 20),
-          _buildStepIndicator(),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [_buildStep1(), _buildStep2(), _buildStep3()],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- STEP 1: CATEGORY ---
-  Widget _buildStep1() {
-    bool isCompleted = _selectedCategory != null;
-    return _buildStepCard(
-      title: 'Select Category',
-      children: [
-        const Text(
-          'Listing Type',
-          style: TextStyle(fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            _typeButton('Product', null),
-            const SizedBox(width: 8),
-            _typeButton('Service', null),
-            const SizedBox(width: 8),
-            _typeButton('Property', Icons.home_outlined),
-          ],
-        ),
-        const SizedBox(height: 25),
-        const Text('Category', style: TextStyle(fontWeight: FontWeight.w500)),
-        const SizedBox(height: 10),
-        DropdownButtonFormField<String>(
-          value: _selectedCategory,
-          isExpanded: true,
-          menuMaxHeight: 300,
-          dropdownColor: Colors.white,
-          borderRadius: const BorderRadius.only(
-            bottomLeft: Radius.circular(12),
-            bottomRight: Radius.circular(12),
-          ),
-          decoration: _inputDecoration('Choose a category').copyWith(
-            fillColor: Colors.white,
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-          ),
-          items: _categories
-              .map((val) => DropdownMenuItem(value: val, child: Text(val)))
-              .toList(),
-          onChanged: (val) => setState(() => _selectedCategory = val),
-        ),
-        const SizedBox(height: 40),
-        SizedBox(
-          width: double.infinity,
-          child: _actionButton(
-            _nextStep,
-            'Next: Upload Media',
-            isPrimary: isCompleted,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // --- STEP 2: MEDIA ---
-  Widget _buildStep2() {
-    bool isCompleted = _selectedImages.isNotEmpty;
-    return _buildStepCard(
-      title: 'Upload Photos',
-      children: [
-        const Text(
-          'Add up to 5 photos (first photo will be the cover)',
-          style: TextStyle(color: Colors.black54, fontSize: 13),
-        ),
-        const SizedBox(height: 20),
-        SizedBox(
-          height: 100,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _selectedImages.length + 1,
-            itemBuilder: (context, index) {
-              if (index == _selectedImages.length) {
-                return _buildAddPhotoButton();
-              }
-              return _buildImagePreview(index);
-            },
-          ),
-        ),
-        const SizedBox(height: 40),
-        Row(
-          children: [
-            Expanded(
-              child: _actionButton(
-                _previousStep,
-                'Back',
-                isPrimary: false,
-                isOutline: true,
-              ),
-            ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: _actionButton(
-                _nextStep,
-                'Next: Details',
-                isPrimary: isCompleted,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAddPhotoButton() {
-    return GestureDetector(
-      onTap: _pickImages,
-      child: Container(
-        width: 100,
-        margin: const EdgeInsets.only(right: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF5F6F8),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.grey.shade300,
-            style: BorderStyle.solid,
-          ),
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_a_photo_outlined, color: Colors.grey),
-            SizedBox(height: 4),
-            Text('Add', style: TextStyle(color: Colors.grey, fontSize: 12)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImagePreview(int index) {
-    return Stack(
-      children: [
-        Container(
-          width: 100,
-          margin: const EdgeInsets.only(right: 10),
+        backgroundColor: Colors.transparent,
+        duration: const Duration(seconds: 3),
+        content: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
+            color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            image: DecorationImage(
-              image: FileImage(File(_selectedImages[index].path)),
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-        Positioned(
-          top: 5,
-          right: 15,
-          child: GestureDetector(
-            onTap: () => _removeImage(index),
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: const BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-              child: const Icon(Icons.close, color: Colors.white, size: 16),
-            ),
-          ),
-        ),
-        if (index == 0)
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 10,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(12),
-                  bottomRight: Radius.circular(12),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: const Text(
-                'Cover',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 10),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  // --- STEP 3: DETAILS ---
-  Widget _buildStep3() {
-    bool isCompleted =
-        _titleController.text.isNotEmpty && _priceController.text.isNotEmpty;
-    return _buildStepCard(
-      title: 'Product Details',
-      children: [
-        _fieldLabel('Title'),
-        TextField(
-          controller: _titleController,
-          onChanged: (_) => setState(() {}),
-          decoration: _inputDecoration('e.g., Premium Sharp Sand'),
-        ),
-        const SizedBox(height: 20),
-        _fieldLabel('Description'),
-        TextField(
-          maxLines: 4,
-          decoration: _inputDecoration('Describe your product...'),
-        ),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _fieldLabel('Price (₦)'),
-                  TextField(
-                    controller: _priceController,
-                    onChanged: (_) => setState(() {}),
-                    keyboardType: TextInputType.number,
-                    decoration: _inputDecoration('75000'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _fieldLabel('Price Unit'),
-                  TextField(decoration: _inputDecoration('per truck')),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        _fieldLabel('Location'),
-        TextField(decoration: _inputDecoration('e.g., Ikeja, Lagos')),
-        const SizedBox(height: 30),
-        Row(
-          children: [
-            Flexible(
-              flex: 2,
-              child: SizedBox(
-                width: double.infinity,
-                child: _actionButton(
-                  _previousStep,
-                  'Back',
-                  isPrimary: false,
-                  isOutline: true,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Flexible(
-              flex: 8,
-              child: SizedBox(
-                width: double.infinity,
-                child: _actionButton(
-                  _handlePublish,
-                  'Publish Ad',
-                  isPrimary: isCompleted,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // --- HELPERS ---
-
-  Widget _buildStepCard({
-    required String title,
-    required List<Widget> children,
-  }) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade100),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 24),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _actionButton(
-    VoidCallback onTap,
-    String text, {
-    bool isPrimary = true,
-    bool isOutline = false,
-  }) {
-    Color bgColor = isPrimary
-        ? const Color(0xFFFF7043)
-        : const Color(0xFFFFAB91);
-    return ElevatedButton(
-      onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isOutline ? Colors.white : bgColor,
-        foregroundColor: isOutline ? Colors.black87 : Colors.white,
-        elevation: 0,
-        side: isOutline
-            ? BorderSide(color: Colors.grey.shade300)
-            : BorderSide.none,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-      ),
-    );
-  }
-
-  Widget _typeButton(String label, IconData? icon) {
-    bool isSelected = _selectedType == label;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => _selectedType = label),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFFF7043) : Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isSelected ? Colors.transparent : Colors.grey.shade300,
-            ),
+            ],
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null)
-                Icon(
-                  icon,
-                  size: 16,
-                  color: isSelected ? Colors.white : Colors.black54,
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  shape: BoxShape.circle,
                 ),
-              if (icon != null) const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.black87,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                child: const Icon(Icons.check, color: Colors.white, size: 14),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Ad Published Successfully!',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -544,78 +163,513 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: Colors.black26, fontSize: 14),
-      filled: true,
-      fillColor: const Color(0xFFF5F6F8),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide.none,
+  void _handlePublish() async {
+    setState(() => _isPublishing = true);
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+    setState(() => _isPublishing = false);
+    _showCustomToast();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (context) =>
+            const Scaffold(body: Center(child: Text("Vendor Home Screen"))),
       ),
+      (route) => false,
     );
   }
 
-  Widget _fieldLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
-          color: Colors.black87,
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF9FAFB),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Post an Ad',
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              'Step $_currentStep of 3',
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ],
         ),
       ),
+      body: _isPublishing
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFFF7D54)),
+            )
+          : Column(
+              children: [
+                const SizedBox(height: 20),
+                _buildStepIndicator(),
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [_buildStep1(), _buildStep2(), _buildStep3()],
+                  ),
+                ),
+              ],
+            ),
     );
   }
 
   Widget _buildStepIndicator() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 60),
+      child: Row(
+        children: List.generate(5, (index) {
+          if (index % 2 == 0) {
+            int stepNum = (index ~/ 2) + 1;
+            bool active = _currentStep >= stepNum;
+            return Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: active
+                    ? const Color(0xFFFF7D54)
+                    : const Color(0xFFE5E7EB),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  '$stepNum',
+                  style: TextStyle(
+                    color: active ? Colors.white : Colors.black45,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            );
+          }
+          return Expanded(
+            child: Container(
+              height: 2,
+              color: _currentStep > (index ~/ 2) + 1
+                  ? const Color(0xFFFF7D54)
+                  : const Color(0xFFE5E7EB),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildStep1() {
+    List<String> currentList = _selectedType == 'Property'
+        ? _propertyCategories
+        : (_selectedType == 'Product'
+              ? _productCategories
+              : _serviceCategories);
+    return _stepWrapper(
+      title: 'Select Category',
       children: [
-        _indicatorCircle(1),
-        _indicatorLine(1),
-        _indicatorCircle(2),
-        _indicatorLine(2),
-        _indicatorCircle(3),
+        _label('Listing Type'),
+        Row(
+          children: [
+            _typeBtn('Product', null, const Color(0xFFFF7D54)),
+            const SizedBox(width: 8),
+            _typeBtn('Service', null, const Color(0xFF1E237E)),
+            const SizedBox(width: 8),
+            _typeBtn('Property', Icons.home_outlined, const Color(0xFFFF7D54)),
+          ],
+        ),
+        if (_selectedType == 'Property') ...[
+          const SizedBox(height: 15),
+          _label('Property Type'),
+          Row(
+            children: [
+              _subBtn('For Rent'),
+              const SizedBox(width: 8),
+              _subBtn('For Sale'),
+            ],
+          ),
+        ],
+        const SizedBox(height: 15),
+        _label('Category'),
+        DropdownButtonFormField<String>(
+          value: _selectedCategory,
+          isExpanded: true,
+          decoration: _inputStyle('Choose a category'),
+          items: currentList
+              .map(
+                (c) => DropdownMenuItem(
+                  value: c,
+                  child: Text(c, style: const TextStyle(fontSize: 14)),
+                ),
+              )
+              .toList(),
+          onChanged: (v) => setState(() => _selectedCategory = v),
+        ),
+        const SizedBox(height: 30),
+        _cta('Next: Upload Media', () {
+          _pageController.nextPage(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+          setState(() => _currentStep = 2);
+        }),
       ],
     );
   }
 
-  Widget _indicatorCircle(int step) {
-    bool isActive = step <= _currentStep;
-    return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFFFF7043) : Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: isActive ? const Color(0xFFFF7043) : Colors.grey.shade300,
+  Widget _buildStep2() {
+    return _stepWrapper(
+      title: 'Upload Photos',
+      children: [
+        const Text(
+          'Add up to 5 photos',
+          style: TextStyle(color: Colors.black54, fontSize: 12),
+        ),
+        const SizedBox(height: 15),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+          ),
+          itemCount: _selectedImages.length < 5
+              ? _selectedImages.length + 1
+              : 5,
+          itemBuilder: (context, index) {
+            if (index == _selectedImages.length && _selectedImages.length < 5) {
+              return GestureDetector(
+                onTap: _pickImages,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black12),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.grey[50],
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_a_photo_outlined, color: Colors.black26),
+                      Text(
+                        'Add',
+                        style: TextStyle(color: Colors.black26, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            // FIX: Ensure file existence check or safe rendering
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(_selectedImages[index].path),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () =>
+                        setState(() => _selectedImages.removeAt(index)),
+                    child: const CircleAvatar(
+                      radius: 10,
+                      backgroundColor: Colors.red,
+                      child: Icon(Icons.close, size: 12, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 30),
+        Row(
+          children: [
+            _backBtn(),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _cta('Next: Details', () {
+                _pageController.nextPage(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                );
+                setState(() => _currentStep = 3);
+              }),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep3() {
+    return _stepWrapper(
+      title: 'Listing Details',
+      children: [
+        _label('Ad Title'),
+        TextField(
+          controller: _titleController,
+          decoration: _inputStyle('e.g. 10 Bags of Dangote Cement'),
+        ),
+        const SizedBox(height: 12),
+        if (_selectedType == 'Property') ...[
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('Bedrooms'),
+                    TextField(
+                      controller: _bedroomController,
+                      keyboardType: TextInputType.number,
+                      decoration: _inputStyle('3'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('Size (Sqft)'),
+                    TextField(
+                      controller: _sqftController,
+                      keyboardType: TextInputType.number,
+                      decoration: _inputStyle('1200'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _label('Price (₦)'),
+                  TextField(
+                    controller: _priceController,
+                    keyboardType: TextInputType.number,
+                    decoration: _inputStyle('5000'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _label('Unit'),
+                  TextField(
+                    controller: _priceUnitController,
+                    decoration: _inputStyle('per bag'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _label('Location'),
+        TextField(
+          controller: _locationController,
+          decoration: _inputStyle('State, City or Street'),
+        ),
+        const SizedBox(height: 30),
+        Row(
+          children: [
+            _backBtn(),
+            const SizedBox(width: 10),
+            Expanded(child: _cta('Publish Ad Now', _handlePublish)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _stepWrapper({required String title, required List<Widget> children}) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFF1F4F7)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 15),
+            ...children,
+          ],
         ),
       ),
-      child: Center(
-        child: Text(
-          '$step',
-          style: TextStyle(
-            color: isActive ? Colors.white : Colors.grey,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
+    );
+  }
+
+  Widget _label(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 5, top: 5),
+    child: Text(
+      text,
+      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+    ),
+  );
+
+  InputDecoration _inputStyle(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: const TextStyle(color: Colors.black26, fontSize: 13),
+    filled: true,
+    fillColor: const Color(0xFFF1F4F7),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide.none,
+    ),
+  );
+
+  Widget _typeBtn(String label, IconData? icon, Color activeColor) {
+    bool isSelected = _selectedType == label;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _selectedType = label;
+          _selectedCategory = null;
+        }),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? activeColor : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? Colors.transparent : Colors.black12,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null)
+                Icon(
+                  icon,
+                  size: 14,
+                  color: isSelected ? Colors.white : Colors.black87,
+                ),
+              if (icon != null) const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.black87,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _indicatorLine(int step) {
-    bool isPassed = step < _currentStep;
-    return Container(
-      width: 60,
-      height: 2,
-      color: isPassed ? const Color(0xFFFF7043) : Colors.grey.shade300,
+  Widget _subBtn(String label) {
+    bool isSelected = _propertyStatus == label;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _propertyStatus = label),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFFF7D54) : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? Colors.transparent : Colors.black12,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
+
+  Widget _cta(String text, VoidCallback onTap) {
+    bool isValid = _isStepValid();
+    return ElevatedButton(
+      onPressed: isValid ? onTap : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isValid
+            ? const Color(0xFFFF7D54)
+            : const Color(0xFFE5E7EB),
+        disabledBackgroundColor: const Color(0xFFE5E7EB),
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Center(
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isValid ? Colors.white : Colors.black26,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _backBtn() => OutlinedButton(
+    onPressed: () {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+      setState(() => _currentStep--);
+    },
+    style: OutlinedButton.styleFrom(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      side: const BorderSide(color: Color(0xFFF1F4F7)),
+    ),
+    child: const Text(
+      'Back',
+      style: TextStyle(color: Colors.black, fontSize: 14),
+    ),
+  );
 }

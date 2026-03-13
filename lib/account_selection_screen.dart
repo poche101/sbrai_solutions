@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'buyer/widgets/selection_card.dart';
 import 'buyer/screens/signup_page.dart';
 // Ensure this path is correct for your project
-import 'vendor/register_screen.dart';
+import 'vendor/screen/register_screen.dart';
 
 class AccountSelectionScreen extends StatelessWidget {
   const AccountSelectionScreen({super.key});

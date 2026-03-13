@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 // Ensure these match your actual file names
-import 'profile_screen.dart';
+import 'screen/profile_screen.dart';
+// Ensure this matches the file name where you saved the VendorDashboardScreen
+import 'screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
+
+// Using a prefix 'vendor' to ensure we point to the correct screens
+import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart'
+    as vendor;
+// Ensure you have these files created and imported correctly
+import 'package:sbrai_solutions/vendor/screen/message_screen.dart';
+import 'package:sbrai_solutions/vendor/screen/settings/vendor_settings_screen.dart';
 
 class VendorMenu extends StatelessWidget {
   const VendorMenu({super.key});
@@ -9,12 +18,11 @@ class VendorMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      // Setting the drawer background to white
       child: Container(
         color: Colors.white,
         child: Column(
           children: [
-            // --- HEADER SECTION (WHITE BACKGROUND) ---
+            // --- HEADER SECTION ---
             Container(
               padding: const EdgeInsets.only(
                 top: 50,
@@ -56,7 +64,7 @@ class VendorMenu extends StatelessWidget {
                   ),
                   const SizedBox(height: 15),
                   const Text(
-                    'Igwe', // Placeholder for user name
+                    'Igwe',
                     style: TextStyle(
                       color: Colors.black87,
                       fontSize: 20,
@@ -72,7 +80,6 @@ class VendorMenu extends StatelessWidget {
                         icon: Icons.storefront_rounded,
                       ),
                       const SizedBox(width: 8),
-                      // --- NOT VERIFIED BADGE ---
                       _buildBadge(
                         'Not Verified',
                         Colors.grey.shade400,
@@ -85,7 +92,7 @@ class VendorMenu extends StatelessWidget {
               ),
             ),
 
-            // --- MENU ITEMS SECTION (WHITE BODY) ---
+            // --- MENU ITEMS ---
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -96,7 +103,7 @@ class VendorMenu extends StatelessWidget {
                     () => Navigator.pop(context),
                   ),
                   _buildMenuItem(Icons.person_outline, 'Profile', () {
-                    Navigator.pop(context); // Close drawer
+                    Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -107,19 +114,45 @@ class VendorMenu extends StatelessWidget {
                       ),
                     );
                   }),
-                  // --- UPDATED: POST AD NAVIGATION ---
                   _buildMenuItem(Icons.add_box_outlined, 'Post Ad', () {
-                    Navigator.pop(context); // Close drawer
+                    Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const ProductsScreen(),
+                        builder: (context) => const PostAdScreen(),
                       ),
                     );
                   }),
-                  _buildMenuItem(Icons.dashboard_outlined, 'Dashboard', () {}),
-                  _buildMenuItem(Icons.favorite_outline, 'Favorites', () {}),
-                  _buildMenuItem(Icons.chat_bubble_outline, 'Messages', () {}),
+                  _buildMenuItem(Icons.dashboard_outlined, 'Dashboard', () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const VendorDashboardScreen(),
+                      ),
+                    );
+                  }),
+
+                  _buildMenuItem(Icons.favorite_outline, 'Favorites', () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const vendor.FavoriteScreen(),
+                      ),
+                    );
+                  }),
+
+                  _buildMenuItem(Icons.chat_bubble_outline, 'Messages', () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const MessageScreen(),
+                      ),
+                    );
+                  }),
+
                   const Divider(
                     height: 30,
                     thickness: 0.8,
@@ -127,7 +160,24 @@ class VendorMenu extends StatelessWidget {
                     endIndent: 25,
                     color: Color(0xFFF1F1F1),
                   ),
-                  _buildMenuItem(Icons.settings_outlined, 'Settings', () {}),
+
+                  // --- UPDATED: SETTINGS NAVIGATION ---
+                  // Update this in your VendorMenu file
+                  _buildMenuItem(Icons.settings_outlined, 'Settings', () {
+                    // 1. Get the navigator before popping the drawer
+                    final navigator = Navigator.of(context);
+
+                    // 2. Close the drawer
+                    navigator.pop();
+
+                    // 3. Push the new screen
+                    navigator.push(
+                      MaterialPageRoute(
+                        builder: (context) => const VendorSettingsScreen(),
+                      ),
+                    );
+                  }),
+
                   _buildMenuItem(Icons.verified_user_outlined, 'KYC', () {}),
                   _buildMenuItem(
                     Icons.logout_outlined,
@@ -139,7 +189,7 @@ class VendorMenu extends StatelessWidget {
               ),
             ),
 
-            // --- FOOTER SECTION WITH LOGO ---
+            // --- FOOTER ---
             Padding(
               padding: const EdgeInsets.only(bottom: 30, top: 10),
               child: Column(
@@ -168,7 +218,6 @@ class VendorMenu extends StatelessWidget {
     );
   }
 
-  // --- HELPER: BADGE ---
   Widget _buildBadge(
     String label,
     Color color, {
@@ -199,7 +248,6 @@ class VendorMenu extends StatelessWidget {
     );
   }
 
-  // --- HELPER: MENU ITEM ---
   Widget _buildMenuItem(
     IconData icon,
     String title,

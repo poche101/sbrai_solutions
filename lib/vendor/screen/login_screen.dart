@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sbrai_solutions/vendor/register_screen.dart';
-import 'package:sbrai_solutions/vendor/home_screen.dart';
+import 'package:sbrai_solutions/vendor/screen/register_screen.dart';
+import 'package:sbrai_solutions/vendor/screen/home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
