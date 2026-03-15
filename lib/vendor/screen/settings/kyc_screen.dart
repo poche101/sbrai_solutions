@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-// Assuming EmailVerification is in a file named email_verification.dart
+// Ensure these paths match your actual project structure
 import 'package:sbrai_solutions/vendor/widgets/email_verification.dart';
+import 'package:sbrai_solutions/vendor/widgets/phone_verification.dart';
+import 'package:sbrai_solutions/vendor/widgets/identity_verification.dart';
+import 'package:sbrai_solutions/vendor/widgets/business_verification.dart';
 
 class KYCScreen extends StatefulWidget {
   const KYCScreen({super.key});
@@ -24,6 +27,34 @@ class _KYCScreenState extends State<KYCScreen> {
     if (isIdentityVerified) completed++;
     if (isBusinessVerified) completed++;
     return completed / 4;
+  }
+
+  /// Helper method to navigate and update state on return
+  /// Expects the verification screens to return 'true' upon success
+  Future<void> _navigateAndVerify(Widget screen, String type) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
+    );
+
+    if (result == true) {
+      setState(() {
+        switch (type) {
+          case 'email':
+            isEmailVerified = true;
+            break;
+          case 'phone':
+            isPhoneVerified = true;
+            break;
+          case 'identity':
+            isIdentityVerified = true;
+            break;
+          case 'business':
+            isBusinessVerified = true;
+            break;
+        }
+      });
+    }
   }
 
   @override
@@ -100,24 +131,16 @@ class _KYCScreenState extends State<KYCScreen> {
           _buildVerificationTile(
             icon: Icons.mail_outline,
             title: 'Email Verification',
-            subtitle: 'example@gmail.com',
+            subtitle: 'vendor@demo.com',
             isCompleted: isEmailVerified,
-            onTap: () {
-              // Navigate to the Email Verification Screen
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const EmailVerification(),
-                ),
-              );
-            },
+            onTap: () => _navigateAndVerify(const EmailVerification(), 'email'),
           ),
           _buildVerificationTile(
             icon: Icons.phone_outlined,
             title: 'Phone Verification',
-            subtitle: 'Phone Number',
+            subtitle: '08087654321',
             isCompleted: isPhoneVerified,
-            onTap: () => setState(() => isPhoneVerified = !isPhoneVerified),
+            onTap: () => _navigateAndVerify(const PhoneVerification(), 'phone'),
           ),
           _buildVerificationTile(
             icon: Icons.badge_outlined,
@@ -125,7 +148,7 @@ class _KYCScreenState extends State<KYCScreen> {
             subtitle: 'NIN or BVN required',
             isCompleted: isIdentityVerified,
             onTap: () =>
-                setState(() => isIdentityVerified = !isIdentityVerified),
+                _navigateAndVerify(const IdentityVerification(), 'identity'),
           ),
           _buildVerificationTile(
             icon: Icons.apartment_outlined,
@@ -133,7 +156,7 @@ class _KYCScreenState extends State<KYCScreen> {
             subtitle: 'Required for verified badge',
             isCompleted: isBusinessVerified,
             onTap: () =>
-                setState(() => isBusinessVerified = !isBusinessVerified),
+                _navigateAndVerify(const BusinessVerification(), 'business'),
           ),
 
           const SizedBox(height: 8),
@@ -155,7 +178,7 @@ class _KYCScreenState extends State<KYCScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: InkWell(
-        onTap: onTap,
+        onTap: isCompleted ? null : onTap, // Disable tap if already completed
         borderRadius: BorderRadius.circular(16),
         child: _buildCard(
           child: Row(
