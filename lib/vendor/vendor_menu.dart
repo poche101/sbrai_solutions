@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 // Ensure these match your actual file names
 import 'screen/profile_screen.dart';
-// Ensure this matches the file name where you saved the VendorDashboardScreen
 import 'screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 
-// Using a prefix 'vendor' to ensure we point to the correct screens
+// Import your newly created KYC screen here
+import 'package:sbrai_solutions/vendor/screen/settings/kyc_screen.dart';
+
 import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart'
     as vendor;
-// Ensure you have these files created and imported correctly
 import 'package:sbrai_solutions/vendor/screen/message_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/vendor_settings_screen.dart';
 
@@ -161,16 +161,9 @@ class VendorMenu extends StatelessWidget {
                     color: Color(0xFFF1F1F1),
                   ),
 
-                  // --- UPDATED: SETTINGS NAVIGATION ---
-                  // Update this in your VendorMenu file
                   _buildMenuItem(Icons.settings_outlined, 'Settings', () {
-                    // 1. Get the navigator before popping the drawer
                     final navigator = Navigator.of(context);
-
-                    // 2. Close the drawer
                     navigator.pop();
-
-                    // 3. Push the new screen
                     navigator.push(
                       MaterialPageRoute(
                         builder: (context) => const VendorSettingsScreen(),
@@ -178,7 +171,18 @@ class VendorMenu extends StatelessWidget {
                     );
                   }),
 
-                  _buildMenuItem(Icons.verified_user_outlined, 'KYC', () {}),
+                  // --- UPDATED: KYC NAVIGATION ---
+                  _buildMenuItem(Icons.verified_user_outlined, 'KYC', () {
+                    final navigator = Navigator.of(context);
+                    navigator.pop(); // Close drawer
+                    navigator.push(
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const KYCScreen(), // Navigates to your KYC Screen
+                      ),
+                    );
+                  }),
+
                   _buildMenuItem(
                     Icons.logout_outlined,
                     'Logout',
