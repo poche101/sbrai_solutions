@@ -1,3 +1,4 @@
+import 'dart:io'; // Required for HttpOverrides
 import 'package:flutter/material.dart';
 import 'account_selection_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/favorite_screen.dart';
@@ -7,6 +8,9 @@ import 'package:sbrai_solutions/vendor/screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 
 void main() {
+  // This line tells Flutter to use your custom SSL bypass settings
+  HttpOverrides.global = MyHttpOverrides();
+
   runApp(const SbraiSolutionsApp());
 }
 
@@ -20,12 +24,10 @@ class SbraiSolutionsApp extends StatelessWidget {
       title: 'Sbrai Solutions',
       theme: ThemeData(
         useMaterial3: true,
-        // Using the specific orange branding for Sbrai Solutions
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFFF6B35),
           primary: const Color(0xFFFF7043),
         ),
-        // Fix for "Large UI": Standardize visual density
         visualDensity: VisualDensity.adaptivePlatformDensity,
         scaffoldBackgroundColor: Colors.white,
         appBarTheme: const AppBarTheme(
@@ -56,5 +58,16 @@ class SbraiSolutionsApp extends StatelessWidget {
         '/post-ad': (context) => const PostAdScreen(),
       },
     );
+  }
+}
+
+// --- Custom SSL Bypass Class ---
+// This allows the app to connect to servers with self-signed or invalid SSL certificates.
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
   }
 }

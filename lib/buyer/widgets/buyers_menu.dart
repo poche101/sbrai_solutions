@@ -4,8 +4,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:sbrai_solutions/buyer/screens/profile_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/favorite_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/message_screen.dart';
-// New Import for Settings Screen
 import 'package:sbrai_solutions/buyer/screens/settings/settings_screen.dart';
+import 'package:sbrai_solutions/buyer_service/api_service.dart';
+import 'package:sbrai_solutions/buyer/screens/signin_screen.dart';
 
 class BuyersMenu extends StatefulWidget {
   final bool isDesktop;
@@ -26,6 +27,8 @@ class BuyersMenu extends StatefulWidget {
 class _BuyersMenuState extends State<BuyersMenu> {
   File? _imageFile;
   final ImagePicker _picker = ImagePicker();
+  final ApiService _apiService = ApiService();
+  bool _isLoggingOut = false;
 
   Future<void> _pickImage() async {
     try {
@@ -41,6 +44,86 @@ class _BuyersMenuState extends State<BuyersMenu> {
       }
     } catch (e) {
       debugPrint("Error picking image: $e");
+    }
+  }
+
+  /// Custom Toast Notification
+  void _showCustomToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        content: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// Handle Logout API Call
+  Future<void> _handleLogout() async {
+    setState(() => _isLoggingOut = true);
+
+    try {
+      await _apiService.logout();
+
+      if (!mounted) return;
+
+      _showCustomToast("Logged out successfully");
+
+      // Navigate to sign-in and clear navigation stack
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const SigninScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Logout failed: $e"),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoggingOut = false);
     }
   }
 
@@ -62,9 +145,7 @@ class _BuyersMenuState extends State<BuyersMenu> {
                   Icons.person_outline,
                   "My Profile",
                   onTap: () {
-                    if (Navigator.canPop(context)) {
-                      Navigator.pop(context);
-                    }
+                    if (Navigator.canPop(context)) Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -77,9 +158,7 @@ class _BuyersMenuState extends State<BuyersMenu> {
                   Icons.favorite_outline,
                   "Favorites",
                   onTap: () {
-                    if (Navigator.canPop(context)) {
-                      Navigator.pop(context);
-                    }
+                    if (Navigator.canPop(context)) Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -92,9 +171,7 @@ class _BuyersMenuState extends State<BuyersMenu> {
                   Icons.chat_bubble_outline,
                   "Messages",
                   onTap: () {
-                    if (Navigator.canPop(context)) {
-                      Navigator.pop(context);
-                    }
+                    if (Navigator.canPop(context)) Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -113,11 +190,7 @@ class _BuyersMenuState extends State<BuyersMenu> {
                   Icons.settings_outlined,
                   "Settings",
                   onTap: () {
-                    // 1. Close the drawer/menu
-                    if (Navigator.canPop(context)) {
-                      Navigator.pop(context);
-                    }
-                    // 2. Navigate to the Settings Screen
+                    if (Navigator.canPop(context)) Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -128,11 +201,9 @@ class _BuyersMenuState extends State<BuyersMenu> {
                 ),
                 _buildMenuItem(
                   Icons.logout_outlined,
-                  "Logout",
+                  _isLoggingOut ? "Logging out..." : "Logout",
                   color: Colors.red,
-                  onTap: () {
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                  },
+                  onTap: _isLoggingOut ? () {} : _handleLogout,
                 ),
               ],
             ),

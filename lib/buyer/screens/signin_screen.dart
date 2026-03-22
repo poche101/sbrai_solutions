@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'signup_page.dart';
 import 'home_screen.dart';
+import 'package:sbrai_solutions/buyer_service/api_service.dart';
 
 class SigninScreen extends StatefulWidget {
   const SigninScreen({super.key});
@@ -10,6 +12,128 @@ class SigninScreen extends StatefulWidget {
 }
 
 class _SigninScreenState extends State<SigninScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
+  final ApiService _apiService = ApiService();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  /// Custom Toast Notification Implementation
+  void _showCustomToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor:
+            Colors.transparent, // We use a Container for custom styling
+        elevation: 0,
+        content: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Circle check mark with black background
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter both email and password")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _apiService.post('/v1/buyers/login', {
+        'email': email,
+        'password': password,
+      });
+
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && responseData['status'] == 'success') {
+        await _apiService.saveToken(responseData['data']['access_token']);
+
+        if (!mounted) return;
+
+        // Trigger the custom toast notification
+        _showCustomToast(responseData['message'] ?? "Signed in successfully");
+
+        // Short delay to let the user see the toast before navigating
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              (route) => false,
+            );
+          }
+        });
+      } else {
+        String errorMsg = responseData['message'] ?? "Login failed";
+        if (responseData['errors'] != null) {
+          errorMsg = responseData['errors'].values.first[0];
+        }
+        throw errorMsg;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -30,9 +154,7 @@ class _SigninScreenState extends State<SigninScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Container(
-            constraints: const BoxConstraints(
-              maxWidth: 450,
-            ), // Optimized for Desktop & Mobile
+            constraints: const BoxConstraints(maxWidth: 450),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -42,7 +164,6 @@ class _SigninScreenState extends State<SigninScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Logo
                 Image.asset(
                   'assets/images/logo.png',
                   height: 50,
@@ -62,8 +183,6 @@ class _SigninScreenState extends State<SigninScreen> {
                   style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
                 const SizedBox(height: 32),
-
-                // Social Logins
                 _buildSocialButton(
                   "Continue with Google",
                   'assets/icons/google.png',
@@ -73,10 +192,7 @@ class _SigninScreenState extends State<SigninScreen> {
                   "Continue with Facebook",
                   'assets/icons/facebook.png',
                 ),
-
                 const SizedBox(height: 24),
-
-                // OR Divider
                 const Row(
                   children: [
                     Expanded(child: Divider(color: Colors.black12)),
@@ -95,34 +211,25 @@ class _SigninScreenState extends State<SigninScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-
-                // Email Field
                 _buildInputLabel("Email Address"),
-                TextField(decoration: _inputDecoration("Email Address")),
+                TextField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: _inputDecoration("Email Address"),
+                ),
                 const SizedBox(height: 20),
-
-                // Password Field
                 _buildInputLabel("Password"),
                 TextField(
+                  controller: _passwordController,
                   obscureText: true,
                   decoration: _inputDecoration("Password"),
                 ),
                 const SizedBox(height: 32),
-
-                // Sign In Button
                 SizedBox(
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const HomeScreen(),
-                        ),
-                        (route) => false,
-                      );
-                    },
+                    onPressed: _isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF6B35),
                       foregroundColor: Colors.white,
@@ -131,15 +238,22 @@ class _SigninScreenState extends State<SigninScreen> {
                       ),
                       elevation: 0,
                     ),
-                    child: const Text(
-                      "Sign In",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            "Sign In",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // Sign Up Redirect
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -175,29 +289,23 @@ class _SigninScreenState extends State<SigninScreen> {
     );
   }
 
-  // Social Button Helper
   Widget _buildSocialButton(String text, String assetPath) {
-    // Determine brand colors based on the button text
     final bool isGoogle = text.contains("Google");
     final Color brandColor = isGoogle
-        ? const Color.fromARGB(255, 154, 5, 45) // Google Blue
-        : const Color(0xFF1877F2); // Facebook Blue
+        ? const Color.fromARGB(255, 154, 5, 45)
+        : const Color(0xFF1877F2);
 
     return Container(
       width: double.infinity,
       height: 50,
       decoration: BoxDecoration(
-        // We keep a light border for Google (as per their brand guidelines for white buttons)
-        // But we can make the Facebook border match its brand color slightly
         border: Border.all(
           color: isGoogle ? Colors.black12 : brandColor.withOpacity(0.2),
         ),
         borderRadius: BorderRadius.circular(10),
       ),
       child: InkWell(
-        onTap: () {
-          // Add Social Login Logic here
-        },
+        onTap: () {},
         borderRadius: BorderRadius.circular(10),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -206,7 +314,6 @@ class _SigninScreenState extends State<SigninScreen> {
               assetPath,
               height: 22,
               width: 22,
-              // The errorBuilder now uses the specific brand colors
               errorBuilder: (context, error, stackTrace) => Icon(
                 isGoogle ? Icons.g_mobiledata : Icons.facebook,
                 color: brandColor,
@@ -217,8 +324,6 @@ class _SigninScreenState extends State<SigninScreen> {
             Text(
               text,
               style: TextStyle(
-                // Google usually uses a dark grey/black text
-                // Facebook can use its own brand color for the text if you want it to pop
                 color: isGoogle ? Colors.black87 : brandColor,
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
