@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
+import '../../services/vendor/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -22,6 +23,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
 
   bool _isPasswordVisible = false;
+  bool _isLoading = false;
+
+  final AuthService _authService = AuthService();
 
   @override
   void dispose() {
@@ -34,6 +38,62 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  // Added registration handler
+  Future<void> _handleRegistration() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await _authService.registerVendor(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+        businessName: _businessNameController.text.trim(),
+        nin: _ninController.text.trim(),
+        address: _addressController.text.trim(),
+        password: _passwordController.text,
+        confirmPassword: _confirmPasswordController.text,
+      );
+
+      if (mounted) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Registration successful! Please login to continue.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // Navigate to login screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Registration failed: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -98,13 +158,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 32),
 
               _buildLabel("Full Name"),
-              _buildTextField(_nameController, "Enter your name"),
+              _buildTextField(
+                _nameController,
+                "Enter your name",
+                validator: (value) {
+                  if (value == null || value.isEmpty) return "Full name is required";
+                  return null;
+                },
+              ),
 
               _buildLabel("Email Address"),
               _buildTextField(
                 _emailController,
                 "Enter email",
                 keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return "Email is required";
+                  if (!value.contains('@') || !value.contains('.')) {
+                    return "Enter a valid email address";
+                  }
+                  return null;
+                },
               ),
 
               _buildLabel("Phone Number"),
@@ -112,10 +186,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _phoneController,
                 "Enter phone number",
                 keyboardType: TextInputType.phone,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return "Phone number is required";
+                  if (value.length < 10) return "Enter a valid phone number";
+                  return null;
+                },
               ),
 
               _buildLabel("Business Name"),
-              _buildTextField(_businessNameController, "Enter business name"),
+              _buildTextField(
+                _businessNameController,
+                "Enter business name",
+                validator: (value) {
+                  if (value == null || value.isEmpty) return "Business name is required";
+                  return null;
+                },
+              ),
 
               _buildLabel("NIN (National Identification Number)"),
               _buildTextField(
@@ -124,8 +210,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 keyboardType: TextInputType.number,
                 validator: (value) {
                   if (value == null || value.isEmpty) return "NIN is required";
-                  if (value.length != 11)
-                    return "NIN must be exactly 11 digits";
+                  if (value.length != 11) return "NIN must be exactly 11 digits";
                   return null;
                 },
               ),
@@ -141,13 +226,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
 
               _buildLabel("Business Address"),
-              _buildTextField(_addressController, "Enter address"),
+              _buildTextField(
+                _addressController,
+                "Enter address",
+                validator: (value) {
+                  if (value == null || value.isEmpty) return "Business address is required";
+                  return null;
+                },
+              ),
 
               _buildLabel("Password"),
               _buildTextField(
                 _passwordController,
                 "********",
                 isPassword: true,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return "Password is required";
+                  if (value.length < 6) return "Password must be at least 6 characters";
+                  return null;
+                },
               ),
 
               _buildLabel("Confirm Password"),
@@ -156,24 +253,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 "********",
                 isPassword: true,
                 validator: (value) {
-                  if (value != _passwordController.text)
-                    return "Passwords do not match";
+                  if (value == null || value.isEmpty) return "Please confirm your password";
+                  if (value != _passwordController.text) return "Passwords do not match";
                   return null;
                 },
               ),
 
               const SizedBox(height: 30),
 
-              // Create Account Button
+              // Create Account Button - Updated with loading state
               SizedBox(
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      // Handle Registration
-                    }
-                  },
+                  onPressed: _isLoading ? null : _handleRegistration,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF7043),
                     shape: RoundedRectangleBorder(
@@ -181,7 +274,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
+                  child: _isLoading
+                      ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                      : const Text(
                     'Create Account',
                     style: TextStyle(
                       color: Colors.white,
@@ -213,11 +315,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _socialButton(Icons.g_mobiledata, Colors.red, () {
-                    // Google Signup
+                    // Google Signup - You can implement this later
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Google Sign Up coming soon!')),
+                    );
                   }),
                   const SizedBox(width: 20),
                   _socialButton(Icons.facebook, Colors.blueAccent, () {
-                    // Facebook Signup
+                    // Facebook Signup - You can implement this later
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Facebook Sign Up coming soon!')),
+                    );
                   }),
                 ],
               ),
@@ -294,22 +402,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildTextField(
-    TextEditingController controller,
-    String hint, {
-    bool isPassword = false,
-    TextInputType keyboardType = TextInputType.text,
-    String? Function(String?)? validator,
-  }) {
+      TextEditingController controller,
+      String hint, {
+        bool isPassword = false,
+        TextInputType keyboardType = TextInputType.text,
+        String? Function(String?)? validator,
+      }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: TextFormField(
         controller: controller,
         obscureText: isPassword && !_isPasswordVisible,
         keyboardType: keyboardType,
-        validator:
-            validator ??
-            (value) =>
-                (value == null || value.isEmpty) ? "Required field" : null,
+        validator: validator ?? (value) => (value == null || value.isEmpty) ? "Required field" : null,
         style: const TextStyle(fontSize: 15),
         decoration: InputDecoration(
           hintText: hint,
@@ -325,15 +430,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           suffixIcon: isPassword
               ? IconButton(
-                  icon: Icon(
-                    _isPasswordVisible
-                        ? Icons.visibility
-                        : Icons.visibility_off,
-                    color: Colors.grey,
-                  ),
-                  onPressed: () =>
-                      setState(() => _isPasswordVisible = !_isPasswordVisible),
-                )
+            icon: Icon(
+              _isPasswordVisible
+                  ? Icons.visibility
+                  : Icons.visibility_off,
+              color: Colors.grey,
+            ),
+            onPressed: () =>
+                setState(() => _isPasswordVisible = !_isPasswordVisible),
+          )
               : null,
         ),
       ),

@@ -3,7 +3,7 @@ class VendorModel {
   String email;
   String phoneNumber;
   String businessName;
-  String nin; // Changed from businessId
+  String nin;
   String businessAddress;
   String password;
 
