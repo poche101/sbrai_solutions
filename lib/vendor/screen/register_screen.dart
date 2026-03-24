@@ -17,7 +17,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _businessNameController = TextEditingController();
-  final _ninController = TextEditingController();
   final _addressController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -33,14 +32,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _businessNameController.dispose();
-    _ninController.dispose();
     _addressController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  // Added registration handler
+  // Registration handler
   Future<void> _handleRegistration() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -49,12 +47,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final response = await _authService.registerVendor(
+      final _ = await _authService.registerVendor(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
         businessName: _businessNameController.text.trim(),
-        nin: _ninController.text.trim(),
         address: _addressController.text.trim(),
         password: _passwordController.text,
         confirmPassword: _confirmPasswordController.text,
@@ -83,7 +80,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           SnackBar(
             content: Text('Registration failed: ${e.toString().replaceAll('Exception: ', '')}'),
             backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -203,28 +200,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
               ),
 
-              _buildLabel("NIN (National Identification Number)"),
-              _buildTextField(
-                _ninController,
-                "Enter 11-digit NIN",
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) return "NIN is required";
-                  if (value.length != 11) return "NIN must be exactly 11 digits";
-                  return null;
-                },
-              ),
-              const Padding(
-                padding: EdgeInsets.only(top: 4, bottom: 12),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    "Your NIN is required to verify your identity as a vendor",
-                    style: TextStyle(color: Colors.grey, fontSize: 11),
-                  ),
-                ),
-              ),
-
               _buildLabel("Business Address"),
               _buildTextField(
                 _addressController,
@@ -261,7 +236,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               const SizedBox(height: 30),
 
-              // Create Account Button - Updated with loading state
+              // Create Account Button
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -296,7 +271,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               const SizedBox(height: 24),
 
-              // --- Social Login Section ---
+              // Social Login Section
               Row(
                 children: const [
                   Expanded(child: Divider(color: Colors.grey, thickness: 0.5)),
@@ -330,7 +305,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
               ),
 
-              // -----------------------------
               const SizedBox(height: 24),
 
               // Sign In Link

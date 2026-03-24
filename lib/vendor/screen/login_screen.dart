@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/vendor/screen/register_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/home_screen.dart';
+import '../../services/vendor/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,12 +21,67 @@ class _LoginScreenState extends State<LoginScreen> {
   );
 
   bool _isPasswordVisible = false;
+  bool _isLoading = false;
+
+  final AuthService _authService = AuthService();
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  // Login handler
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final _ = await _authService.loginVendor(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (mounted) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Login successful!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Navigate to home screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const HomeScreen(),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -86,15 +142,27 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 32),
 
-              // Social Logins with authentic branding
+              // Social Logins
               _buildSocialButton(
                 "Continue with Google",
                 'assets/icons/google.png',
+                    () {
+                  // Google Sign In - To be implemented
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Google Sign In coming soon!')),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               _buildSocialButton(
                 "Continue with Facebook",
                 'assets/icons/facebook.png',
+                    () {
+                  // Facebook Sign In - To be implemented
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Facebook Sign In coming soon!')),
+                  );
+                },
               ),
 
               const SizedBox(height: 24),
@@ -125,6 +193,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 _emailController,
                 "Enter your email",
                 keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "Email is required";
+                  }
+                  if (!value.contains('@') || !value.contains('.')) {
+                    return "Enter a valid email address";
+                  }
+                  return null;
+                },
               ),
 
               const SizedBox(height: 16),
@@ -135,6 +212,38 @@ class _LoginScreenState extends State<LoginScreen> {
                 _passwordController,
                 "Enter your password",
                 isPassword: true,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "Password is required";
+                  }
+                  if (value.length < 6) {
+                    return "Password must be at least 6 characters";
+                  }
+                  return null;
+                },
+              ),
+
+              const SizedBox(height: 12),
+
+              // Forgot Password Link
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    // Forgot password functionality
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Forgot Password coming soon!')),
+                    );
+                  },
+                  child: const Text(
+                    'Forgot Password?',
+                    style: TextStyle(
+                      color: Color(0xFFFF7043),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
               ),
 
               const SizedBox(height: 30),
@@ -144,17 +253,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      // Logic to transition to the home page
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const HomeScreen(),
-                        ),
-                      );
-                    }
-                  },
+                  onPressed: _isLoading ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF7043),
                     shape: RoundedRectangleBorder(
@@ -162,7 +261,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
+                  child: _isLoading
+                      ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                      : const Text(
                     'Sign In',
                     style: TextStyle(
                       color: Colors.white,
@@ -210,8 +318,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Updated Social Button Helper using Image.asset for authentic logos
-  Widget _buildSocialButton(String text, String assetPath) {
+  Widget _buildSocialButton(String text, String assetPath, VoidCallback onTap) {
     return Container(
       width: double.infinity,
       height: 50,
@@ -220,9 +327,7 @@ class _LoginScreenState extends State<LoginScreen> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: InkWell(
-        onTap: () {
-          // Social Login Logic
-        },
+        onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -269,15 +374,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildTextField(
-    TextEditingController controller,
-    String hint, {
-    bool isPassword = false,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
+      TextEditingController controller,
+      String hint, {
+        bool isPassword = false,
+        TextInputType keyboardType = TextInputType.text,
+        String? Function(String?)? validator,
+      }) {
     return TextFormField(
       controller: controller,
       obscureText: isPassword && !_isPasswordVisible,
       keyboardType: keyboardType,
+      validator: validator,
       style: const TextStyle(fontSize: 15),
       decoration: InputDecoration(
         hintText: hint,
@@ -293,13 +400,13 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         suffixIcon: isPassword
             ? IconButton(
-                icon: Icon(
-                  _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                  color: Colors.grey,
-                ),
-                onPressed: () =>
-                    setState(() => _isPasswordVisible = !_isPasswordVisible),
-              )
+          icon: Icon(
+            _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+            color: Colors.grey,
+          ),
+          onPressed: () =>
+              setState(() => _isPasswordVisible = !_isPasswordVisible),
+        )
             : null,
       ),
     );
