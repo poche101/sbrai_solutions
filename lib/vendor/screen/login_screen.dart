@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/vendor/screen/register_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/home_screen.dart';
-import '../../services/vendor/auth_service.dart';
+import '../../services/vendor/vendor_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,7 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
 
-  final AuthService _authService = AuthService();
+  final VendorAuthService _authService = VendorAuthService();
 
   @override
   void dispose() {
@@ -41,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final _ = await _authService.loginVendor(
+      final _ = await  _authService.login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );

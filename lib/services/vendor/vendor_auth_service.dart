@@ -1,12 +1,14 @@
+// lib/services/vendor/vendor_auth_service.dart
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import '../../buyer_service/api_service.dart';
+import '../api_service.dart';
 
-class AuthService {
+class VendorAuthService {
   final ApiService _apiService = ApiService();
+  static const String userType = 'vendor';
 
   // Vendor Registration
-  Future<Map<String, dynamic>> registerVendor({
+  Future<Map<String, dynamic>> register({
     required String name,
     required String email,
     required String phone,
@@ -27,14 +29,14 @@ class AuthService {
           'password': password,
           'password_confirmation': confirmPassword,
         },
-        isProtected: false, // Registration doesn't require auth
+        isProtected: false,
+        userType: userType,
       );
 
       final responseData = jsonDecode(response.body);
 
-      // If registration returns a token, save it automatically
       if (responseData['token'] != null) {
-        await _apiService.saveToken(responseData['token']);
+        await _apiService.saveToken(responseData['token'], userType: userType);
         debugPrint("🔐 Vendor token saved after registration");
       }
 
@@ -46,7 +48,7 @@ class AuthService {
   }
 
   // Vendor Login
-  Future<Map<String, dynamic>> loginVendor({
+  Future<Map<String, dynamic>> login({
     required String email,
     required String password,
   }) async {
@@ -57,14 +59,14 @@ class AuthService {
           'email': email,
           'password': password,
         },
-        isProtected: false, // Login doesn't require auth
+        isProtected: false,
+        userType: userType,
       );
 
       final responseData = jsonDecode(response.body);
 
-      // Save token on successful login
       if (responseData['token'] != null) {
-        await _apiService.saveToken(responseData['token']);
+        await _apiService.saveToken(responseData['token'], userType: userType);
         debugPrint("🔐 Vendor token saved after login");
       }
 
@@ -75,35 +77,38 @@ class AuthService {
     }
   }
 
-  // Vendor Logout
-  Future<void> logoutVendor() async {
+  // Vendor Logout (Single source of truth)
+  Future<void> logout() async {
     try {
-      // Call logout endpoint if your API has one
-      await _apiService.post('/v1/vendor/logout', {}, isProtected: true);
+      // Call logout API
+      await _apiService.post('/v1/vendor/logout', {},
+        isProtected: true,
+        userType: userType,
+      );
       debugPrint("✅ Vendor logged out successfully");
     } catch (e) {
-      debugPrint("❌ Logout error: $e");
-      // Even if API fails, clear local token
+      debugPrint("❌ Logout API error: $e");
     } finally {
-      await _apiService.clearToken();
+      // Always clear token
+      await _apiService.clearToken(userType: userType);
       debugPrint("🔐 Vendor token cleared");
     }
   }
 
-  // Check if user is authenticated
+  // Check if vendor is authenticated
   Future<bool> isAuthenticated() async {
-    final token = await _apiService.getToken();
+    final token = await _apiService.getToken(userType: userType);
     return token != null && token.isNotEmpty;
   }
 
-  // Get current vendor profile (example protected endpoint)
-  Future<Map<String, dynamic>> getVendorProfile() async {
+  // Get vendor profile
+  Future<Map<String, dynamic>> getProfile() async {
     try {
       final response = await _apiService.get(
         '/v1/vendor/profile',
         isProtected: true,
+        userType: userType,
       );
-
       return jsonDecode(response.body);
     } catch (e) {
       debugPrint("❌ Get profile error: $e");
@@ -111,8 +116,8 @@ class AuthService {
     }
   }
 
-  // Update vendor profile (example protected endpoint)
-  Future<Map<String, dynamic>> updateVendorProfile({
+  // Update vendor profile
+  Future<Map<String, dynamic>> updateProfile({
     required String name,
     required String phone,
     required String businessName,
@@ -128,8 +133,8 @@ class AuthService {
           'business_address': address,
         },
         isProtected: true,
+        userType: userType,
       );
-
       return jsonDecode(response.body);
     } catch (e) {
       debugPrint("❌ Update profile error: $e");
@@ -137,72 +142,44 @@ class AuthService {
     }
   }
 
-  // Change password
-  Future<Map<String, dynamic>> changePassword({
-    required String currentPassword,
-    required String newPassword,
-    required String confirmPassword,
+  // Identity Verification (KYC)
+  Future<Map<String, dynamic>> verifyIdentity({
+    String? nin,
+    String? bvn,
+    String? documentPath,
   }) async {
     try {
-      final response = await _apiService.post(
-        '/v1/vendor/change-password',
-        {
-          'current_password': currentPassword,
-          'password': newPassword,
-          'password_confirmation': confirmPassword,
-        },
-        isProtected: true,
-      );
+      if (documentPath != null) {
+        // Upload with file
+        Map<String, String> data = {};
+        if (nin != null) data['nin'] = nin;
+        if (bvn != null) data['bvn'] = bvn;
 
-      return jsonDecode(response.body);
+        final response = await _apiService.upload(
+          '/v1/vendor/nin/verify',
+          data,
+          filePath: documentPath,
+          fileField: 'document',
+          isProtected: true,
+          userType: userType,
+        );
+        return jsonDecode(response.body);
+      } else {
+        // Regular post without file
+        Map<String, dynamic> data = {};
+        if (nin != null) data['nin'] = nin;
+        if (bvn != null) data['bvn'] = bvn;
+
+        final response = await _apiService.post(
+          '/v1/vendor/verify-identity',
+          data,
+          isProtected: true,
+          userType: userType,
+        );
+        return jsonDecode(response.body);
+      }
     } catch (e) {
-      debugPrint("❌ Change password error: $e");
-      throw Exception(e.toString());
-    }
-  }
-
-  // Forgot password request
-  Future<Map<String, dynamic>> forgotPassword({
-    required String email,
-  }) async {
-    try {
-      final response = await _apiService.post(
-        '/v1/vendor/forgot-password',
-        {
-          'email': email,
-        },
-        isProtected: false,
-      );
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      debugPrint("❌ Forgot password error: $e");
-      throw Exception(e.toString());
-    }
-  }
-
-  // Reset password with token
-  Future<Map<String, dynamic>> resetPassword({
-    required String email,
-    required String token,
-    required String password,
-    required String confirmPassword,
-  }) async {
-    try {
-      final response = await _apiService.post(
-        '/v1/vendor/reset-password',
-        {
-          'email': email,
-          'token': token,
-          'password': password,
-          'password_confirmation': confirmPassword,
-        },
-        isProtected: false,
-      );
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      debugPrint("❌ Reset password error: $e");
+      debugPrint("❌ Identity verification error: $e");
       throw Exception(e.toString());
     }
   }

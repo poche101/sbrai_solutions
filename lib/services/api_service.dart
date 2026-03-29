@@ -5,41 +5,50 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
-class VendorApiService {
+class ApiService {
   static const String baseUrl = "https://sbraisolutions.com/api";
+
+  // Token keys for different user types
+  static const String _buyerTokenKey = 'buyer_auth_token';
   static const String _vendorTokenKey = 'vendor_auth_token';
 
-  static final VendorApiService _instance = VendorApiService._internal();
-  factory VendorApiService() => _instance;
-  VendorApiService._internal();
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+  ApiService._internal();
 
-  /// --- VENDOR TOKEN MANAGEMENT ---
-  Future<void> saveToken(String token) async {
+  /// --- TOKEN MANAGEMENT (Generic) ---
+  Future<void> saveToken(String token, {required String userType}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_vendorTokenKey, token);
-    debugPrint("🔐 Vendor token saved");
+    final key = userType == 'vendor' ? _vendorTokenKey : _buyerTokenKey;
+    await prefs.setString(key, token);
+    debugPrint("🔐 $userType token saved");
   }
 
-  Future<String?> getToken() async {
+  Future<String?> getToken({required String userType}) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_vendorTokenKey);
+    final key = userType == 'vendor' ? _vendorTokenKey : _buyerTokenKey;
+    return prefs.getString(key);
   }
 
-  Future<void> clearToken() async {
+  Future<void> clearToken({required String userType}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_vendorTokenKey);
-    debugPrint("🔐 Vendor token cleared");
+    final key = userType == 'vendor' ? _vendorTokenKey : _buyerTokenKey;
+    await prefs.remove(key);
+    debugPrint("🔐 $userType token cleared");
   }
 
   /// --- PRIVATE HELPERS ---
-  Future<Map<String, String>> _getHeaders({bool protected = false}) async {
+  Future<Map<String, String>> _getHeaders({
+    bool protected = false,
+    required String userType
+  }) async {
     Map<String, String> headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
 
     if (protected) {
-      String? token = await getToken();
+      String? token = await getToken(userType: userType);
       if (token != null) {
         headers['Authorization'] = 'Bearer $token';
       }
@@ -52,19 +61,23 @@ class VendorApiService {
     return Uri.parse('$baseUrl$cleanEndpoint');
   }
 
-  /// --- CORE METHODS ---
-  Future<http.Response> get(String endpoint, {bool isProtected = true}) async {
+  /// --- CORE METHODS with userType parameter ---
+  Future<http.Response> get(
+      String endpoint, {
+        bool isProtected = true,
+        required String userType, // 'vendor' or 'buyer'
+      }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
+      final headers = await _getHeaders(protected: isProtected, userType: userType);
 
-      debugPrint("🚀 VENDOR API GET: $url");
+      debugPrint("🚀 API GET [$userType]: $url");
 
       final response = await http
           .get(url, headers: headers)
           .timeout(const Duration(seconds: 15));
 
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } catch (e) {
       return _processError(e, "GET", endpoint);
     }
@@ -74,59 +87,55 @@ class VendorApiService {
       String endpoint,
       Map<String, dynamic> data, {
         bool isProtected = false,
+        required String userType,
       }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
+      final headers = await _getHeaders(protected: isProtected, userType: userType);
 
-      debugPrint("🚀 VENDOR API POST: $url");
+      debugPrint("🚀 API POST [$userType]: $url");
       debugPrint("📦 PAYLOAD: ${jsonEncode(data)}");
 
       final response = await http
           .post(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
 
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } catch (e) {
       return _processError(e, "POST", endpoint);
     }
   }
 
-  /// --- MULTIPART FILE UPLOAD (for identity verification documents) ---
   Future<http.Response> upload(
       String endpoint,
       Map<String, String> data, {
         required String filePath,
         required String fileField,
         bool isProtected = true,
+        required String userType,
       }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
+      final headers = await _getHeaders(protected: isProtected, userType: userType);
 
-      // Remove content-type for multipart request
       headers.remove('Content-Type');
 
       final request = http.MultipartRequest('POST', url);
       request.headers.addAll(headers);
 
-      // Add text fields
       data.forEach((key, value) {
         request.fields[key] = value;
       });
 
-      // Add file
       final file = await http.MultipartFile.fromPath(fileField, filePath);
       request.files.add(file);
 
-      debugPrint("🚀 VENDOR API UPLOAD: $url");
-      debugPrint("📦 FIELDS: $data");
-      debugPrint("📄 FILE: $filePath");
+      debugPrint("🚀 API UPLOAD [$userType]: $url");
 
       final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
       final response = await http.Response.fromStream(streamedResponse);
 
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } catch (e) {
       return _processError(e, "UPLOAD", endpoint);
     }
@@ -136,59 +145,52 @@ class VendorApiService {
       String endpoint,
       Map<String, dynamic> data, {
         bool isProtected = true,
+        required String userType,
       }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
+      final headers = await _getHeaders(protected: isProtected, userType: userType);
 
-      debugPrint("🚀 VENDOR API PUT: $url");
-      debugPrint("📦 PAYLOAD: ${jsonEncode(data)}");
+      debugPrint("🚀 API PUT [$userType]: $url");
 
       final response = await http
           .put(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
 
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } catch (e) {
       return _processError(e, "PUT", endpoint);
     }
   }
 
-  Future<http.Response> delete(String endpoint, {bool isProtected = true}) async {
+  Future<http.Response> delete(
+      String endpoint, {
+        bool isProtected = true,
+        required String userType,
+      }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
+      final headers = await _getHeaders(protected: isProtected, userType: userType);
 
-      debugPrint("🚀 VENDOR API DELETE: $url");
+      debugPrint("🚀 API DELETE [$userType]: $url");
 
       final response = await http
           .delete(url, headers: headers)
           .timeout(const Duration(seconds: 15));
 
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } catch (e) {
       return _processError(e, "DELETE", endpoint);
     }
   }
 
-  /// --- VENDOR LOGOUT ---
-  Future<void> logout() async {
-    try {
-      await post('/v1/vendor/logout', {}, isProtected: true);
-    } catch (e) {
-      debugPrint("Vendor logout API failed: $e");
-    } finally {
-      await clearToken();
-    }
-  }
-
   /// --- RESPONSE & ERROR HANDLING ---
-  http.Response _handleResponse(http.Response response) {
+  http.Response _handleResponse(http.Response response, {required String userType}) {
     final int statusCode = response.statusCode;
     debugPrint("📥 STATUS: $statusCode");
 
     if (statusCode == 401) {
-      clearToken();
+      clearToken(userType: userType);
       throw "Session expired. Please sign in again.";
     }
 
@@ -206,7 +208,7 @@ class VendorApiService {
   }
 
   http.Response _processError(dynamic e, String method, String endpoint) {
-    debugPrint("❌ VENDOR $method ERROR [$endpoint]: $e");
+    debugPrint("❌ $method ERROR [$endpoint]: $e");
 
     if (e is SocketException) {
       throw "No internet connection. Please check your network.";

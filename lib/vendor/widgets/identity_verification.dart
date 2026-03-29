@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http show Response;
 import 'dart:io';
-import '../../services/vendor/vendor_api_service.dart'; // Import VendorApiService
+import 'package:sbrai_solutions/services/vendor/vendor_auth_service.dart';
 
 class IdentityVerification extends StatefulWidget {
   const IdentityVerification({super.key});
@@ -23,7 +23,7 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   String? _ninError;
   String? _bvnError;
 
-  final VendorApiService _vendorApiService = VendorApiService();
+  final VendorAuthService _authService = VendorAuthService();
 
   @override
   void initState() {
@@ -151,66 +151,39 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     setState(() => _isLoading = true);
 
     try {
-      Map<String, String> requestData = {};
-
-      if (_ninController.text.trim().isNotEmpty && _ninError == null) {
-        requestData['nin'] = _ninController.text.trim();
-      }
-
-      if (_bvnController.text.trim().isNotEmpty && _bvnError == null) {
-        requestData['bvn'] = _bvnController.text.trim();
-      }
-
-      http.Response response;
-
-      // If there's a file, use upload method
-      if (_selectedFile != null) {
-        response = await _vendorApiService.upload(
-          '/v1/vendor/verify-identity',
-          requestData,
-          filePath: _selectedFile!.path,
-          fileField: 'document',
-          isProtected: true,
-        );
-      } else {
-        // No file, use regular post
-        // Convert Map<String, String> to Map<String, dynamic>
-        Map<String, dynamic> dynamicData = {};
-        requestData.forEach((key, value) {
-          dynamicData[key] = value;
-        });
-
-        response = await _vendorApiService.post(
-          '/v1/vendor/nin/verify',
-          dynamicData,
-          isProtected: true,
-        );
-      }
-
-      final responseData = jsonDecode(response.body);
+      // Use the clean VendorAuthService method instead of direct API calls
+      final result = await _authService.verifyIdentity(
+        nin: _ninController.text.trim().isNotEmpty ? _ninController.text.trim() : null,
+        bvn: _bvnController.text.trim().isNotEmpty ? _bvnController.text.trim() : null,
+        documentPath: _selectedFile?.path,
+      );
 
       if (mounted) {
-        if (response.statusCode == 200 || response.statusCode == 201) {
+        // Check if verification was successful
+        if (result['status'] == 'success' || result['message']?.contains('success') == true) {
           _showCustomToast(context, 'Identity verified successfully!');
           Future.delayed(const Duration(milliseconds: 800), () {
             if (mounted) Navigator.pop(context, true);
           });
         } else {
-          throw Exception(responseData['message'] ?? 'Verification failed');
+          throw Exception(result['message'] ?? 'Verification failed');
         }
       }
     } catch (e) {
       if (mounted) {
         String errorMessage = e.toString().replaceAll('Exception: ', '');
 
-        if (errorMessage.contains('NIN already used')) {
+        // User-friendly error messages
+        if (errorMessage.contains('NIN already used') || errorMessage.contains('already been used')) {
           errorMessage = 'This NIN has already been used for verification';
         } else if (errorMessage.contains('BVN already used')) {
           errorMessage = 'This BVN has already been used for verification';
-        } else if (errorMessage.contains('Invalid NIN')) {
+        } else if (errorMessage.contains('Invalid NIN') || errorMessage.contains('invalid nin')) {
           errorMessage = 'The NIN provided is invalid. Please check and try again.';
-        } else if (errorMessage.contains('Invalid BVN')) {
+        } else if (errorMessage.contains('Invalid BVN') || errorMessage.contains('invalid bvn')) {
           errorMessage = 'The BVN provided is invalid. Please check and try again.';
+        } else if (errorMessage.contains('network') || errorMessage.contains('internet')) {
+          errorMessage = 'Network error. Please check your connection.';
         }
 
         _showCustomToast(context, errorMessage, isError: true);

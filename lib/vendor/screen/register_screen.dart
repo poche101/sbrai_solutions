@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
-import '../../services/vendor/auth_service.dart';
+import '../../services/vendor/vendor_auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -24,7 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
 
-  final AuthService _authService = AuthService();
+  final VendorAuthService _authService = VendorAuthService();
 
   @override
   void dispose() {
@@ -47,7 +47,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final _ = await _authService.registerVendor(
+      // Changed from registerVendor to register method
+      final response = await _authService.register(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
@@ -58,27 +59,45 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (mounted) {
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Registration successful! Please login to continue.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
+        // Check if registration was successful
+        if (response['status'] == 'success' || response['token'] != null) {
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration successful! Please login to continue.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
 
         // Navigate to login screen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+        } else {
+          // Handle unsuccessful registration
+          throw Exception(response['message'] ?? 'Registration failed');
+        }
       }
     } catch (e) {
       if (mounted) {
-        // Show error message
+        String errorMessage = e.toString().replaceAll('Exception: ', '');
+
+        // User-friendly error messages
+        if (errorMessage.contains('email already exists')) {
+          errorMessage = 'This email is already registered. Please use a different email or login.';
+        } else if (errorMessage.contains('phone already exists')) {
+          errorMessage = 'This phone number is already registered.';
+        } else if (errorMessage.contains('password confirmation')) {
+          errorMessage = 'Password confirmation does not match.';
+        } else if (errorMessage.contains('network') || errorMessage.contains('internet')) {
+          errorMessage = 'Network error. Please check your connection.';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Registration failed: ${e.toString().replaceAll('Exception: ', '')}'),
+            content: Text('Registration failed: $errorMessage'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
           ),
