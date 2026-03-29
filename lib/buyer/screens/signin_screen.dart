@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'signup_page.dart';
 import 'home_screen.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
+// Note: You'll need to add google_sign_in to your pubspec.yaml
+// import 'package:google_sign_in/google_sign_in.dart';
 
 class SigninScreen extends StatefulWidget {
   const SigninScreen({super.key});
@@ -29,8 +31,7 @@ class _SigninScreenState extends State<SigninScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor:
-            Colors.transparent, // We use a Container for custom styling
+        backgroundColor: Colors.transparent,
         elevation: 0,
         content: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -48,7 +49,6 @@ class _SigninScreenState extends State<SigninScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Circle check mark with black background
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: const BoxDecoration(
@@ -75,14 +75,26 @@ class _SigninScreenState extends State<SigninScreen> {
     );
   }
 
+  /// Navigation Helper
+  void _navigateToHome() {
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    });
+  }
+
+  /// Handle Email/Password Login
   Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter both email and password")),
-      );
+      _showErrorSnackBar("Please enter both email and password");
       return;
     }
 
@@ -98,40 +110,72 @@ class _SigninScreenState extends State<SigninScreen> {
 
       if (response.statusCode == 200 && responseData['status'] == 'success') {
         await _apiService.saveToken(responseData['data']['access_token']);
-
         if (!mounted) return;
 
-        // Trigger the custom toast notification
         _showCustomToast(responseData['message'] ?? "Signed in successfully");
-
-        // Short delay to let the user see the toast before navigating
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
-              (route) => false,
-            );
-          }
-        });
+        _navigateToHome();
       } else {
-        String errorMsg = responseData['message'] ?? "Login failed";
-        if (responseData['errors'] != null) {
-          errorMsg = responseData['errors'].values.first[0];
-        }
-        throw errorMsg;
+        throw responseData['message'] ?? "Login failed";
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      _showErrorSnackBar(e.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  /// Handle Social Login (Google/Facebook)
+  Future<void> _handleSocialLogin(String provider) async {
+    setState(() => _isLoading = true);
+
+    try {
+      String? token;
+
+      if (provider == 'google') {
+        // Logic for Google Sign In would go here
+        token = "SOCIAL_TOKEN_FROM_SDK";
+      } else if (provider == 'facebook') {
+        // Logic for Facebook Sign In would go here
+        token = "FB_TOKEN_FROM_SDK";
+      }
+
+      if (token == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final response = await _apiService.socialLogin(provider, token);
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+
+        // Use responseData to clear the unused variable warning
+        final successMsg =
+            responseData['message'] ??
+            "Signed in with ${provider[0].toUpperCase()}${provider.substring(1)}";
+
+        _showCustomToast(successMsg);
+        _navigateToHome();
+      }
+    } catch (e) {
+      // This call was failing because the method below didn't exist
+      _showErrorSnackBar("Social login failed: ${e.toString()}");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// THE MISSING METHOD: Add this below _handleSocialLogin
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -183,15 +227,22 @@ class _SigninScreenState extends State<SigninScreen> {
                   style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
                 const SizedBox(height: 32),
+
+                // Google Button
                 _buildSocialButton(
                   "Continue with Google",
                   'assets/icons/google.png',
+                  onTap: () => _handleSocialLogin('google'),
                 ),
                 const SizedBox(height: 12),
+
+                // Facebook Button
                 _buildSocialButton(
                   "Continue with Facebook",
                   'assets/icons/facebook.png',
+                  onTap: () => _handleSocialLogin('facebook'),
                 ),
+
                 const SizedBox(height: 24),
                 const Row(
                   children: [
@@ -289,7 +340,11 @@ class _SigninScreenState extends State<SigninScreen> {
     );
   }
 
-  Widget _buildSocialButton(String text, String assetPath) {
+  Widget _buildSocialButton(
+    String text,
+    String assetPath, {
+    required VoidCallback onTap,
+  }) {
     final bool isGoogle = text.contains("Google");
     final Color brandColor = isGoogle
         ? const Color.fromARGB(255, 154, 5, 45)
@@ -305,7 +360,7 @@ class _SigninScreenState extends State<SigninScreen> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: InkWell(
-        onTap: () {},
+        onTap: _isLoading ? null : onTap,
         borderRadius: BorderRadius.circular(10),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,

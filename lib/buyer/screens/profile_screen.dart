@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-// Ensure you import your ApiService file here
+import 'package:image_picker/image_picker.dart';
+// Ensure these paths match your project structure
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 
-// --- Data Model ---
+// --- Updated Data Model ---
 class UserProfile {
   String fullName;
   String email;
@@ -23,21 +26,32 @@ class UserProfile {
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
-    final userData = json['user'] ?? {};
+    // Check for nested user object or direct fields
+    final userData = json['user'] ?? json;
 
     String formattedDate = "Joined recently";
-    if (json['created_at'] != null) {
+    String? dateStr = json['created_at'] ?? userData['created_at'];
+
+    if (dateStr != null) {
       try {
-        DateTime dt = DateTime.parse(json['created_at']);
+        DateTime dt = DateTime.parse(dateStr);
         formattedDate = DateFormat('MMM yyyy').format(dt);
       } catch (e) {
         formattedDate = "N/A";
       }
     }
 
+    // Logic for Dynamic Name:
+    // 1. full_name from profile 2. name from user table 3. email prefix as last resort
+    String displayName =
+        json['full_name'] ??
+        userData['name'] ??
+        userData['email']?.split('@')[0] ??
+        'User';
+
     return UserProfile(
-      fullName: json['full_name'] ?? userData['name'] ?? 'User',
-      email: userData['email'] ?? json['email'] ?? 'Not provided',
+      fullName: displayName,
+      email: userData['email'] ?? 'Not provided',
       phone: json['phone'] ?? userData['phone'] ?? '',
       address: json['address'] ?? userData['address'] ?? '',
       joinDate: formattedDate,
@@ -50,25 +64,63 @@ class UserProfile {
 
 // --- Updated Service ---
 class ProfileService {
-  // We now use the ApiService singleton for all heavy lifting
   final ApiService _api = ApiService();
 
   Future<UserProfile> fetchProfile() async {
-    // Endpoints in ApiService are relative to baseUrl
-    final response = await _api.get('/v1/buyers/profile', isProtected: true);
-    final decoded = jsonDecode(response.body);
-    return UserProfile.fromJson(decoded['data']);
+    try {
+      final response = await _api.get('/v1/buyers/profile', isProtected: true);
+      final decoded = jsonDecode(response.body);
+      final profileData = (decoded is Map && decoded.containsKey('data'))
+          ? decoded['data']
+          : decoded;
+      return UserProfile.fromJson(profileData);
+    } catch (e) {
+      throw Exception("Failed to load profile data: $e");
+    }
   }
 
   Future<UserProfile> updateProfile(Map<String, dynamic> data) async {
-    // Laravel apiResource expects PUT for updates
-    final response = await _api.put(
-      '/v1/buyers/profile/1',
-      data,
-      isProtected: true,
-    );
-    final decoded = jsonDecode(response.body);
-    return UserProfile.fromJson(decoded['data']);
+    try {
+      // Laravel handles POST better for profile updates including fields
+      final response = await _api.post(
+        '/v1/buyers/profile/update',
+        data,
+        isProtected: true,
+      );
+      final decoded = jsonDecode(response.body);
+      final profileData = (decoded is Map && decoded.containsKey('data'))
+          ? decoded['data']
+          : decoded;
+      return UserProfile.fromJson(profileData);
+    } catch (e) {
+      throw Exception("Update failed: $e");
+    }
+  }
+
+  Future<UserProfile> uploadAvatar(File imageFile) async {
+    try {
+      // MethodNotAllowed is common if using PUT for files.
+      // Ensure ApiService.postMultipart actually uses 'POST'
+      final response = await _api.postMultipart(
+        '/v1/buyers/profile/upload-photo',
+        imageFile,
+        'profile_photo',
+        isProtected: true,
+      );
+
+      final decoded = jsonDecode(response.body);
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception(decoded['message'] ?? "Server rejected the image");
+      }
+
+      final profileData = (decoded is Map && decoded.containsKey('data'))
+          ? decoded['data']
+          : decoded;
+      return UserProfile.fromJson(profileData);
+    } catch (e) {
+      throw Exception("Upload failed: $e");
+    }
   }
 }
 
@@ -83,6 +135,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isEditing = false;
   bool _isLoading = true;
+  final ImagePicker _picker = ImagePicker();
 
   UserProfile _user = UserProfile(
     fullName: "Loading...",
@@ -93,7 +146,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   );
 
   final ProfileService _service = ProfileService();
-
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   late TextEditingController _addressController;
@@ -117,9 +169,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       if (!mounted) return;
       setState(() => _isLoading = true);
-
       final data = await _service.fetchProfile();
-
       if (mounted) {
         setState(() {
           _user = data;
@@ -130,8 +180,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        // ApiService now throws specific strings, so we show them directly
-        _showError(e.toString());
+        _showError("Connection error: Could not fetch profile.");
+      }
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality:
+            50, // Reduced quality slightly to ensure faster upload/less errors
+        maxWidth: 800,
+      );
+
+      if (pickedFile == null) return;
+
+      setState(() => _isLoading = true);
+
+      final updatedUser = await _service.uploadAvatar(File(pickedFile.path));
+
+      if (mounted) {
+        setState(() {
+          _user = updatedUser;
+          _isLoading = false;
+        });
+        _showSuccess("Profile picture updated!");
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        // Specifically catching the Method Not Allowed or File Size errors
+        _showError(e.toString().replaceAll("Exception:", ""));
       }
     }
   }
@@ -147,17 +227,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message)),
+          ],
+        ),
         backgroundColor: Colors.redAccent,
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(20),
-        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
   Future<void> _saveProfile() async {
-    if (_nameController.text.isEmpty) {
+    if (_nameController.text.trim().isEmpty) {
       _showError("Name cannot be empty");
       return;
     }
@@ -165,7 +259,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
 
     final updateData = {
-      'full_name': _nameController.text.trim(), // Use snake_case for Laravel
+      'fullName': _nameController.text.trim(),
       'phone': _phoneController.text.trim(),
       'address': _addressController.text.trim(),
     };
@@ -179,18 +273,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isEditing = false;
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Profile updated successfully!"),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        _showSuccess("Profile updated successfully");
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showError(e.toString());
+        _showError("Save failed. Please check your internet.");
       }
     }
   }
@@ -260,8 +348,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ... (Keep your _buildProfileHeaderCard, _buildInfoList, _infoTile, and _editField methods as they are)
-
   Widget _buildProfileHeaderCard() {
     return Container(
       width: double.infinity,
@@ -279,46 +365,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 55,
-            backgroundColor: const Color(0xFFFFF5F2),
-            backgroundImage: _user.photoUrl != null
-                ? NetworkImage(_user.photoUrl!)
-                : null,
-            child: _user.photoUrl == null
-                ? const Icon(
-                    Icons.person_outline_rounded,
-                    size: 60,
-                    color: Color(0xFFFF7043),
-                  )
-                : null,
+          Stack(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFFFF5F2), width: 4),
+                ),
+                child: CircleAvatar(
+                  radius: 55,
+                  backgroundColor: const Color(0xFFFFF5F2),
+                  backgroundImage:
+                      _user.photoUrl != null && _user.photoUrl!.isNotEmpty
+                      ? NetworkImage(_user.photoUrl!)
+                      : null,
+                  child: (_user.photoUrl == null || _user.photoUrl!.isEmpty)
+                      ? const Icon(
+                          Icons.person_outline_rounded,
+                          size: 60,
+                          color: Color(0xFFFF7043),
+                        )
+                      : null,
+                ),
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: GestureDetector(
+                  onTap: _pickAndUploadImage,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF7043),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 18),
           Text(
             _user.fullName,
+            textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1A1A1A),
             ),
           ),
           const SizedBox(height: 6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
               color: const Color(0xFF1E267A),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: const Text(
               "Buyer",
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -330,7 +448,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: 8),
               Text(
                 "Joined ${_user.joinDate}",
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
+                style: const TextStyle(color: Color(0xFF757575), fontSize: 13),
               ),
             ],
           ),
@@ -351,11 +469,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           const Text(
             "Account Information",
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF333333),
-            ),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 15),
           _infoTile(Icons.mail_outline_rounded, "Email", _user.email),
@@ -397,12 +511,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _updateControllers();
                     setState(() => _isEditing = false);
                   },
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
                   child: const Text(
                     "Cancel",
                     style: TextStyle(color: Colors.black87),
@@ -414,12 +522,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: ElevatedButton(
                   onPressed: _saveProfile,
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
                     backgroundColor: const Color(0xFFFF7043),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
                   ),
                   child: const Text(
                     "Save",
@@ -460,7 +563,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFF333333),
                   ),
                 ),
               ],

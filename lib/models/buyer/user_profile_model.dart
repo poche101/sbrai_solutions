@@ -18,38 +18,41 @@ class UserProfile {
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
-    // 1. Safely handle the nested user object
+    // Check for a nested user object just in case
     final Map<String, dynamic> userRel = json['user'] is Map
         ? json['user']
         : {};
 
-    // 2. Format the date (e.g., "2026-03-22" -> "Mar 2026")
-    String formattedDate = "Joined recently";
-    if (json['created_at'] != null) {
-      try {
-        DateTime dt = DateTime.parse(json['created_at']);
-        formattedDate = DateFormat('MMM yyyy').format(dt);
-      } catch (e) {
-        formattedDate = "N/A";
-      }
-    }
-
     return UserProfile(
-      // Access 'full_name' from profile, fall back to user 'name', then empty string
-      fullName: json['full_name'] ?? userRel['name'] ?? 'Guest User',
+      // FIX: Changed from 'full_name' to 'fullName' to match your API
+      fullName:
+          json['fullName'] ?? json['name'] ?? userRel['name'] ?? 'Guest User',
 
-      // Access email from the nested user relationship
-      email: userRel['email'] ?? 'No email provided',
+      // Email is already working, but we keep the fallback
+      email: json['email'] ?? userRel['email'] ?? 'No email provided',
 
-      phone: json['phone'] ?? '',
-      address: json['address'] ?? '',
-      joinDate: formattedDate,
+      phone: json['phone']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
 
-      // Use the absolute URL if your Resource provides it,
-      // otherwise prepend your storage base URL
-      photoUrl: json['profile_photo'] != null
-          ? "https://sbraisolutions.com/storage/${json['profile_photo']}"
+      // FIX: Your API already provides "joinDate": "Mar 2026",
+      // so we can use it directly or fall back to our parser.
+      joinDate: json['joinDate'] ?? _parseDate(json['created_at']),
+
+      // FIX: Changed from 'profile_photo' to 'photo' to match your API
+      photoUrl: json['photo'] != null
+          ? "https://sbraisolutions.com/storage/${json['photo']}"
           : null,
     );
+  }
+
+  /// Helper to handle date parsing safely
+  static String _parseDate(dynamic dateValue) {
+    if (dateValue == null) return "Joined recently";
+    try {
+      DateTime dt = DateTime.parse(dateValue.toString());
+      return DateFormat('MMM yyyy').format(dt);
+    } catch (e) {
+      return "N/A";
+    }
   }
 }
