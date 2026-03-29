@@ -1,5 +1,10 @@
+import 'dart:convert' show jsonDecode;
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http show Response;
+import 'dart:io';
+import 'package:sbrai_solutions/services/vendor/vendor_auth_service.dart';
 
 class IdentityVerification extends StatefulWidget {
   const IdentityVerification({super.key});
@@ -12,8 +17,13 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   final TextEditingController _ninController = TextEditingController();
   final TextEditingController _bvnController = TextEditingController();
   String? _fileName;
+  File? _selectedFile; // Changed from PlatformFile to File
   bool _isButtonEnabled = false;
   bool _isLoading = false;
+  String? _ninError;
+  String? _bvnError;
+
+  final VendorAuthService _authService = VendorAuthService();
 
   @override
   void initState() {
@@ -24,15 +34,40 @@ class _IdentityVerificationState extends State<IdentityVerification> {
 
   void _validateFields() {
     setState(() {
-      // Enables if either NIN or BVN is provided
-      _isButtonEnabled =
-          _ninController.text.trim().isNotEmpty ||
-          _bvnController.text.trim().isNotEmpty;
+      // Validate NIN
+      if (_ninController.text.trim().isNotEmpty) {
+        if (_ninController.text.trim().length != 11) {
+          _ninError = 'NIN must be exactly 11 digits';
+        } else if (!RegExp(r'^[0-9]+$').hasMatch(_ninController.text.trim())) {
+          _ninError = 'NIN must contain only numbers';
+        } else {
+          _ninError = null;
+        }
+      } else {
+        _ninError = null;
+      }
+
+      // Validate BVN
+      if (_bvnController.text.trim().isNotEmpty) {
+        if (_bvnController.text.trim().length != 11) {
+          _bvnError = 'BVN must be exactly 11 digits';
+        } else if (!RegExp(r'^[0-9]+$').hasMatch(_bvnController.text.trim())) {
+          _bvnError = 'BVN must contain only numbers';
+        } else {
+          _bvnError = null;
+        }
+      } else {
+        _bvnError = null;
+      }
+
+      final hasValidNin = _ninController.text.trim().isNotEmpty && _ninError == null;
+      final hasValidBvn = _bvnController.text.trim().isNotEmpty && _bvnError == null;
+
+      _isButtonEnabled = (hasValidNin || hasValidBvn);
     });
   }
 
-  /// Custom Toast Notification
-  void _showCustomToast(BuildContext context, String message) {
+  void _showCustomToast(BuildContext context, String message, {bool isError = false}) {
     final overlay = Overlay.of(context);
     late OverlayEntry overlayEntry;
 
@@ -46,7 +81,7 @@ class _IdentityVerificationState extends State<IdentityVerification> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isError ? Colors.red.shade50 : Colors.white,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
@@ -60,18 +95,22 @@ class _IdentityVerificationState extends State<IdentityVerification> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
+                  decoration: BoxDecoration(
+                    color: isError ? Colors.red : Colors.black,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.check, color: Colors.white, size: 16),
+                  child: Icon(
+                    isError ? Icons.close : Icons.check,
+                    color: Colors.white,
+                    size: 16,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     message,
-                    style: const TextStyle(
-                      color: Colors.black,
+                    style: TextStyle(
+                      color: isError ? Colors.red.shade800 : Colors.black,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -101,24 +140,58 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     if (result != null) {
       setState(() {
         _fileName = result.files.single.name;
+        _selectedFile = File(result.files.single.path!);
       });
     }
   }
 
   Future<void> _handleSubmit() async {
+    if (!_isButtonEnabled) return;
+
     setState(() => _isLoading = true);
 
-    // Simulate API call for Identity verification
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Use the clean VendorAuthService method instead of direct API calls
+      final result = await _authService.verifyIdentity(
+        nin: _ninController.text.trim().isNotEmpty ? _ninController.text.trim() : null,
+        bvn: _bvnController.text.trim().isNotEmpty ? _bvnController.text.trim() : null,
+        documentPath: _selectedFile?.path,
+      );
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      _showCustomToast(context, 'Identity information submitted successfully!');
+      if (mounted) {
+        // Check if verification was successful
+        if (result['status'] == 'success' || result['message']?.contains('success') == true) {
+          _showCustomToast(context, 'Identity verified successfully!');
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (mounted) Navigator.pop(context, true);
+          });
+        } else {
+          throw Exception(result['message'] ?? 'Verification failed');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        String errorMessage = e.toString().replaceAll('Exception: ', '');
 
-      // Delay slightly to let the user see the toast before popping
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted) Navigator.pop(context, true);
-      });
+        // User-friendly error messages
+        if (errorMessage.contains('NIN already used') || errorMessage.contains('already been used')) {
+          errorMessage = 'This NIN has already been used for verification';
+        } else if (errorMessage.contains('BVN already used')) {
+          errorMessage = 'This BVN has already been used for verification';
+        } else if (errorMessage.contains('Invalid NIN') || errorMessage.contains('invalid nin')) {
+          errorMessage = 'The NIN provided is invalid. Please check and try again.';
+        } else if (errorMessage.contains('Invalid BVN') || errorMessage.contains('invalid bvn')) {
+          errorMessage = 'The BVN provided is invalid. Please check and try again.';
+        } else if (errorMessage.contains('network') || errorMessage.contains('internet')) {
+          errorMessage = 'Network error. Please check your connection.';
+        }
+
+        _showCustomToast(context, errorMessage, isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -206,7 +279,11 @@ class _IdentityVerificationState extends State<IdentityVerification> {
               const SizedBox(height: 30),
 
               _buildLabel('National Identification Number (NIN)'),
-              _buildTextField(_ninController, '12345678901'),
+              _buildTextField(
+                _ninController,
+                '12345678901',
+                errorText: _ninError,
+              ),
               _buildSubLabel('11-digit NIN issued by NIMC'),
 
               const SizedBox(height: 20),
@@ -214,7 +291,11 @@ class _IdentityVerificationState extends State<IdentityVerification> {
               const SizedBox(height: 20),
 
               _buildLabel('Bank Verification Number (BVN)'),
-              _buildTextField(_bvnController, '22334455667'),
+              _buildTextField(
+                _bvnController,
+                '22334455667',
+                errorText: _bvnError,
+              ),
               _buildSubLabel('11-digit BVN from your bank'),
 
               const SizedBox(height: 24),
@@ -268,6 +349,7 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                   ),
                 ),
               ),
+              _buildSubLabel('Supported formats: PDF, JPG, PNG (Max 5MB)'),
 
               const SizedBox(height: 30),
 
@@ -291,20 +373,20 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                   ),
                   child: _isLoading
                       ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
                       : const Text(
-                          'Submit for Verification',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                    'Submit for Verification',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -334,18 +416,31 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint) {
+  Widget _buildTextField(
+      TextEditingController controller,
+      String hint, {
+        String? errorText,
+      }) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
       onChanged: (_) => _validateFields(),
       decoration: InputDecoration(
         hintText: hint,
+        errorText: errorText,
         filled: true,
         fillColor: const Color(0xFFF3F4F6),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.red.shade300),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.red.shade300),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,

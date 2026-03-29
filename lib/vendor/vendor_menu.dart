@@ -1,19 +1,97 @@
 import 'package:flutter/material.dart';
-// Ensure these match your actual file names
+import 'package:sbrai_solutions/services/vendor/vendor_auth_service.dart';
 import 'screen/profile_screen.dart';
 import 'screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
-
-// Import your newly created KYC screen here
 import 'package:sbrai_solutions/vendor/screen/settings/kyc_screen.dart';
-
-import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart'
-    as vendor;
+import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart' as vendor;
 import 'package:sbrai_solutions/vendor/screen/message_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/vendor_settings_screen.dart';
+import 'package:sbrai_solutions/vendor/screen/login_screen.dart';
 
-class VendorMenu extends StatelessWidget {
+class VendorMenu extends StatefulWidget {
   const VendorMenu({super.key});
+
+  @override
+  State<VendorMenu> createState() => _VendorMenuState();
+}
+
+class _VendorMenuState extends State<VendorMenu> {
+  bool _isLoggingOut = false;
+  final VendorAuthService _authService = VendorAuthService();
+
+  // Show logout confirmation dialog
+  Future<void> _showLogoutConfirmation() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                'Logout',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogout == true) {
+      await _handleLogout();
+    }
+  }
+
+  // Handle logout process
+  Future<void> _handleLogout() async {
+    setState(() => _isLoggingOut = true);
+
+    try {
+      await _authService.logout();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Logged out successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Clear all routes and go to login
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Logout failed: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoggingOut = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +178,7 @@ class VendorMenu extends StatelessWidget {
                   _buildMenuItem(
                     Icons.home_outlined,
                     'Home',
-                    () => Navigator.pop(context),
+                        () => Navigator.pop(context),
                   ),
                   _buildMenuItem(Icons.person_outline, 'Profile', () {
                     Navigator.pop(context);
@@ -171,27 +249,42 @@ class VendorMenu extends StatelessWidget {
                     );
                   }),
 
-                  // --- UPDATED: KYC NAVIGATION ---
+                  // KYC NAVIGATION
                   _buildMenuItem(Icons.verified_user_outlined, 'KYC', () {
                     final navigator = Navigator.of(context);
-                    navigator.pop(); // Close drawer
+                    navigator.pop();
                     navigator.push(
                       MaterialPageRoute(
-                        builder: (context) =>
-                            const KYCScreen(), // Navigates to your KYC Screen
+                        builder: (context) => const KYCScreen(),
                       ),
                     );
                   }),
 
-                  _buildMenuItem(
+                  // LOGOUT MENU ITEM WITH LOADING STATE
+                  _isLoggingOut
+                      ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                        ),
+                      ),
+                    ),
+                  )
+                      : _buildMenuItem(
                     Icons.logout_outlined,
                     'Logout',
-                    () {},
+                        () async => await _handleLogout(),
                     color: Colors.red.shade300,
                   ),
                 ],
               ),
             ),
+
 
             // --- FOOTER ---
             Padding(
@@ -223,11 +316,11 @@ class VendorMenu extends StatelessWidget {
   }
 
   Widget _buildBadge(
-    String label,
-    Color color, {
-    required IconData icon,
-    bool isVerified = true,
-  }) {
+      String label,
+      Color color, {
+        required IconData icon,
+        bool isVerified = true,
+      }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -253,11 +346,11 @@ class VendorMenu extends StatelessWidget {
   }
 
   Widget _buildMenuItem(
-    IconData icon,
-    String title,
-    VoidCallback onTap, {
-    Color? color,
-  }) {
+      IconData icon,
+      String title,
+      VoidCallback onTap, {
+        Color? color,
+      }) {
     return ListTile(
       leading: Icon(icon, color: color ?? Colors.black45, size: 22),
       title: Text(
