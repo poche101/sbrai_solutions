@@ -1,59 +1,497 @@
 import 'package:flutter/material.dart';
-import '../widgets/buyers_menu.dart';
+import 'package:sbrai_solutions/models/buyer/product_model.dart';
+import 'package:sbrai_solutions/buyer/widgets/buyers_menu.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String selectedState = "All Nigeria";
+  String selectedLanguage = "English";
+  final TextEditingController _searchController = TextEditingController();
+
+  List<Product> products = [];
+  int currentPage = 1;
+  bool isLoading = false;
+
+  final List<String> nigeriaStates = [
+    "All Nigeria",
+    "Abia",
+    "Adamawa",
+    "Akwa Ibom",
+    "Anambra",
+    "Bauchi",
+    "Bayelsa",
+    "Benue",
+    "Borno",
+    "Cross River",
+    "Delta",
+    "Ebonyi",
+    "Edo",
+    "Ekiti",
+    "Enugu",
+    "FCT",
+    "Gombe",
+    "Imo",
+    "Jigawa",
+    "Kaduna",
+    "Kano",
+    "Katsina",
+    "Kebbi",
+    "Kogi",
+    "Kwara",
+    "Lagos",
+    "Nasarawa",
+    "Niger",
+    "Ogun",
+    "Ondo",
+    "Osun",
+    "Oyo",
+    "Plateau",
+    "Rivers",
+    "Sokoto",
+    "Taraba",
+    "Yobe",
+    "Zamfara",
+  ];
+
+  @override
   Widget build(BuildContext context) {
-    final bool isDesktop = MediaQuery.of(context).size.width > 900;
-
-    // These values could eventually come from your Login logic
-    const String currentUserName = "";
-    const String currentUserEmail = "";
-
     return Scaffold(
-      // Mobile Drawer - PASSING REQUIRED ARGUMENTS HERE
-      drawer: isDesktop
-          ? null
-          : Drawer(
-              child: BuyersMenu(
-                userName: currentUserName,
-                userEmail: currentUserEmail,
-              ),
-            ),
-
-      appBar: isDesktop
-          ? null
-          : AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0.5,
-              title: const Text(
-                "Store Hub",
-                style: TextStyle(color: Colors.black),
-              ),
-            ),
-
-      body: Row(
-        children: [
-          // Sidebar for Desktop - PASSING REQUIRED ARGUMENTS HERE
-          if (isDesktop)
-            BuyersMenu(
-              isDesktop: true,
-              userName: currentUserName,
-              userEmail: currentUserEmail,
-            ),
-
-          // Main Content Area
-          const Expanded(
-            child: Center(
-              child: Text(
-                "Welcome to the Sbrai",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
+      backgroundColor: Colors.white,
+      drawer: const BuyersMenu(
+        userName: "Guest User",
+        userEmail: "guest@example.com",
+      ),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: Colors.black87),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+        title: Image.asset('assets/images/logo.png', height: 25),
+        actions: [
+          _buildLanguageDropdown(),
+          const SizedBox(width: 8),
+          const Icon(Icons.person_outline, color: Colors.black87),
+          const Center(
+            child: Text(
+              "  Buyer   ",
+              style: TextStyle(color: Colors.black87, fontSize: 13),
             ),
           ),
         ],
+      ),
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification scrollInfo) {
+          if (!isLoading &&
+              scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
+            return true;
+          }
+          return false;
+        },
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Container(
+                color: const Color(0xFFE85D22),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 20,
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      "What are you looking for?",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildFunctionalSearchBar(),
+                    const SizedBox(height: 20),
+                    _buildDynamicCategoryGrid(),
+                    const SizedBox(height: 15),
+                    _buildTrendingSection(),
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.all(12),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Recommended for You",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      "${products.length} items",
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.68,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _buildDynamicProductCard(products[index]),
+                  childCount: products.length,
+                ),
+              ),
+            ),
+            if (isLoading)
+              const SliverToBoxAdapter(
+                child: Center(child: CircularProgressIndicator()),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFunctionalSearchBar() {
+    return Row(
+      children: [
+        // State Dropdown Section using PopupMenuButton for exact styling
+        Expanded(
+          flex: 4,
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              hoverColor: Colors.transparent,
+              splashColor: Colors.transparent,
+            ),
+            child: PopupMenuButton<String>(
+              offset: const Offset(0, 50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              onSelected: (String value) {
+                setState(() => selectedState = value);
+              },
+              itemBuilder: (BuildContext context) {
+                return nigeriaStates.map((String state) {
+                  return PopupMenuItem<String>(
+                    value: state,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(state, style: const TextStyle(fontSize: 14)),
+                        if (selectedState == state)
+                          const Icon(Icons.check, size: 18, color: Colors.grey),
+                      ],
+                    ),
+                  );
+                }).toList();
+              },
+              child: Container(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        selectedState,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.keyboard_arrow_down,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Search Input Section
+        Expanded(
+          flex: 7,
+          child: Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white24, width: 1),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: "I am looking for...",
+                      hintStyle: TextStyle(color: Colors.white54, fontSize: 13),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 15),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => print("Searching..."),
+                  child: Container(
+                    width: 44,
+                    height: 40,
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE85D22),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(
+                      Icons.search,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDynamicCategoryGrid() {
+    final List<Map<String, String>> categories = [
+      {'name': 'Sharp Sand', 'icon': 'https://via.placeholder.com/150'},
+      {'name': 'Granite', 'icon': 'https://via.placeholder.com/150'},
+      {'name': 'Blocks', 'icon': 'https://via.placeholder.com/150'},
+      {'name': 'Cement', 'icon': 'https://via.placeholder.com/150'},
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.75,
+      ),
+      itemCount: categories.length,
+      itemBuilder: (context, index) {
+        return Column(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  image: DecorationImage(
+                    image: NetworkImage(categories[index]['icon']!),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              categories[index]['name']!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildLanguageDropdown() {
+    return PopupMenuButton<String>(
+      onSelected: (value) => setState(() => selectedLanguage = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          children: [
+            Text(
+              selectedLanguage.substring(0, 2).toUpperCase(),
+              style: const TextStyle(color: Colors.black, fontSize: 12),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_down,
+              color: Colors.black,
+              size: 14,
+            ),
+          ],
+        ),
+      ),
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: "NG", child: Text("NG")),
+        const PopupMenuItem(value: "English", child: Text("English")),
+        const PopupMenuItem(value: "French", child: Text("Français")),
+        const PopupMenuItem(value: "Yoruba", child: Text("Yorùbá")),
+        const PopupMenuItem(value: "Hausa", child: Text("Hausa")),
+        const PopupMenuItem(value: "Igbo", child: Text("Igbo")),
+      ],
+    );
+  }
+
+  Widget _buildTrendingSection() {
+    return Row(
+      children: [
+        const Text(
+          "Trending",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const Spacer(),
+        IconButton(
+          onPressed: () {},
+          icon: const Icon(
+            Icons.grid_view_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDynamicProductCard(Product product) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+              child: Image.network(
+                product.imageUrl,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: Colors.grey.shade200,
+                  child: const Icon(Icons.image),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                  maxLines: 1,
+                ),
+                Text(
+                  "📍 ${product.location}",
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "₦${product.price.toStringAsFixed(0)}",
+                  style: const TextStyle(
+                    color: Color(0xFFE85D22),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildSmallButton("Call", Icons.call, false),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: _buildSmallButton(
+                        "Chat",
+                        Icons.chat_bubble_outline,
+                        true,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSmallButton(String label, IconData icon, bool isPrimary) {
+    return SizedBox(
+      height: 30,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isPrimary ? const Color(0xFFE85D22) : Colors.white,
+          foregroundColor: isPrimary ? Colors.white : Colors.black,
+          side: isPrimary
+              ? BorderSide.none
+              : const BorderSide(color: Colors.grey),
+          padding: EdgeInsets.zero,
+          elevation: 0,
+        ),
+        onPressed: () {},
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 12),
+            const SizedBox(width: 2),
+            Text(label, style: const TextStyle(fontSize: 10)),
+          ],
+        ),
       ),
     );
   }

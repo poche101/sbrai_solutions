@@ -6,7 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 class ApiService {
-  static const String baseUrl = "https://sbraisolutions.com/api";
+  // Updated to include /v1 to resolve the fetch failure
+  static const String baseUrl = "https://sbraisolutions.com/api/v1";
 
   // Token keys for different user types
   static const String _buyerTokenKey = 'buyer_auth_token';
@@ -40,7 +41,7 @@ class ApiService {
   /// --- PRIVATE HELPERS ---
   Future<Map<String, String>> _getHeaders({
     bool protected = false,
-    required String userType
+    required String userType,
   }) async {
     Map<String, String> headers = {
       'Content-Type': 'application/json',
@@ -57,19 +58,25 @@ class ApiService {
   }
 
   Uri _buildUrl(String endpoint) {
-    final cleanEndpoint = endpoint.startsWith('/') ? endpoint : '/$endpoint';
-    return Uri.parse('$baseUrl$cleanEndpoint');
+    // Ensures we don't end up with .../api/v1//endpoint
+    final cleanEndpoint = endpoint.startsWith('/')
+        ? endpoint.substring(1)
+        : endpoint;
+    return Uri.parse('$baseUrl/$cleanEndpoint');
   }
 
-  /// --- CORE METHODS with userType parameter ---
+  /// --- CORE METHODS ---
   Future<http.Response> get(
-      String endpoint, {
-        bool isProtected = true,
-        required String userType, // 'vendor' or 'buyer'
-      }) async {
+    String endpoint, {
+    bool isProtected = true,
+    required String userType,
+  }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected, userType: userType);
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
 
       debugPrint("🚀 API GET [$userType]: $url");
 
@@ -84,14 +91,17 @@ class ApiService {
   }
 
   Future<http.Response> post(
-      String endpoint,
-      Map<String, dynamic> data, {
-        bool isProtected = false,
-        required String userType,
-      }) async {
+    String endpoint,
+    Map<String, dynamic> data, {
+    bool isProtected = false,
+    required String userType,
+  }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected, userType: userType);
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
 
       debugPrint("🚀 API POST [$userType]: $url");
       debugPrint("📦 PAYLOAD: ${jsonEncode(data)}");
@@ -107,16 +117,19 @@ class ApiService {
   }
 
   Future<http.Response> upload(
-      String endpoint,
-      Map<String, String> data, {
-        required String filePath,
-        required String fileField,
-        bool isProtected = true,
-        required String userType,
-      }) async {
+    String endpoint,
+    Map<String, String> data, {
+    required String filePath,
+    required String fileField,
+    bool isProtected = true,
+    required String userType,
+  }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected, userType: userType);
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
 
       headers.remove('Content-Type');
 
@@ -132,7 +145,9 @@ class ApiService {
 
       debugPrint("🚀 API UPLOAD [$userType]: $url");
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+      );
       final response = await http.Response.fromStream(streamedResponse);
 
       return _handleResponse(response, userType: userType);
@@ -142,14 +157,17 @@ class ApiService {
   }
 
   Future<http.Response> put(
-      String endpoint,
-      Map<String, dynamic> data, {
-        bool isProtected = true,
-        required String userType,
-      }) async {
+    String endpoint,
+    Map<String, dynamic> data, {
+    bool isProtected = true,
+    required String userType,
+  }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected, userType: userType);
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
 
       debugPrint("🚀 API PUT [$userType]: $url");
 
@@ -164,13 +182,16 @@ class ApiService {
   }
 
   Future<http.Response> delete(
-      String endpoint, {
-        bool isProtected = true,
-        required String userType,
-      }) async {
+    String endpoint, {
+    bool isProtected = true,
+    required String userType,
+  }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected, userType: userType);
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
 
       debugPrint("🚀 API DELETE [$userType]: $url");
 
@@ -185,7 +206,10 @@ class ApiService {
   }
 
   /// --- RESPONSE & ERROR HANDLING ---
-  http.Response _handleResponse(http.Response response, {required String userType}) {
+  http.Response _handleResponse(
+    http.Response response, {
+    required String userType,
+  }) {
     final int statusCode = response.statusCode;
     debugPrint("📥 STATUS: $statusCode");
 

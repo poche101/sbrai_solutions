@@ -5,6 +5,7 @@ import 'package:sbrai_solutions/buyer/screens/profile_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/favorite_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/message_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/settings_screen.dart';
+import 'package:sbrai_solutions/buyer/screens/settings/kyc_screen.dart'; // Added KYC screen import
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:sbrai_solutions/buyer/screens/signin_screen.dart';
 
@@ -193,7 +194,7 @@ class _BuyersMenuState extends State<BuyersMenu> {
                 ),
                 _buildMenuItem(
                   Icons.person_outline,
-                  "My Profile",
+                  "Profile",
                   onTap: () {
                     if (Navigator.canPop(context)) Navigator.pop(context);
                     Navigator.push(
@@ -249,6 +250,20 @@ class _BuyersMenuState extends State<BuyersMenu> {
                     );
                   },
                 ),
+                // Added KYC Menu Item
+                _buildMenuItem(
+                  Icons.verified_user_outlined,
+                  "KYC",
+                  onTap: () {
+                    if (Navigator.canPop(context)) Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const KYCScreen(),
+                      ),
+                    );
+                  },
+                ),
                 _buildMenuItem(
                   Icons.logout_outlined,
                   _isLoggingOut ? "Logging out..." : "Logout",
@@ -265,7 +280,6 @@ class _BuyersMenuState extends State<BuyersMenu> {
   }
 
   Widget _buildUserHeader(BuildContext context) {
-    // Show loader while fetching if we don't have local data yet
     if (_isFetching && _fetchedName == null) {
       return Container(
         height: 160,

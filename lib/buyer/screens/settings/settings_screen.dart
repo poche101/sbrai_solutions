@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/models/settings_model.dart';
+import 'package:sbrai_solutions/buyer_service/settings_service.dart'; // Import the service
 import 'package:sbrai_solutions/buyer/screens/settings/buyers_terms_page.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/privacy_policy_page.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/help_support_page.dart';
@@ -13,7 +14,51 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final SettingsModel _settings = SettingsModel();
+  final SettingsService _settingsService = SettingsService();
+  SettingsModel _settings = SettingsModel();
+  bool _isLoading = true;
+
+  // NOTE: Replace this with your actual token retrieval (e.g., from a Provider or Secure Storage)
+  final String _authToken = "YOUR_SESSION_TOKEN_HERE";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserSettings();
+  }
+
+  /// Initial Load from Laravel API
+  Future<void> _loadUserSettings() async {
+    final remoteSettings = await _settingsService.fetchSettings(_authToken);
+    if (remoteSettings != null) {
+      setState(() {
+        _settings = remoteSettings;
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Syncs a specific change to the backend
+  void _updateSetting(Function updateFn) async {
+    setState(() => updateFn());
+
+    // Sync to Laravel
+    bool success = await _settingsService.updateNotificationSettings(
+      _settings,
+      _authToken,
+    );
+
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Failed to sync settings. Please check connection."),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,159 +81,181 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFFF7043)),
+            )
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
 
-            // Notifications Section
-            _buildSection(
-              title: 'Notifications',
-              icon: Icons.notifications_none_outlined,
-              iconColor: Colors.orange,
-              description: 'Manage your notification preferences',
-              children: [
-                _buildSwitchTile(
-                  'New Listings',
-                  'Get notified about new items in your area',
-                  _settings.newListings,
-                  (val) => setState(() => _settings.newListings = val),
-                ),
-                _buildSwitchTile(
-                  'Price Drops',
-                  'Alert me when prices drop on favorited items',
-                  _settings.priceDrops,
-                  (val) => setState(() => _settings.priceDrops = val),
-                ),
-                _buildSwitchTile(
-                  'Messages',
-                  'Receive notifications for new messages',
-                  _settings.messages,
-                  (val) => setState(() => _settings.messages = val),
-                ),
-                _buildSwitchTile(
-                  'Promotions',
-                  'Receive promotional offers and deals',
-                  _settings.promotions,
-                  (val) => setState(() => _settings.promotions = val),
-                ),
-              ],
-            ),
-
-            // Privacy & Security Section
-            _buildSection(
-              title: 'Privacy & Security',
-              icon: Icons.shield_outlined,
-              iconColor: Colors.orange, // Icon is now orange
-              description: 'Control your privacy and account security',
-              children: [
-                _buildSwitchTile(
-                  'Show Online Status',
-                  'Let others see when you\'re online',
-                  _settings.showOnlineStatus,
-                  (val) => setState(() => _settings.showOnlineStatus = val),
-                ),
-                _buildSwitchTile(
-                  'Show Phone Number',
-                  'Display phone number on profile',
-                  _settings.showPhoneNumber,
-                  (val) => setState(() => _settings.showPhoneNumber = val),
-                ),
-                _buildSwitchTile(
-                  'Allow Messages',
-                  'Allow users to send you messages',
-                  _settings.allowMessages,
-                  (val) => setState(() => _settings.allowMessages = val),
-                ),
-                _buildActionTile('Change Password', Icons.key_outlined, () {}),
-              ],
-            ),
-            // Language & Region Section
-            _buildSection(
-              title: 'Language & Region',
-              icon: Icons.language_outlined,
-              iconColor: Colors.orange,
-              titleColor: Colors.black,
-              children: [
-                _buildSelectionTile('Language', _settings.language, () {}),
-                _buildSelectionTile('Currency', _settings.currency, () {}),
-              ],
-            ),
-
-            // Legal Section
-            _buildSection(
-              children: [
-                // 1. Terms & Conditions Tile
-                _buildActionTile(
-                  'Terms & Conditions',
-                  Icons.description_outlined,
-                  () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const BuyersTermsPage(),
+                  // Notifications Section
+                  _buildSection(
+                    title: 'Notifications',
+                    icon: Icons.notifications_none_outlined,
+                    iconColor: Colors.orange,
+                    description: 'Manage your notification preferences',
+                    children: [
+                      _buildSwitchTile(
+                        'New Listings',
+                        'Get notified about new items in your area',
+                        _settings.newListings,
+                        (val) =>
+                            _updateSetting(() => _settings.newListings = val),
                       ),
-                    );
-                  },
-                ),
+                      _buildSwitchTile(
+                        'Price Drops',
+                        'Alert me when prices drop on favorited items',
+                        _settings.priceDrops,
+                        (val) =>
+                            _updateSetting(() => _settings.priceDrops = val),
+                      ),
+                      _buildSwitchTile(
+                        'Messages',
+                        'Receive notifications for new messages',
+                        _settings.messages,
+                        (val) => _updateSetting(() => _settings.messages = val),
+                      ),
+                      _buildSwitchTile(
+                        'Promotions',
+                        'Receive promotional offers and deals',
+                        _settings.promotions,
+                        (val) =>
+                            _updateSetting(() => _settings.promotions = val),
+                      ),
+                    ],
+                  ),
 
-                // 2. Privacy Policy Tile
-                _buildActionTile('Privacy Policy', Icons.lock_outline, () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const PrivacyPolicyPage(),
-                    ),
-                  );
-                }),
+                  // Privacy & Security Section
+                  _buildSection(
+                    title: 'Privacy & Security',
+                    icon: Icons.shield_outlined,
+                    iconColor: Colors.orange,
+                    description: 'Control your privacy and account security',
+                    children: [
+                      _buildSwitchTile(
+                        'Show Online Status',
+                        'Let others see when you\'re online',
+                        _settings.showOnlineStatus,
+                        (val) => _updateSetting(
+                          () => _settings.showOnlineStatus = val,
+                        ),
+                      ),
+                      _buildSwitchTile(
+                        'Show Phone Number',
+                        'Display phone number on profile',
+                        _settings.showPhoneNumber,
+                        (val) => _updateSetting(
+                          () => _settings.showPhoneNumber = val,
+                        ),
+                      ),
+                      _buildSwitchTile(
+                        'Allow Messages',
+                        'Allow users to send you messages',
+                        _settings.allowMessages,
+                        (val) =>
+                            _updateSetting(() => _settings.allowMessages = val),
+                      ),
+                      _buildActionTile(
+                        'Change Password',
+                        Icons.key_outlined,
+                        () {},
+                      ),
+                    ],
+                  ),
 
-                // 3. Help & Support Tile
-                _buildActionTile('Help & Support', Icons.help_outline, () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const HelpSupportPage(),
-                    ),
-                  );
-                }),
-              ],
-            ),
-            // Danger Zone
-            _buildSection(
-              title: 'Danger Zone',
-              iconColor: Colors.redAccent,
-              titleColor: Colors.redAccent,
-              description: 'Irreversible and destructive actions',
-              isDanger: true,
-              children: [
-                _buildActionTile(
-                  'Logout',
-                  Icons.logout,
-                  () {},
-                  color: Colors.redAccent,
-                ),
-                _buildActionTile(
-                  'Delete Account',
-                  Icons.delete_outline,
-                  _showDeleteConfirmation,
-                  color: Colors.redAccent,
-                ),
-              ],
-            ),
+                  // Language & Region Section
+                  _buildSection(
+                    title: 'Language & Region',
+                    icon: Icons.language_outlined,
+                    iconColor: Colors.orange,
+                    children: [
+                      _buildSelectionTile(
+                        'Language',
+                        _settings.language,
+                        () {},
+                      ),
+                      _buildSelectionTile(
+                        'Currency',
+                        _settings.currency,
+                        () {},
+                      ),
+                    ],
+                  ),
 
-            const SizedBox(height: 20),
-            const Text(
-              'Sbrai Hub v1.0.0',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
+                  // Legal Section
+                  _buildSection(
+                    children: [
+                      _buildActionTile(
+                        'Terms & Conditions',
+                        Icons.description_outlined,
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BuyersTermsPage(),
+                          ),
+                        ),
+                      ),
+                      _buildActionTile(
+                        'Privacy Policy',
+                        Icons.lock_outline,
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PrivacyPolicyPage(),
+                          ),
+                        ),
+                      ),
+                      _buildActionTile(
+                        'Help & Support',
+                        Icons.help_outline,
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const HelpSupportPage(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Danger Zone
+                  _buildSection(
+                    title: 'Danger Zone',
+                    iconColor: Colors.redAccent,
+                    titleColor: Colors.redAccent,
+                    description: 'Irreversible and destructive actions',
+                    isDanger: true,
+                    children: [
+                      _buildActionTile(
+                        'Logout',
+                        Icons.logout,
+                        () {},
+                        color: Colors.redAccent,
+                      ),
+                      _buildActionTile(
+                        'Delete Account',
+                        Icons.delete_outline,
+                        _showDeleteConfirmation,
+                        color: Colors.redAccent,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Sbrai Hub v1.0.0',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  const SizedBox(height: 40),
+                ],
+              ),
             ),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
     );
   }
 
-  // --- UI Helpers ---
+  // --- UI Helpers (Keep as provided in your original code) ---
 
   Widget _buildSection({
     String? title,
@@ -222,7 +289,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title,
                   style: TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w900, // Very bold section titles
+                    fontWeight: FontWeight.w900,
                     color: titleColor,
                   ),
                 ),
@@ -249,9 +316,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildSwitchTile(
     String title,
-    String subtitle,
-    bool value,
-    Function(bool) onChanged,
+    String sub,
+    bool val,
+    Function(bool) onChg,
   ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -266,12 +333,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title,
                   style: const TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold, // Updated to bold
-                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
                 Text(
-                  subtitle,
+                  sub,
                   style: const TextStyle(fontSize: 11, color: Colors.grey),
                 ),
               ],
@@ -280,9 +346,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Transform.scale(
             scale: 0.8,
             child: CupertinoSwitch(
-              value: value,
+              value: val,
               activeColor: const Color(0xFFFF7043),
-              onChanged: onChanged,
+              onChanged: onChg,
             ),
           ),
         ],
@@ -355,64 +421,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showDeleteConfirmation() {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Are you absolutely sure?',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'This action cannot be undone. This will permanently delete your account.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    'Delete Account',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(color: Colors.grey.shade200),
-                    ),
-                  ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.black),
-                  ),
-                ),
-              ),
-            ],
-          ),
+      builder: (context) => AlertDialog(
+        title: const Text('Are you absolutely sure?'),
+        content: const Text(
+          'This action cannot be undone. This will permanently delete your account.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }

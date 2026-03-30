@@ -95,14 +95,14 @@ class _SignupPageState extends State<SignupPage> {
 
     try {
       // UPDATED ENDPOINT: Now includes /v1/buyers to match the new shorter baseUrl
-      final response = await ApiService().post('/v1/buyers/register', {
+      final response = await ApiService().post('/buyers/register', {
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'address': _addressController.text.trim(),
         'password': _passwordController.text,
         'password_confirmation': _confirmPasswordController.text,
-      });
+      }, userType: 'buyer');
 
       final data = jsonDecode(response.body);
 

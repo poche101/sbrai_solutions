@@ -20,4 +20,12 @@ class SettingsModel {
     this.language = 'English',
     this.currency = 'Nigerian Naira (₦)',
   });
+
+  static Future<SettingsModel?> fromJson(
+    Map<String, dynamic> responseData,
+  ) async {
+    return null;
+  }
+
+  toJson() {}
 }

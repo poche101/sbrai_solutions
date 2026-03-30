@@ -4,7 +4,8 @@ import 'screen/profile_screen.dart';
 import 'screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/kyc_screen.dart';
-import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart' as vendor;
+import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart'
+    as vendor;
 import 'package:sbrai_solutions/vendor/screen/message_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/vendor_settings_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/login_screen.dart';
@@ -21,40 +22,6 @@ class _VendorMenuState extends State<VendorMenu> {
   final VendorAuthService _authService = VendorAuthService();
 
   // Show logout confirmation dialog
-  Future<void> _showLogoutConfirmation() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text(
-                'Logout',
-                style: TextStyle(color: Colors.red),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldLogout == true) {
-      await _handleLogout();
-    }
-  }
 
   // Handle logout process
   Future<void> _handleLogout() async {
@@ -75,14 +42,16 @@ class _VendorMenuState extends State<VendorMenu> {
         // Clear all routes and go to login
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (route) => false,
+          (route) => false,
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Logout failed: ${e.toString().replaceAll('Exception: ', '')}'),
+            content: Text(
+              'Logout failed: ${e.toString().replaceAll('Exception: ', '')}',
+            ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),
@@ -178,7 +147,7 @@ class _VendorMenuState extends State<VendorMenu> {
                   _buildMenuItem(
                     Icons.home_outlined,
                     'Home',
-                        () => Navigator.pop(context),
+                    () => Navigator.pop(context),
                   ),
                   _buildMenuItem(Icons.person_outline, 'Profile', () {
                     Navigator.pop(context);
@@ -263,28 +232,29 @@ class _VendorMenuState extends State<VendorMenu> {
                   // LOGOUT MENU ITEM WITH LOADING STATE
                   _isLoggingOut
                       ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Center(
-                      child: SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
-                        ),
-                      ),
-                    ),
-                  )
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(
+                            child: SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.red,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
                       : _buildMenuItem(
-                    Icons.logout_outlined,
-                    'Logout',
-                        () async => await _handleLogout(),
-                    color: Colors.red.shade300,
-                  ),
+                          Icons.logout_outlined,
+                          'Logout',
+                          () async => await _handleLogout(),
+                          color: Colors.red.shade300,
+                        ),
                 ],
               ),
             ),
-
 
             // --- FOOTER ---
             Padding(
@@ -316,11 +286,11 @@ class _VendorMenuState extends State<VendorMenu> {
   }
 
   Widget _buildBadge(
-      String label,
-      Color color, {
-        required IconData icon,
-        bool isVerified = true,
-      }) {
+    String label,
+    Color color, {
+    required IconData icon,
+    bool isVerified = true,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -346,11 +316,11 @@ class _VendorMenuState extends State<VendorMenu> {
   }
 
   Widget _buildMenuItem(
-      IconData icon,
-      String title,
-      VoidCallback onTap, {
-        Color? color,
-      }) {
+    IconData icon,
+    String title,
+    VoidCallback onTap, {
+    Color? color,
+  }) {
     return ListTile(
       leading: Icon(icon, color: color ?? Colors.black45, size: 22),
       title: Text(

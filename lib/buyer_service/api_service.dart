@@ -8,10 +8,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:path/path.dart';
 
 class ApiService {
-  static const String baseUrl = "https://sbraisolutions.com/api";
+  static const String baseUrl = "https://sbraisolutions.com/api/v1";
   static const String _tokenKey = 'auth_token';
 
-  // Storage Keys
   static const String _nameKey = 'user_name';
   static const String _emailKey = 'user_email';
   static const String _photoKey = 'user_photo';
@@ -24,7 +23,6 @@ class ApiService {
 
   /// --- USER DATA MANAGEMENT ---
 
-  /// Saves user profile details to local storage
   Future<void> saveUserData(Map<String, dynamic> userData) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_nameKey, userData['name'] ?? '');
@@ -35,7 +33,6 @@ class ApiService {
     debugPrint("👤 User profile data cached.");
   }
 
-  /// Retrieves cached user data for the UI
   Future<Map<String, String?>> getUserData() async {
     final prefs = await SharedPreferences.getInstance();
     return {
@@ -45,10 +42,12 @@ class ApiService {
     };
   }
 
-  Future<void> saveToken(String token) async {
+  // Updated to actually use the userType if needed, or just satisfy the signature
+  Future<void> saveToken(String token, {required String userType}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
-    debugPrint("🔐 Auth token saved successfully.");
+    // You could also save the userType here if you need to persist the role
+    debugPrint("🔐 Auth token saved for $userType.");
   }
 
   Future<String?> getToken() async {
@@ -87,18 +86,23 @@ class ApiService {
 
   Future<http.Response> socialLogin(String provider, String accessToken) async {
     try {
-      final response = await post('/v1/buyers/social-signup', {
-        'provider': provider,
-        'access_token': accessToken,
-      }, isProtected: false);
+      // FIX: Added required userType: 'buyer'
+      final response = await post(
+        'buyers/social-signup',
+        {'provider': provider, 'access_token': accessToken},
+        isProtected: false,
+        userType: 'buyer',
+      );
 
       final responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200 && responseData['status'] == 'success') {
-        // Save the token
-        await saveToken(responseData['data']['access_token']);
+        // FIX: Passed 'buyer' instead of empty string
+        await saveToken(
+          responseData['data']['access_token'],
+          userType: 'buyer',
+        );
 
-        // Save user data so the Menu can see it
         if (responseData['data']['user'] != null) {
           await saveUserData(responseData['data']['user']);
         }
@@ -113,7 +117,11 @@ class ApiService {
 
   /// --- CORE METHODS ---
 
-  Future<http.Response> get(String endpoint, {bool isProtected = true}) async {
+  Future<http.Response> get(
+    String endpoint, {
+    bool isProtected = true,
+    required String userType,
+  }) async {
     try {
       final url = _buildUrl(endpoint);
       final headers = await _getHeaders(protected: isProtected);
@@ -133,12 +141,12 @@ class ApiService {
     String endpoint,
     Map<String, dynamic> data, {
     bool isProtected = false,
+    required String userType, // Keep required
   }) async {
     try {
       final url = _buildUrl(endpoint);
       final headers = await _getHeaders(protected: isProtected);
-      debugPrint("🚀 API POST: $url");
-      debugPrint("📦 PAYLOAD: ${jsonEncode(data)}");
+      debugPrint("🚀 API POST ($userType): $url");
 
       final response = await http
           .post(url, headers: headers, body: jsonEncode(data))
@@ -155,15 +163,15 @@ class ApiService {
   Future<bool> uploadProfileImage(File imageFile) async {
     try {
       final response = await postMultipart(
-        '/v1/buyers/profile/upload-photo',
+        'buyers/profile/upload-photo',
         imageFile,
         'photo',
         isProtected: true,
+        userType: 'buyer',
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = jsonDecode(response.body);
-        // If the server returns the new photo URL, update our local cache
         if (responseData['data'] != null &&
             responseData['data']['profile_photo_url'] != null) {
           final prefs = await SharedPreferences.getInstance();
@@ -186,12 +194,11 @@ class ApiService {
     File file,
     String fieldName, {
     bool isProtected = true,
+    required String userType,
   }) async {
     try {
       final url = _buildUrl(endpoint);
       final String? token = await getToken();
-
-      debugPrint("🚀 API MULTIPART POST: $url");
 
       final request = http.MultipartRequest('POST', url);
       request.headers.addAll({'Accept': 'application/json'});
@@ -239,6 +246,7 @@ class ApiService {
   Future<http.Response> delete(
     String endpoint, {
     bool isProtected = true,
+    required String userType,
   }) async {
     try {
       final url = _buildUrl(endpoint);
@@ -267,16 +275,20 @@ class ApiService {
   }
 
   Uri _buildUrl(String endpoint) {
-    final cleanEndpoint = endpoint.startsWith('/') ? endpoint : '/$endpoint';
-    return Uri.parse('$baseUrl$cleanEndpoint');
+    final cleanEndpoint = endpoint.startsWith('/')
+        ? endpoint.substring(1)
+        : endpoint;
+    return Uri.parse('$baseUrl/$cleanEndpoint');
   }
 
   Future<void> logout() async {
     try {
+      // FIX: Added required userType: 'buyer'
       await post(
-        '/v1/buyers/logout',
+        'buyers/logout',
         {},
         isProtected: true,
+        userType: 'buyer',
       ).timeout(const Duration(seconds: 5));
     } catch (e) {
       debugPrint("⚠️ Logout API failed: $e");
@@ -295,8 +307,12 @@ class ApiService {
     if (statusCode >= 200 && statusCode < 300) {
       return response;
     } else {
-      final decoded = jsonDecode(response.body);
-      throw decoded['message'] ?? "Server error ($statusCode)";
+      try {
+        final decoded = jsonDecode(response.body);
+        throw decoded['message'] ?? "Server error ($statusCode)";
+      } catch (e) {
+        throw "Server error: $statusCode";
+      }
     }
   }
 

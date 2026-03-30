@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'signup_page.dart';
 import 'home_screen.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
-// Note: You'll need to add google_sign_in to your pubspec.yaml
-// import 'package:google_sign_in/google_sign_in.dart';
 
 class SigninScreen extends StatefulWidget {
   const SigninScreen({super.key});
@@ -101,15 +99,26 @@ class _SigninScreenState extends State<SigninScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _apiService.post('/v1/buyers/login', {
+      // POST handles /v1 automatically in ApiService
+      final response = await _apiService.post('buyers/login', {
         'email': email,
         'password': password,
-      });
+      }, userType: 'buyer');
 
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200 && responseData['status'] == 'success') {
-        await _apiService.saveToken(responseData['data']['access_token']);
+        // Save the access token
+        await _apiService.saveToken(
+          responseData['data']['access_token'],
+          userType: 'buyer',
+        );
+
+        // Save user profile data (Name, Email, etc.) for the UI
+        if (responseData['data']['user'] != null) {
+          await _apiService.saveUserData(responseData['data']['user']);
+        }
+
         if (!mounted) return;
 
         _showCustomToast(responseData['message'] ?? "Signed in successfully");
@@ -124,49 +133,35 @@ class _SigninScreenState extends State<SigninScreen> {
     }
   }
 
-  /// Handle Social Login (Google/Facebook)
+  /// Handle Social Login using ApiService built-in Google flow
   Future<void> _handleSocialLogin(String provider) async {
     setState(() => _isLoading = true);
 
     try {
-      String? token;
-
       if (provider == 'google') {
-        // Logic for Google Sign In would go here
-        token = "SOCIAL_TOKEN_FROM_SDK";
-      } else if (provider == 'facebook') {
-        // Logic for Facebook Sign In would go here
-        token = "FB_TOKEN_FROM_SDK";
-      }
+        final response = await _apiService.signInWithGoogle();
 
-      if (token == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
+        if (response != null && response.statusCode == 200) {
+          final responseData = jsonDecode(response.body);
+          if (!mounted) return;
 
-      final response = await _apiService.socialLogin(provider, token);
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        if (!mounted) return;
-
-        // Use responseData to clear the unused variable warning
-        final successMsg =
-            responseData['message'] ??
-            "Signed in with ${provider[0].toUpperCase()}${provider.substring(1)}";
-
-        _showCustomToast(successMsg);
-        _navigateToHome();
+          _showCustomToast(responseData['message'] ?? "Signed in with Google");
+          _navigateToHome();
+        } else if (response == null) {
+          // User cancelled the login
+          setState(() => _isLoading = false);
+        }
+      } else {
+        // Facebook implementation would follow a similar pattern if added to ApiService
+        _showErrorSnackBar("Facebook login coming soon");
       }
     } catch (e) {
-      // This call was failing because the method below didn't exist
       _showErrorSnackBar("Social login failed: ${e.toString()}");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// THE MISSING METHOD: Add this below _handleSocialLogin
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -228,7 +223,6 @@ class _SigninScreenState extends State<SigninScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                // Google Button
                 _buildSocialButton(
                   "Continue with Google",
                   'assets/icons/google.png',
@@ -236,7 +230,6 @@ class _SigninScreenState extends State<SigninScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Facebook Button
                 _buildSocialButton(
                   "Continue with Facebook",
                   'assets/icons/facebook.png',

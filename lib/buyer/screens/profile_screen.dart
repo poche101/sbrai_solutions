@@ -68,7 +68,11 @@ class ProfileService {
 
   Future<UserProfile> fetchProfile() async {
     try {
-      final response = await _api.get('/v1/buyers/profile', isProtected: true);
+      final response = await _api.get(
+        '/buyers/profile',
+        isProtected: true,
+        userType: 'buyer',
+      );
       final decoded = jsonDecode(response.body);
       final profileData = (decoded is Map && decoded.containsKey('data'))
           ? decoded['data']
@@ -83,9 +87,10 @@ class ProfileService {
     try {
       // Laravel handles POST better for profile updates including fields
       final response = await _api.post(
-        '/v1/buyers/profile/update',
+        '/buyers/profile/update',
         data,
         isProtected: true,
+        userType: 'buyer',
       );
       final decoded = jsonDecode(response.body);
       final profileData = (decoded is Map && decoded.containsKey('data'))
@@ -99,13 +104,14 @@ class ProfileService {
 
   Future<UserProfile> uploadAvatar(File imageFile) async {
     try {
-      // MethodNotAllowed is common if using PUT for files.
-      // Ensure ApiService.postMultipart actually uses 'POST'
+      // 1. Removed leading '/v1/' to prevent 404 double-routing
+      // 2. Added the required 'userType' named parameter
       final response = await _api.postMultipart(
-        '/v1/buyers/profile/upload-photo',
+        'buyers/profile/upload-photo',
         imageFile,
         'profile_photo',
         isProtected: true,
+        userType: 'buyer', // <--- This fixes the dart error
       );
 
       final decoded = jsonDecode(response.body);
@@ -114,12 +120,15 @@ class ProfileService {
         throw Exception(decoded['message'] ?? "Server rejected the image");
       }
 
+      // Handle Laravel resource wrapper
       final profileData = (decoded is Map && decoded.containsKey('data'))
           ? decoded['data']
           : decoded;
+
       return UserProfile.fromJson(profileData);
     } catch (e) {
-      throw Exception("Upload failed: $e");
+      // Re-throwing with a cleaner message for the UI
+      throw Exception(e.toString().replaceAll("Exception:", "").trim());
     }
   }
 }
