@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-
-// Ensure this import points to your actual Vendor Home Screen file
-// import 'vendor/vendor_home_screen.dart';
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PostAdScreen extends StatefulWidget {
   const PostAdScreen({super.key});
@@ -23,6 +24,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
   String _propertyStatus = 'For Rent';
   String? _selectedCategory;
   List<XFile> _selectedImages = [];
+  int? get _selectedCategoryId => null;
 
   // --- CONTROLLERS ---
   final TextEditingController _titleController = TextEditingController();
@@ -33,6 +35,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
     text: 'per year',
   );
   final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
 
   final List<String> _propertyCategories = [
     'Apartment',
@@ -57,6 +60,29 @@ class _PostAdScreenState extends State<PostAdScreen> {
     'Fumigation',
   ];
 
+  // Category ID mapping (you'll need to update these with your actual category IDs from backend)
+  final Map<String, int> _categoryIdMap = {
+    // Product categories
+    'Sharp Sand': 1,
+    'Granite': 2,
+    'Blocks': 3,
+    'Cement': 4,
+    'Iron Rods': 5,
+    'Paints': 6,
+    'Furniture': 7,
+    'Scaffolding': 8,
+    // Service categories
+    'Logistics': 9,
+    'Borehole': 10,
+    'Cleaning': 11,
+    'Fumigation': 12,
+    // Property categories
+    'Apartment': 13,
+    'House': 14,
+    'Commercial': 15,
+    'Land': 16,
+  };
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +91,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
     _locationController.addListener(_updateState);
     _bedroomController.addListener(_updateState);
     _sqftController.addListener(_updateState);
+    _descriptionController.addListener(_updateState);
   }
 
   void _updateState() {
@@ -80,6 +107,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
     _priceController.dispose();
     _priceUnitController.dispose();
     _locationController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -89,8 +117,9 @@ class _PostAdScreenState extends State<PostAdScreen> {
 
     bool commonFields =
         _titleController.text.trim().isNotEmpty &&
-        _priceController.text.trim().isNotEmpty &&
-        _locationController.text.trim().isNotEmpty;
+            _priceController.text.trim().isNotEmpty &&
+            _locationController.text.trim().isNotEmpty &&
+            _descriptionController.text.trim().isNotEmpty;
 
     if (_selectedType == 'Property') {
       return commonFields &&
@@ -113,10 +142,11 @@ class _PostAdScreenState extends State<PostAdScreen> {
       }
     } catch (e) {
       debugPrint("Error picking images: $e");
+      _showCustomToast(message: 'Error picking images: $e', isError: true);
     }
   }
 
-  void _showCustomToast() {
+  void _showCustomToast({required String message, bool isError = false}) {
     final scaffold = ScaffoldMessenger.of(context);
     scaffold.showSnackBar(
       SnackBar(
@@ -126,7 +156,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
         content: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isError ? Colors.red : Colors.white,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
@@ -140,18 +170,22 @@ class _PostAdScreenState extends State<PostAdScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Colors.black,
+                decoration: BoxDecoration(
+                  color: isError ? Colors.white : Colors.black,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check, color: Colors.white, size: 14),
+                child: Icon(
+                  isError ? Icons.close : Icons.check,
+                  color: isError ? Colors.red : Colors.white,
+                  size: 14,
+                ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Ad Published Successfully!',
+                  message,
                   style: TextStyle(
-                    color: Colors.black,
+                    color: isError ? Colors.white : Colors.black,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -163,19 +197,131 @@ class _PostAdScreenState extends State<PostAdScreen> {
     );
   }
 
-  void _handlePublish() async {
+  Future<String?> _getVendorToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('vendor_auth_token');
+  }
+
+  Future<void> _handlePublish() async {
     setState(() => _isPublishing = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    setState(() => _isPublishing = false);
-    _showCustomToast();
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (context) =>
-            const Scaffold(body: Center(child: Text("Vendor Home Screen"))),
-      ),
-      (route) => false,
-    );
+
+    try {
+      // Validate price
+      final price = double.tryParse(_priceController.text.trim());
+      if (price == null) {
+        throw 'Invalid price format';
+      }
+
+      // Get category ID
+      if (_selectedCategory == null) {
+        throw 'Please select a category';
+      }
+
+      final categoryId = _categoryIdMap[_selectedCategory];
+      if (categoryId == null) {
+        throw 'Invalid category selected';
+      }
+
+      // Prepare the product data
+      final token = await _getVendorToken();
+      if (token == null) {
+        throw 'Authentication required. Please login again.';
+      }
+
+      final url = Uri.parse('https://sbraisolutions.com/api/v1/vendor/products');
+
+      final request = http.MultipartRequest('POST', url);
+      request.headers['Accept'] = 'application/json';
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add form fields
+      request.fields['category_id'] = categoryId.toString();
+      request.fields['title'] = _titleController.text.trim();
+      request.fields['description'] = _descriptionController.text.trim();
+      request.fields['price'] = price.toString();
+      request.fields['price_unit'] = _priceUnitController.text.trim();
+      request.fields['location'] = _locationController.text.trim();
+
+      // Add additional fields for property
+      if (_selectedType == 'Property') {
+        request.fields['property_status'] = _propertyStatus;
+        request.fields['bedrooms'] = _bedroomController.text.trim();
+        request.fields['sqft'] = _sqftController.text.trim();
+      }
+
+      // Add images
+      for (int i = 0; i < _selectedImages.length && i < 5; i++) {
+        final file = File(_selectedImages[i].path);
+        final stream = http.ByteStream(file.openRead());
+        final length = await file.length();
+
+        final multipartFile = http.MultipartFile(
+          'photos[$i]',
+          stream,
+          length,
+          filename: path.basename(file.path),
+        );
+
+        request.files.add(multipartFile);
+      }
+
+      debugPrint('🚀 UPLOAD: $url');
+      debugPrint('📦 Fields: ${request.fields}');
+      debugPrint('📷 Files: ${request.files.length}');
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // ADD THIS LOGGING
+      debugPrint('📥 STATUS CODE: ${response.statusCode}');
+      debugPrint('📥 RESPONSE BODY: ${response.body}');
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        debugPrint('✅ Success: $responseData');
+
+        if (responseData['status'] == true) {
+          _showCustomToast(
+            message: responseData['message'] ?? 'Ad Published Successfully!',
+          );
+
+          // Navigate back to vendor home
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => const Scaffold(
+                body: Center(child: Text("Vendor Home Screen")),
+              ),
+            ),
+                (route) => false,
+          );
+        } else {
+          throw responseData['message'] ?? 'Failed to publish ad';
+        }
+      } else {
+        // Try to parse error message
+        try {
+          final errorData = jsonDecode(response.body);
+          debugPrint('❌ Error Response: $errorData');
+          throw errorData['message'] ?? 'Server error: ${response.statusCode}';
+        } catch (_) {
+          throw 'Server error: ${response.statusCode}';
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Exception: $e');
+      if (mounted) {
+        _showCustomToast(
+          message: e.toString(),
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPublishing = false);
+      }
+    }
   }
 
   @override
@@ -209,21 +355,21 @@ class _PostAdScreenState extends State<PostAdScreen> {
       ),
       body: _isPublishing
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFF7D54)),
-            )
+        child: CircularProgressIndicator(color: Color(0xFFFF7D54)),
+      )
           : Column(
-              children: [
-                const SizedBox(height: 20),
-                _buildStepIndicator(),
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [_buildStep1(), _buildStep2(), _buildStep3()],
-                  ),
-                ),
-              ],
+        children: [
+          const SizedBox(height: 20),
+          _buildStepIndicator(),
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [_buildStep1(), _buildStep2(), _buildStep3()],
             ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -273,8 +419,8 @@ class _PostAdScreenState extends State<PostAdScreen> {
     List<String> currentList = _selectedType == 'Property'
         ? _propertyCategories
         : (_selectedType == 'Product'
-              ? _productCategories
-              : _serviceCategories);
+        ? _productCategories
+        : _serviceCategories);
     return _stepWrapper(
       title: 'Select Category',
       children: [
@@ -308,12 +454,15 @@ class _PostAdScreenState extends State<PostAdScreen> {
           items: currentList
               .map(
                 (c) => DropdownMenuItem(
-                  value: c,
-                  child: Text(c, style: const TextStyle(fontSize: 14)),
-                ),
-              )
+              value: c,
+              child: Text(c, style: const TextStyle(fontSize: 14)),
+            ),
+          )
               .toList(),
-          onChanged: (v) => setState(() => _selectedCategory = v),
+          onChanged: (v) => setState(() {
+            _selectedCategory = v;
+            _selectedCategoryId = _categoryIdMap[v];
+          }),
         ),
         const SizedBox(height: 30),
         _cta('Next: Upload Media', () {
@@ -371,7 +520,6 @@ class _PostAdScreenState extends State<PostAdScreen> {
               );
             }
 
-            // FIX: Ensure file existence check or safe rendering
             return Stack(
               children: [
                 Positioned.fill(
@@ -428,6 +576,13 @@ class _PostAdScreenState extends State<PostAdScreen> {
         TextField(
           controller: _titleController,
           decoration: _inputStyle('e.g. 10 Bags of Dangote Cement'),
+        ),
+        const SizedBox(height: 12),
+        _label('Description'),
+        TextField(
+          controller: _descriptionController,
+          maxLines: 3,
+          decoration: _inputStyle('Describe your product/service/property...'),
         ),
         const SizedBox(height: 12),
         if (_selectedType == 'Property') ...[
@@ -564,6 +719,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
         onTap: () => setState(() {
           _selectedType = label;
           _selectedCategory = null;
+          _selectedCategoryId = null;
         }),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
