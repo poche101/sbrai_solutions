@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/vendor/screen/register_screen.dart';
-import 'package:sbrai_solutions/vendor/screen/home_screen.dart';
+import 'package:sbrai_solutions/vendor/screen/vendor_home_screen.dart';
+// Ensure this import path matches your project structure
+import 'package:sbrai_solutions/account_selection_screen.dart';
 import '../../services/vendor/vendor_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -13,12 +15,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  final TextEditingController _emailController = TextEditingController(
-    text: "",
-  );
-  final TextEditingController _passwordController = TextEditingController(
-    text: "",
-  );
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   bool _isPasswordVisible = false;
   bool _isLoading = false;
@@ -32,6 +30,54 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // Custom Toast implementation for consistency
+  void _showSuccessToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        duration: const Duration(seconds: 3),
+        content: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // Login handler
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
@@ -41,32 +87,26 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final _ = await  _authService.login(
+      await _authService.login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
 
       if (mounted) {
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Login successful!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        _showSuccessToast('Login successful!');
 
-        // Navigate to home screen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const HomeScreen(),
-          ),
-        );
+        // Small delay so the user can see the success toast
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+            );
+          }
+        });
       }
     } catch (e) {
       if (mounted) {
-        // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceAll('Exception: ', '')),
@@ -93,7 +133,16 @@ class _LoginScreenState extends State<LoginScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87, size: 24),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            // Updated to navigate specifically to Account Selection Screen
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const AccountSelectionScreen(),
+              ),
+              (route) => false,
+            );
+          },
         ),
         title: const Text(
           'Sign In',
@@ -146,10 +195,11 @@ class _LoginScreenState extends State<LoginScreen> {
               _buildSocialButton(
                 "Continue with Google",
                 'assets/icons/google.png',
-                    () {
-                  // Google Sign In - To be implemented
+                () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Google Sign In coming soon!')),
+                    const SnackBar(
+                      content: Text('Google Sign In coming soon!'),
+                    ),
                   );
                 },
               ),
@@ -157,10 +207,11 @@ class _LoginScreenState extends State<LoginScreen> {
               _buildSocialButton(
                 "Continue with Facebook",
                 'assets/icons/facebook.png',
-                    () {
-                  // Facebook Sign In - To be implemented
+                () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Facebook Sign In coming soon!')),
+                    const SnackBar(
+                      content: Text('Facebook Sign In coming soon!'),
+                    ),
                   );
                 },
               ),
@@ -168,8 +219,8 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
 
               // OR Divider
-              const Row(
-                children: [
+              Row(
+                children: const [
                   Expanded(child: Divider(color: Colors.black12)),
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
@@ -230,9 +281,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () {
-                    // Forgot password functionality
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Forgot Password coming soon!')),
+                      const SnackBar(
+                        content: Text('Forgot Password coming soon!'),
+                      ),
                     );
                   },
                   child: const Text(
@@ -263,21 +315,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: _isLoading
                       ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
                       : const Text(
-                    'Sign In',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                          'Sign In',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
 
@@ -374,12 +428,12 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildTextField(
-      TextEditingController controller,
-      String hint, {
-        bool isPassword = false,
-        TextInputType keyboardType = TextInputType.text,
-        String? Function(String?)? validator,
-      }) {
+    TextEditingController controller,
+    String hint, {
+    bool isPassword = false,
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+  }) {
     return TextFormField(
       controller: controller,
       obscureText: isPassword && !_isPasswordVisible,
@@ -400,13 +454,13 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         suffixIcon: isPassword
             ? IconButton(
-          icon: Icon(
-            _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-            color: Colors.grey,
-          ),
-          onPressed: () =>
-              setState(() => _isPasswordVisible = !_isPasswordVisible),
-        )
+                icon: Icon(
+                  _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                  color: Colors.grey,
+                ),
+                onPressed: () =>
+                    setState(() => _isPasswordVisible = !_isPasswordVisible),
+              )
             : null,
       ),
     );

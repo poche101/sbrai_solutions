@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'signin_screen.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 
@@ -21,6 +19,7 @@ class _SignupPageState extends State<SignupPage> {
       TextEditingController();
 
   bool _isLoading = false;
+  final ApiService _apiService = ApiService();
 
   @override
   void dispose() {
@@ -33,7 +32,6 @@ class _SignupPageState extends State<SignupPage> {
     super.dispose();
   }
 
-  // --- Custom Toast Implementation ---
   void _showCustomToast(String message, {bool isSuccess = true}) {
     if (!mounted) return;
     final overlay = Overlay.of(context);
@@ -51,7 +49,6 @@ class _SignupPageState extends State<SignupPage> {
               borderRadius: BorderRadius.circular(30),
             ),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   isSuccess ? Icons.check_circle : Icons.error,
@@ -62,7 +59,7 @@ class _SignupPageState extends State<SignupPage> {
                 Expanded(
                   child: Text(
                     message,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
                   ),
                 ),
               ],
@@ -73,7 +70,7 @@ class _SignupPageState extends State<SignupPage> {
     );
 
     overlay.insert(overlayEntry);
-    Future.delayed(const Duration(seconds: 3), () {
+    Future.delayed(const Duration(seconds: 4), () {
       if (overlayEntry.mounted) overlayEntry.remove();
     });
   }
@@ -94,8 +91,8 @@ class _SignupPageState extends State<SignupPage> {
     setState(() => _isLoading = true);
 
     try {
-      // UPDATED ENDPOINT: Now includes /v1/buyers to match the new shorter baseUrl
-      final response = await ApiService().post('/buyers/register', {
+      // The ApiService now handles the 422/401 logic and throws specific strings
+      await _apiService.post('buyers/register', {
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -104,36 +101,30 @@ class _SignupPageState extends State<SignupPage> {
         'password_confirmation': _confirmPasswordController.text,
       }, userType: 'buyer');
 
-      final data = jsonDecode(response.body);
+      _showCustomToast("Account created successfully!");
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final prefs = await SharedPreferences.getInstance();
-
-        // Ensure your Laravel API returns data['data']['access_token']
-        if (data['data'] != null && data['data']['access_token'] != null) {
-          await prefs.setString('auth_token', data['data']['access_token']);
-        }
-
-        _showCustomToast("Account created successfully!");
-
-        if (mounted) {
-          Future.delayed(const Duration(milliseconds: 500), () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const SigninScreen()),
-            );
-          });
-        }
-      } else {
-        // Handle Laravel validation errors or messages
-        String errorMessage = data['message'] ?? "Registration failed";
-        if (data['errors'] != null && data['errors'] is Map) {
-          errorMessage = (data['errors'] as Map).values.first[0].toString();
-        }
-        _showCustomToast(errorMessage, isSuccess: false);
+      if (mounted) {
+        Future.delayed(const Duration(milliseconds: 800), () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const SigninScreen()),
+          );
+        });
       }
     } catch (e) {
-      // This will now show the actual technical error from ApiService
+      // e will now contain specific Laravel validation errors or security messages
+      _showCustomToast(e.toString(), isSuccess: false);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      await _apiService.signInWithGoogle();
+      _showCustomToast("Signed in with Google!");
+    } catch (e) {
       _showCustomToast(e.toString(), isSuccess: false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -168,164 +159,18 @@ class _SignupPageState extends State<SignupPage> {
               border: Border.all(color: Colors.grey.shade100),
             ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFF1EB),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.shopping_bag_outlined,
-                    color: Color(0xFFFF6B35),
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  "Sign Up as Buyer",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const Text(
-                  "Create your account to start shopping",
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
-                ),
+                _buildHeader(),
                 const SizedBox(height: 32),
-
-                _buildSocialButton(
-                  "Continue with Google",
-                  'assets/icons/google.png',
-                  () {},
-                ),
-                const SizedBox(height: 12),
-                _buildSocialButton(
-                  "Continue with Facebook",
-                  'assets/icons/facebook.png',
-                  () {},
-                ),
-
+                _buildSocialSection(),
                 const SizedBox(height: 24),
-                const Row(
-                  children: [
-                    Expanded(child: Divider(color: Colors.black12)),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        "OR SIGN UP WITH EMAIL",
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(child: Divider(color: Colors.black12)),
-                  ],
-                ),
+                _buildDivider(),
                 const SizedBox(height: 24),
-
-                _buildField(
-                  "Full Name",
-                  "Full Name",
-                  Icons.person_outline,
-                  controller: _nameController,
-                ),
-                _buildField(
-                  "Email Address",
-                  "Email",
-                  Icons.email_outlined,
-                  controller: _emailController,
-                ),
-                _buildField(
-                  "Phone Number",
-                  "Phone",
-                  Icons.phone_android_outlined,
-                  controller: _phoneController,
-                ),
-                _buildField(
-                  "Address (Optional)",
-                  "Address",
-                  Icons.location_on_outlined,
-                  controller: _addressController,
-                ),
-                _buildField(
-                  "Password",
-                  "Enter Password",
-                  Icons.lock_outline,
-                  isPassword: true,
-                  controller: _passwordController,
-                ),
-                _buildField(
-                  "Confirm Password",
-                  "Confirm Password",
-                  Icons.lock_outline,
-                  isPassword: true,
-                  controller: _confirmPasswordController,
-                ),
-
+                _buildForm(),
                 const SizedBox(height: 24),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _handleSignup,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B35),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Text(
-                            "Create Account",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                  ),
-                ),
-
+                _buildSubmitButton(),
                 const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "Already have an account? ",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SigninScreen(),
-                          ),
-                        );
-                      },
-                      child: const Text(
-                        "Sign In",
-                        style: TextStyle(
-                          color: Color(0xFFFF6B35),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                _buildFooter(),
               ],
             ),
           ),
@@ -334,19 +179,188 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  Widget _buildSocialButton(String text, String assetPath, VoidCallback onTap) {
-    final bool isGoogle = text.contains("Google");
-    final Color brandColor = isGoogle
-        ? const Color.fromARGB(255, 201, 4, 24)
-        : const Color(0xFF1877F2);
+  Widget _buildHeader() {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFF1EB),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.shopping_bag_outlined,
+            color: Color(0xFFFF6B35),
+            size: 32,
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          "Sign Up as Buyer",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const Text(
+          "Create your account to start shopping",
+          style: TextStyle(color: Colors.grey, fontSize: 14),
+        ),
+      ],
+    );
+  }
 
+  Widget _buildSocialSection() {
+    return Column(
+      children: [
+        _buildSocialButton(
+          "Continue with Google",
+          'assets/icons/google.png',
+          _handleGoogleSignIn,
+          isGoogle: true,
+        ),
+        const SizedBox(height: 12),
+        _buildSocialButton(
+          "Continue with Facebook",
+          'assets/icons/facebook.png',
+          () {},
+          isGoogle: false,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDivider() {
+    return const Row(
+      children: [
+        Expanded(child: Divider(color: Colors.black12)),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            "OR SIGN UP WITH EMAIL",
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        Expanded(child: Divider(color: Colors.black12)),
+      ],
+    );
+  }
+
+  Widget _buildForm() {
+    return Column(
+      children: [
+        _buildField(
+          "Full Name",
+          "Full Name",
+          Icons.person_outline,
+          controller: _nameController,
+        ),
+        _buildField(
+          "Email Address",
+          "Email",
+          Icons.email_outlined,
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+        ),
+        _buildField(
+          "Phone Number",
+          "Phone",
+          Icons.phone_android_outlined,
+          controller: _phoneController,
+          keyboardType: TextInputType.phone,
+        ),
+        _buildField(
+          "Address (Optional)",
+          "Address",
+          Icons.location_on_outlined,
+          controller: _addressController,
+        ),
+        _buildField(
+          "Password",
+          "Enter Strong Password",
+          Icons.lock_outline,
+          isPassword: true,
+          controller: _passwordController,
+        ),
+        _buildField(
+          "Confirm Password",
+          "Confirm Password",
+          Icons.lock_outline,
+          isPassword: true,
+          controller: _confirmPasswordController,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _handleSignup,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFFF6B35),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 0,
+        ),
+        child: _isLoading
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : const Text(
+                "Create Account",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildFooter() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text(
+          "Already have an account? ",
+          style: TextStyle(color: Colors.grey),
+        ),
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SigninScreen()),
+          ),
+          child: const Text(
+            "Sign In",
+            style: TextStyle(
+              color: Color(0xFFFF6B35),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSocialButton(
+    String text,
+    String assetPath,
+    VoidCallback onTap, {
+    required bool isGoogle,
+  }) {
     return Container(
       width: double.infinity,
       height: 50,
       decoration: BoxDecoration(
-        border: Border.all(
-          color: isGoogle ? Colors.black12 : brandColor.withOpacity(0.2),
-        ),
+        border: Border.all(color: Colors.black12),
         borderRadius: BorderRadius.circular(10),
       ),
       child: InkWell(
@@ -357,11 +371,12 @@ class _SignupPageState extends State<SignupPage> {
           children: [
             Image.asset(
               assetPath,
-              height: 22,
-              width: 22,
-              errorBuilder: (context, error, stackTrace) => Icon(
+              height: 24,
+              width: 24,
+              // If image isn't found, show a colored icon as fallback
+              errorBuilder: (c, e, s) => Icon(
                 isGoogle ? Icons.g_mobiledata : Icons.facebook,
-                color: brandColor,
+                color: isGoogle ? Colors.red : Colors.blue,
                 size: 28,
               ),
             ),
@@ -370,7 +385,7 @@ class _SignupPageState extends State<SignupPage> {
               text,
               style: const TextStyle(
                 color: Colors.black87,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
                 fontSize: 15,
               ),
             ),
@@ -386,6 +401,7 @@ class _SignupPageState extends State<SignupPage> {
     IconData icon, {
     TextEditingController? controller,
     bool isPassword = false,
+    TextInputType keyboardType = TextInputType.text,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -400,6 +416,7 @@ class _SignupPageState extends State<SignupPage> {
           TextField(
             controller: controller,
             obscureText: isPassword,
+            keyboardType: keyboardType,
             decoration: InputDecoration(
               hintText: hint,
               prefixIcon: Icon(icon, color: Colors.grey, size: 20),
@@ -409,7 +426,10 @@ class _SignupPageState extends State<SignupPage> {
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 16,
+                horizontal: 16,
+              ),
             ),
           ),
         ],

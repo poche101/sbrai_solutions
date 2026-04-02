@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/models/buyer/product_model.dart';
-// Importing the dedicated BuyersMenu
-import 'package:sbrai_solutions/buyer/widgets/buyers_menu.dart';
+import 'package:sbrai_solutions/vendor/vendor_menu.dart';
+import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -11,18 +11,15 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // SIMULATED LOGIN DATA
-  // In a real app, get these from your Auth Provider or Database
-  final String userName = "John Doe";
-  final String userEmail = "johndoe@example.com";
-
   String selectedState = "All Nigeria";
   String selectedLanguage = "English";
-  String? selectedCategory;
+  String? selectedCategory; // Track the clicked category
   final TextEditingController _searchController = TextEditingController();
 
+  // Mock data - In a real app, this would come from an API
   List<Product> allProducts = [];
   List<Product> displayedProducts = [];
+  int currentPage = 1;
   bool isLoading = false;
 
   final List<String> nigeriaStates = [
@@ -88,22 +85,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize with all products (empty or fetched)
     displayedProducts = allProducts;
   }
 
   void _filterByCategory(String categoryName) {
     setState(() {
-      if (selectedCategory == categoryName) {
-        selectedCategory = null;
-        displayedProducts = allProducts;
-      } else {
-        selectedCategory = categoryName;
-        displayedProducts = allProducts
-            .where(
-              (p) => p.category.toLowerCase() == categoryName.toLowerCase(),
-            )
-            .toList();
-      }
+      selectedCategory = categoryName;
+      // Logic: Filter the list based on the category name
+      displayedProducts = allProducts
+          .where((p) => p.category.toLowerCase() == categoryName.toLowerCase())
+          .toList();
     });
   }
 
@@ -111,8 +103,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // FIXED: Passing the required user data to the BuyersMenu
-      drawer: BuyersMenu(userName: userName, userEmail: userEmail),
+      drawer: const VendorMenu(
+        userName: "Guest User",
+        userEmail: "guest@example.com",
+      ),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -127,20 +121,24 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildLanguageDropdown(),
           const SizedBox(width: 8),
           const Icon(Icons.person_outline, color: Colors.black87),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Text(
-                userName.split(' ')[0], // Displays first name (e.g., "John")
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+          const Center(
+            child: Text(
+              "  Vendor   ",
+              style: TextStyle(color: Colors.black87, fontSize: 13),
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const PostAdScreen()),
+          );
+        },
+        backgroundColor: const Color(0xFFE85D22),
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add, color: Colors.white, size: 30),
       ),
       body: CustomScrollView(
         slivers: [
@@ -235,7 +233,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       itemCount: categories.length,
       itemBuilder: (context, index) {
-        bool isSelected = selectedCategory == categories[index]['name'];
         return GestureDetector(
           onTap: () => _filterByCategory(categories[index]['name']!),
           child: Column(
@@ -244,9 +241,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(22),
-                    border: isSelected
-                        ? Border.all(color: Colors.white, width: 2)
-                        : null,
                     image: DecorationImage(
                       image: AssetImage(categories[index]['icon']!),
                       fit: BoxFit.cover,
@@ -257,10 +251,10 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               Text(
                 categories[index]['name']!,
-                style: TextStyle(
-                  color: isSelected ? Colors.black : Colors.white,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  fontWeight: FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -356,6 +350,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
+
+  // ... (Keep existing _buildLanguageDropdown, _buildTrendingSection, and _buildDynamicProductCard as they are)
 
   Widget _buildLanguageDropdown() {
     return PopupMenuButton<String>(

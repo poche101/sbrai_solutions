@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'buyer/widgets/selection_card.dart';
 import 'buyer/screens/signup_page.dart';
-// Ensure this path is correct for your project
 import 'vendor/screen/register_screen.dart';
+
+// --- Auth Imports ---
+// Ensure these paths match your actual folder structure
+import 'package:sbrai_solutions/vendor/screen/login_screen.dart';
+import 'package:sbrai_solutions/buyer/screens/signin_screen.dart';
 
 class AccountSelectionScreen extends StatelessWidget {
   const AccountSelectionScreen({super.key});
@@ -50,38 +54,21 @@ class AccountSelectionScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildBuyerCard(context),
+                    Expanded(child: _buildBuyerSection(context)),
                     const SizedBox(width: 24),
-                    _buildVendorCard(context), // Pass context here
+                    Expanded(child: _buildVendorSection(context)),
                   ],
                 )
               else
                 Column(
                   children: [
-                    _buildBuyerCard(context),
-                    const SizedBox(height: 20),
-                    _buildVendorCard(context), // Pass context here
+                    _buildBuyerSection(context),
+                    const SizedBox(height: 32),
+                    _buildVendorSection(context),
                   ],
                 ),
 
               const SizedBox(height: 40),
-              const Text(
-                "Already have an account?",
-                style: TextStyle(color: Colors.grey),
-              ),
-              TextButton(
-                onPressed: () {
-                  // You can add logic to go to a login page here later
-                },
-                child: const Text(
-                  "Sign In to Your Account",
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
               const Text(
                 "By continuing, you agree to Store Hub's Terms of Service and Privacy Policy",
                 textAlign: TextAlign.center,
@@ -94,53 +81,113 @@ class AccountSelectionScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBuyerCard(BuildContext context) {
-    return SelectionCard(
-      title: "I'm a Buyer",
-      description: "Browse products, shop for materials, and hire services",
-      icon: Icons.shopping_bag_outlined,
-      iconBgColor: const Color(0xFFFFF1EB),
-      iconColor: const Color(0xFFFF6B35),
-      buttonColor: const Color(0xFFFF6B35),
-      buttonText: "Sign Up as Buyer",
-      features: const [
-        "Search and filter listings",
-        "Chat with verified vendors",
-        "Book professional services",
-        "Location-based search",
+  // Wrapper for Buyer Card + Sign In Link
+  Widget _buildBuyerSection(BuildContext context) {
+    return Column(
+      children: [
+        SelectionCard(
+          title: "I'm a Buyer",
+          description: "Browse products, shop for materials, and hire services",
+          icon: Icons.shopping_bag_outlined,
+          iconBgColor: const Color(0xFFFFF1EB),
+          iconColor: const Color(0xFFFF6B35),
+          buttonColor: const Color(0xFFFF6B35),
+          buttonText: "Sign Up as Buyer",
+          features: const [
+            "Search and filter listings",
+            "Chat with verified vendors",
+            "Book professional services",
+            "Location-based search",
+          ],
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SignupPage()),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              "Have a buyer account? ",
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SigninScreen()),
+                );
+              },
+              child: const Text(
+                "Sign In",
+                style: TextStyle(
+                  color: Color(0xFFFF6B35),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const SignupPage()),
-        );
-      },
     );
   }
 
-  // UPDATED: Added BuildContext context
-  Widget _buildVendorCard(BuildContext context) {
-    return SelectionCard(
-      title: "I'm a Vendor",
-      description: "List products, offer services, and grow your business",
-      icon: Icons.storefront_outlined,
-      iconBgColor: const Color(0xFFE8EAF6),
-      iconColor: const Color(0xFF1D267D),
-      buttonColor: const Color(0xFF1D267D),
-      buttonText: "Sign Up as Vendor",
-      features: const [
-        "Upload images and list items",
-        "Access seller dashboard",
-        "Get verified badge",
-        "Manage customer chats",
+  // Wrapper for Vendor Card + Sign In Link
+  Widget _buildVendorSection(BuildContext context) {
+    return Column(
+      children: [
+        SelectionCard(
+          title: "I'm a Vendor",
+          description: "List products, offer services, and grow your business",
+          icon: Icons.storefront_outlined,
+          iconBgColor: const Color(0xFFE8EAF6),
+          iconColor: const Color(0xFF1D267D),
+          buttonColor: const Color(0xFF1D267D),
+          buttonText: "Sign Up as Vendor",
+          features: const [
+            "Upload images and list items",
+            "Access seller dashboard",
+            "Get verified badge",
+            "Manage customer chats",
+          ],
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const RegisterScreen()),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              "Have a vendor account? ",
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                );
+              },
+              child: const Text(
+                "Sign In",
+                style: TextStyle(
+                  color: Color(0xFF1D267D),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
-      onPressed: () {
-        // NAVIGATES TO THE REGISTER SCREEN
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const RegisterScreen()),
-        );
-      },
     );
   }
 }

@@ -42,11 +42,9 @@ class ApiService {
     };
   }
 
-  // Updated to actually use the userType if needed, or just satisfy the signature
   Future<void> saveToken(String token, {required String userType}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
-    // You could also save the userType here if you need to persist the role
     debugPrint("🔐 Auth token saved for $userType.");
   }
 
@@ -86,7 +84,6 @@ class ApiService {
 
   Future<http.Response> socialLogin(String provider, String accessToken) async {
     try {
-      // FIX: Added required userType: 'buyer'
       final response = await post(
         'buyers/social-signup',
         {'provider': provider, 'access_token': accessToken},
@@ -97,7 +94,6 @@ class ApiService {
       final responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200 && responseData['status'] == 'success') {
-        // FIX: Passed 'buyer' instead of empty string
         await saveToken(
           responseData['data']['access_token'],
           userType: 'buyer',
@@ -141,7 +137,7 @@ class ApiService {
     String endpoint,
     Map<String, dynamic> data, {
     bool isProtected = false,
-    required String userType, // Keep required
+    required String userType,
   }) async {
     try {
       final url = _buildUrl(endpoint);
@@ -155,37 +151,6 @@ class ApiService {
       return _handleResponse(response);
     } catch (e) {
       throw _processError(e, "POST", endpoint);
-    }
-  }
-
-  /// --- UPLOAD METHODS (MULTIPART) ---
-
-  Future<bool> uploadProfileImage(File imageFile) async {
-    try {
-      final response = await postMultipart(
-        'buyers/profile/upload-photo',
-        imageFile,
-        'photo',
-        isProtected: true,
-        userType: 'buyer',
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseData = jsonDecode(response.body);
-        if (responseData['data'] != null &&
-            responseData['data']['profile_photo_url'] != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(
-            _photoKey,
-            responseData['data']['profile_photo_url'],
-          );
-        }
-        return true;
-      }
-      return false;
-    } catch (e) {
-      debugPrint("❌ Profile Image Upload Error: $e");
-      return false;
     }
   }
 
@@ -260,6 +225,44 @@ class ApiService {
     }
   }
 
+  Future<http.Response> upload(
+    String endpoint,
+    Map<String, String> data, {
+    required String filePath,
+    required String fileField,
+    bool isProtected = true,
+    required String userType,
+  }) async {
+    try {
+      final url = _buildUrl(endpoint);
+      final headers = await _getHeaders(protected: isProtected);
+
+      // Multipart requests handle their own content-type
+      headers.remove('Content-Type');
+
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll(headers);
+
+      data.forEach((key, value) {
+        request.fields[key] = value;
+      });
+
+      final file = await http.MultipartFile.fromPath(fileField, filePath);
+      request.files.add(file);
+
+      debugPrint("🚀 API UPLOAD [$userType]: $url");
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+      );
+
+      final response = await http.Response.fromStream(streamedResponse);
+      return _handleResponse(response);
+    } catch (e) {
+      throw _processError(e, "UPLOAD", endpoint);
+    }
+  }
+
   /// --- PRIVATE HELPERS ---
 
   Future<Map<String, String>> _getHeaders({bool protected = false}) async {
@@ -283,7 +286,6 @@ class ApiService {
 
   Future<void> logout() async {
     try {
-      // FIX: Added required userType: 'buyer'
       await post(
         'buyers/logout',
         {},
@@ -300,26 +302,42 @@ class ApiService {
 
   http.Response _handleResponse(http.Response response) {
     final int statusCode = response.statusCode;
-    if (statusCode == 401) {
+
+    if (statusCode >= 200 && statusCode < 300) {
+      return response;
+    }
+
+    final Map<String, dynamic> decoded = jsonDecode(response.body);
+
+    // Handle Session Expiry
+    if (statusCode == 401 &&
+        decoded['message'] != 'Incorrect email or password.') {
       clearToken();
       throw "Session expired. Please sign in again.";
     }
-    if (statusCode >= 200 && statusCode < 300) {
-      return response;
-    } else {
-      try {
-        final decoded = jsonDecode(response.body);
-        throw decoded['message'] ?? "Server error ($statusCode)";
-      } catch (e) {
-        throw "Server error: $statusCode";
-      }
+
+    // Handle Validation Errors (422)
+    if (statusCode == 422 && decoded['errors'] != null) {
+      Map<String, dynamic> errors = decoded['errors'];
+      String errorMessage = "";
+      errors.forEach((key, value) {
+        if (value is List) {
+          errorMessage += "${value.join(", ")}\n";
+        } else {
+          errorMessage += "$value\n";
+        }
+      });
+      throw errorMessage.trim();
     }
+
+    throw decoded['message'] ?? "Server error ($statusCode)";
   }
 
   String _processError(dynamic e, String method, String endpoint) {
     debugPrint("❌ $method ERROR [$endpoint]: $e");
     if (e is SocketException) return "No internet connection.";
     if (e is TimeoutException) return "Connection timed out.";
+    // Ensure we strip the Exception prefix if it exists
     return e.toString().replaceFirst('Exception: ', '');
   }
 }

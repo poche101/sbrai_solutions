@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
-// Ensure these paths match your project structure
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 
 // --- Updated Data Model ---
@@ -26,7 +25,6 @@ class UserProfile {
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
-    // Check for nested user object or direct fields
     final userData = json['user'] ?? json;
 
     String formattedDate = "Joined recently";
@@ -41,8 +39,6 @@ class UserProfile {
       }
     }
 
-    // Logic for Dynamic Name:
-    // 1. full_name from profile 2. name from user table 3. email prefix as last resort
     String displayName =
         json['full_name'] ??
         userData['name'] ??
@@ -69,7 +65,7 @@ class ProfileService {
   Future<UserProfile> fetchProfile() async {
     try {
       final response = await _api.get(
-        '/buyers/profile',
+        'buyers/profile', // Removed leading slash
         isProtected: true,
         userType: 'buyer',
       );
@@ -79,15 +75,14 @@ class ProfileService {
           : decoded;
       return UserProfile.fromJson(profileData);
     } catch (e) {
-      throw Exception("Failed to load profile data: $e");
+      rethrow;
     }
   }
 
   Future<UserProfile> updateProfile(Map<String, dynamic> data) async {
     try {
-      // Laravel handles POST better for profile updates including fields
       final response = await _api.post(
-        '/buyers/profile/update',
+        'buyers/profile/update',
         data,
         isProtected: true,
         userType: 'buyer',
@@ -98,37 +93,29 @@ class ProfileService {
           : decoded;
       return UserProfile.fromJson(profileData);
     } catch (e) {
-      throw Exception("Update failed: $e");
+      rethrow;
     }
   }
 
   Future<UserProfile> uploadAvatar(File imageFile) async {
     try {
-      // 1. Removed leading '/v1/' to prevent 404 double-routing
-      // 2. Added the required 'userType' named parameter
-      final response = await _api.postMultipart(
+      final response = await _api.upload(
         'buyers/profile/upload-photo',
-        imageFile,
-        'profile_photo',
+        {},
+        filePath: imageFile.path,
+        fileField: 'profile_photo',
         isProtected: true,
-        userType: 'buyer', // <--- This fixes the dart error
+        userType: 'buyer',
       );
 
       final decoded = jsonDecode(response.body);
-
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception(decoded['message'] ?? "Server rejected the image");
-      }
-
-      // Handle Laravel resource wrapper
       final profileData = (decoded is Map && decoded.containsKey('data'))
           ? decoded['data']
           : decoded;
 
       return UserProfile.fromJson(profileData);
     } catch (e) {
-      // Re-throwing with a cleaner message for the UI
-      throw Exception(e.toString().replaceAll("Exception:", "").trim());
+      rethrow;
     }
   }
 }
@@ -189,7 +176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showError("Connection error: Could not fetch profile.");
+        _showError(e.toString());
       }
     }
   }
@@ -198,15 +185,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality:
-            50, // Reduced quality slightly to ensure faster upload/less errors
+        imageQuality: 50,
         maxWidth: 800,
       );
 
       if (pickedFile == null) return;
 
       setState(() => _isLoading = true);
-
       final updatedUser = await _service.uploadAvatar(File(pickedFile.path));
 
       if (mounted) {
@@ -219,44 +204,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        // Specifically catching the Method Not Allowed or File Size errors
-        _showError(e.toString().replaceAll("Exception:", ""));
+        _showError(e.toString());
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
-    super.dispose();
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 10),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   Future<void> _saveProfile() async {
@@ -267,8 +217,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isLoading = true);
 
+    // FIX: Changed 'fullName' to 'name' to match Laravel validation keys
     final updateData = {
-      'fullName': _nameController.text.trim(),
+      'name': _nameController.text.trim(),
       'phone': _phoneController.text.trim(),
       'address': _addressController.text.trim(),
     };
@@ -287,9 +238,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showError("Save failed. Please check your internet.");
+        _showError(e.toString());
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message.replaceFirst('Exception: ', '')),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override

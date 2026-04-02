@@ -5,6 +5,7 @@ class Product {
   final String vendorName;
   final double rating;
   final String imageUrl;
+  final String category; // <--- Add this line
 
   Product({
     required this.name,
@@ -13,5 +14,6 @@ class Product {
     required this.vendorName,
     required this.rating,
     required this.imageUrl,
+    required this.category, // <--- Add this to the constructor
   });
 }

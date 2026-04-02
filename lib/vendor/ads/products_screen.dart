@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
-// Ensure this import points to your actual Vendor Home Screen file
-// import 'vendor/vendor_home_screen.dart';
-
 class PostAdScreen extends StatefulWidget {
   const PostAdScreen({super.key});
 
@@ -141,7 +138,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: const BoxDecoration(
-                  color: Colors.black,
+                  color: Colors.green,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.check, color: Colors.white, size: 14),
@@ -165,15 +162,29 @@ class _PostAdScreenState extends State<PostAdScreen> {
 
   void _handlePublish() async {
     setState(() => _isPublishing = true);
+
+    // Collect Data
+    final adData = {
+      'title': _titleController.text,
+      'type': _selectedType,
+      'category': _selectedCategory,
+      'price': _priceController.text,
+      'unit': _priceUnitController.text,
+      'location': _locationController.text,
+      'image': _selectedImages.isNotEmpty ? _selectedImages[0].path : null,
+      'status': _selectedType == 'Property' ? _propertyStatus : 'Available',
+      'timestamp': DateTime.now(),
+    };
+
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
     setState(() => _isPublishing = false);
+
     _showCustomToast();
+
+    // Navigate to HomeScreen and replace the stack
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (context) =>
-            const Scaffold(body: Center(child: Text("Vendor Home Screen"))),
-      ),
+      MaterialPageRoute(builder: (context) => HomeScreen(newAd: adData)),
       (route) => false,
     );
   }
@@ -371,7 +382,6 @@ class _PostAdScreenState extends State<PostAdScreen> {
               );
             }
 
-            // FIX: Ensure file existence check or safe rendering
             return Stack(
               children: [
                 Positioned.fill(
@@ -672,4 +682,224 @@ class _PostAdScreenState extends State<PostAdScreen> {
       style: TextStyle(color: Colors.black, fontSize: 14),
     ),
   );
+}
+
+// --- UPDATED HOME SCREEN ---
+
+class HomeScreen extends StatelessWidget {
+  final Map<String, dynamic>? newAd;
+
+  const HomeScreen({super.key, this.newAd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F4F6),
+      appBar: AppBar(
+        title: const Text(
+          "Marketplace",
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        actions: [
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.search, color: Colors.black),
+          ),
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.notifications_none, color: Colors.black),
+          ),
+        ],
+      ),
+      body: CustomScrollView(
+        slivers: [
+          // Promotional Banner or Categories could go here
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                newAd != null ? "Fresh Listings" : "All Listings",
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+
+          if (newAd != null)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverToBoxAdapter(child: _buildFeedCard(newAd!)),
+            ),
+
+          // Placeholder for existing items
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+                childAspectRatio: 0.75,
+              ),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                return _buildGridPlaceholder();
+              }, childCount: 4),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFFFF7D54),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PostAdScreen()),
+        ),
+        label: const Text("Post Ad", style: TextStyle(color: Colors.white)),
+        icon: const Icon(Icons.add, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildFeedCard(Map<String, dynamic> ad) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (ad['image'] != null)
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+              child: Image.file(
+                File(ad['image']),
+                height: 200,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF7D54).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        ad['type'].toString().toUpperCase(),
+                        style: const TextStyle(
+                          color: Color(0xFFFF7D54),
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      "₦${ad['price']}",
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF7D54),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  ad['title'] ?? 'Untitled',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      ad['location'],
+                      style: const TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGridPlaceholder() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
+              ),
+              child: const Center(child: Icon(Icons.image, color: Colors.grey)),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Sample Item",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text("₦0.00", style: TextStyle(color: Color(0xFFFF7D54))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

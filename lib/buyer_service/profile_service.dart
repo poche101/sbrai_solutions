@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http; // Add this import
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:sbrai_solutions/models/buyer/user_profile_model.dart';
 
@@ -10,14 +11,12 @@ class ProfileService {
   /// GET: buyers/profile
   Future<UserProfile> fetchProfile() async {
     try {
-      // FIX: Added userType if your ApiService.get requires it
       final response = await _api.get(
         'buyers/profile',
         isProtected: true,
-        userType: 'buyer', // <--- Added this
+        userType: 'buyer',
       );
 
-      debugPrint("DEBUG API RESPONSE: ${response.body}");
       final decoded = jsonDecode(response.body);
       final profileData = (decoded is Map && decoded.containsKey('data'))
           ? decoded['data']
@@ -33,15 +32,16 @@ class ProfileService {
   /// POST (Multipart): buyers/profile/upload-photo
   Future<UserProfile> uploadAvatar(File imageFile) async {
     try {
-      final response = await _api.postMultipart(
+      // Ensure the return type is handled as http.Response
+      final http.Response response = await _api.upload(
         'buyers/profile/upload-photo',
-        imageFile,
-        'profile_photo',
+        {'_method': 'PUT'},
+        filePath: imageFile.path,
+        fileField: 'profile_photo',
         isProtected: true,
-        userType: 'buyer', // <--- Added this
+        userType: 'buyer',
       );
 
-      debugPrint("DEBUG UPLOAD RESPONSE: ${response.body}");
       final decoded = jsonDecode(response.body);
       final profileData = (decoded is Map && decoded.containsKey('data'))
           ? decoded['data']
@@ -54,21 +54,20 @@ class ProfileService {
     }
   }
 
-  /// POST: buyers/profile/update
+  /// POST with Method Spoofing: buyers/profile/update
   Future<UserProfile> updateProfile({
     String? name,
     String? phone,
     String? address,
   }) async {
     try {
-      final Map<String, dynamic> body = {};
+      final Map<String, dynamic> body = {'_method': 'PUT'};
 
-      // NOTE: Verify if Laravel expects 'name' or 'fullName' in the REQUEST
-      if (name != null && name.isNotEmpty) body['fullName'] = name;
+      if (name != null && name.isNotEmpty) body['name'] = name;
       if (phone != null && phone.isNotEmpty) body['phone'] = phone;
       if (address != null && address.isNotEmpty) body['address'] = address;
 
-      if (body.isEmpty) throw "No changes detected to update.";
+      if (body.length == 1) throw "No changes detected to update.";
 
       final response = await _api.post(
         'buyers/profile/update',
@@ -78,6 +77,7 @@ class ProfileService {
       );
 
       debugPrint("DEBUG UPDATE RESPONSE: ${response.body}");
+
       final decoded = jsonDecode(response.body);
       final profileData = (decoded is Map && decoded.containsKey('data'))
           ? decoded['data']
@@ -93,11 +93,7 @@ class ProfileService {
   /// DELETE: buyers/profile
   Future<bool> deleteProfile() async {
     try {
-      await _api.delete(
-        'buyers/profile',
-        isProtected: true,
-        userType: 'buyer', // <--- Added this
-      );
+      await _api.delete('buyers/profile', isProtected: true, userType: 'buyer');
       return true;
     } catch (e) {
       debugPrint("❌ ProfileService Delete Error: $e");

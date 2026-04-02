@@ -6,10 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 class ApiService {
-  // Updated to include /v1 to resolve the fetch failure
-  static const String baseUrl = "https://sbraisolutions.com/api/v1";
+  // FIX: Remove /v1 from here if you plan to include it in your Service paths,
+  // OR keep it here and remove it from your Service paths.
+  // Recommendation: Keep the base as the root API and let services define versions.
+  static const String baseUrl = "https://sbraisolutions.com/api";
 
-  // Token keys for different user types
   static const String _buyerTokenKey = 'buyer_auth_token';
   static const String _vendorTokenKey = 'vendor_auth_token';
 
@@ -17,12 +18,11 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  /// --- TOKEN MANAGEMENT (Generic) ---
+  /// --- TOKEN MANAGEMENT ---
   Future<void> saveToken(String token, {required String userType}) async {
     final prefs = await SharedPreferences.getInstance();
     final key = userType == 'vendor' ? _vendorTokenKey : _buyerTokenKey;
     await prefs.setString(key, token);
-    debugPrint("🔐 $userType token saved");
   }
 
   Future<String?> getToken({required String userType}) async {
@@ -35,7 +35,6 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     final key = userType == 'vendor' ? _vendorTokenKey : _buyerTokenKey;
     await prefs.remove(key);
-    debugPrint("🔐 $userType token cleared");
   }
 
   /// --- PRIVATE HELPERS ---
@@ -57,12 +56,16 @@ class ApiService {
     return headers;
   }
 
+  // FIX: Robust URL builder that prevents double slashes and versioning conflicts
   Uri _buildUrl(String endpoint) {
-    // Ensures we don't end up with .../api/v1//endpoint
-    final cleanEndpoint = endpoint.startsWith('/')
+    // Remove leading slash if present
+    String cleanEndpoint = endpoint.startsWith('/')
         ? endpoint.substring(1)
         : endpoint;
-    return Uri.parse('$baseUrl/$cleanEndpoint');
+
+    // Final URL assembly
+    final finalUrl = '$baseUrl/$cleanEndpoint';
+    return Uri.parse(finalUrl);
   }
 
   /// --- CORE METHODS ---
@@ -77,13 +80,10 @@ class ApiService {
         protected: isProtected,
         userType: userType,
       );
-
       debugPrint("🚀 API GET [$userType]: $url");
-
       final response = await http
           .get(url, headers: headers)
           .timeout(const Duration(seconds: 15));
-
       return _handleResponse(response, userType: userType);
     } catch (e) {
       return _processError(e, "GET", endpoint);
@@ -102,14 +102,10 @@ class ApiService {
         protected: isProtected,
         userType: userType,
       );
-
       debugPrint("🚀 API POST [$userType]: $url");
-      debugPrint("📦 PAYLOAD: ${jsonEncode(data)}");
-
       final response = await http
           .post(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
-
       return _handleResponse(response, userType: userType);
     } catch (e) {
       return _processError(e, "POST", endpoint);
@@ -130,27 +126,19 @@ class ApiService {
         protected: isProtected,
         userType: userType,
       );
-
       headers.remove('Content-Type');
-
       final request = http.MultipartRequest('POST', url);
       request.headers.addAll(headers);
-
-      data.forEach((key, value) {
-        request.fields[key] = value;
-      });
-
+      data.forEach((key, value) => request.fields[key] = value);
       final file = await http.MultipartFile.fromPath(fileField, filePath);
       request.files.add(file);
-
-      debugPrint("🚀 API UPLOAD [$userType]: $url");
-
       final streamedResponse = await request.send().timeout(
         const Duration(seconds: 30),
       );
-      final response = await http.Response.fromStream(streamedResponse);
-
-      return _handleResponse(response, userType: userType);
+      return _handleResponse(
+        await http.Response.fromStream(streamedResponse),
+        userType: userType,
+      );
     } catch (e) {
       return _processError(e, "UPLOAD", endpoint);
     }
@@ -168,13 +156,9 @@ class ApiService {
         protected: isProtected,
         userType: userType,
       );
-
-      debugPrint("🚀 API PUT [$userType]: $url");
-
       final response = await http
           .put(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
-
       return _handleResponse(response, userType: userType);
     } catch (e) {
       return _processError(e, "PUT", endpoint);
@@ -192,20 +176,15 @@ class ApiService {
         protected: isProtected,
         userType: userType,
       );
-
-      debugPrint("🚀 API DELETE [$userType]: $url");
-
       final response = await http
           .delete(url, headers: headers)
           .timeout(const Duration(seconds: 15));
-
       return _handleResponse(response, userType: userType);
     } catch (e) {
       return _processError(e, "DELETE", endpoint);
     }
   }
 
-  /// --- RESPONSE & ERROR HANDLING ---
   http.Response _handleResponse(
     http.Response response, {
     required String userType,
@@ -215,33 +194,28 @@ class ApiService {
 
     if (statusCode == 401) {
       clearToken(userType: userType);
-      throw "Session expired. Please sign in again.";
+      throw "Session expired or unauthorized.";
     }
 
     if (statusCode >= 200 && statusCode < 300) {
       return response;
-    } else {
-      try {
-        final decoded = jsonDecode(response.body);
-        final message = decoded['message'] ?? "Server error ($statusCode)";
-        throw message;
-      } catch (e) {
-        throw "Server error: $statusCode";
+    } else if (statusCode == 422) {
+      final decoded = jsonDecode(response.body);
+      if (decoded['errors'] != null) {
+        // Extracting Laravel validation messages
+        var firstError = (decoded['errors'] as Map).values.first;
+        throw (firstError is List) ? firstError.first : firstError.toString();
       }
+      throw decoded['message'] ?? "Validation failed";
+    } else {
+      throw "Server error: $statusCode";
     }
   }
 
   http.Response _processError(dynamic e, String method, String endpoint) {
     debugPrint("❌ $method ERROR [$endpoint]: $e");
-
-    if (e is SocketException) {
-      throw "No internet connection. Please check your network.";
-    } else if (e is TimeoutException) {
-      throw "Connection timed out. Please try again.";
-    } else if (e is HandshakeException) {
-      throw "Security certificate error. Contact support.";
-    } else {
-      throw e.toString();
-    }
+    if (e is SocketException) throw "No internet connection.";
+    if (e is TimeoutException) throw "Connection timed out.";
+    throw e.toString().replaceAll("Exception: ", "");
   }
 }

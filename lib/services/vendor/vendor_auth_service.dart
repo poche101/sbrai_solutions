@@ -19,7 +19,7 @@ class VendorAuthService {
   }) async {
     try {
       final response = await _apiService.post(
-        '/v1/vendor/register',
+        'v1/vendor/register', // Standardized path
         {
           'full_name': name,
           'email': email,
@@ -42,8 +42,8 @@ class VendorAuthService {
 
       return responseData;
     } catch (e) {
-      debugPrint("❌ Registration error: $e");
-      throw Exception(e.toString());
+      debugPrint("❌ Registration service error: $e");
+      rethrow;
     }
   }
 
@@ -54,11 +54,8 @@ class VendorAuthService {
   }) async {
     try {
       final response = await _apiService.post(
-        '/v1/vendor/login',
-        {
-          'email': email,
-          'password': password,
-        },
+        'v1/vendor/login', // Added v1 to match registration pattern
+        {'email': email, 'password': password},
         isProtected: false,
         userType: userType,
       );
@@ -72,16 +69,17 @@ class VendorAuthService {
 
       return responseData;
     } catch (e) {
-      debugPrint("❌ Login error: $e");
-      throw Exception(e.toString());
+      debugPrint("❌ Login service error: $e");
+      rethrow;
     }
   }
 
-  // Vendor Logout (Single source of truth)
+  // Vendor Logout
   Future<void> logout() async {
     try {
-      // Call logout API
-      await _apiService.post('/v1/vendor/logout', {},
+      await _apiService.post(
+        'v1/vendor/logout', // Consistent naming
+        {},
         isProtected: true,
         userType: userType,
       );
@@ -89,7 +87,6 @@ class VendorAuthService {
     } catch (e) {
       debugPrint("❌ Logout API error: $e");
     } finally {
-      // Always clear token
       await _apiService.clearToken(userType: userType);
       debugPrint("🔐 Vendor token cleared");
     }
@@ -105,14 +102,14 @@ class VendorAuthService {
   Future<Map<String, dynamic>> getProfile() async {
     try {
       final response = await _apiService.get(
-        '/v1/vendor/profile',
+        'v1/vendor/profile',
         isProtected: true,
         userType: userType,
       );
       return jsonDecode(response.body);
     } catch (e) {
       debugPrint("❌ Get profile error: $e");
-      throw Exception(e.toString());
+      rethrow;
     }
   }
 
@@ -125,7 +122,7 @@ class VendorAuthService {
   }) async {
     try {
       final response = await _apiService.put(
-        '/v1/vendor/profile',
+        'v1/vendor/profile',
         {
           'full_name': name,
           'phone_number': phone,
@@ -138,7 +135,7 @@ class VendorAuthService {
       return jsonDecode(response.body);
     } catch (e) {
       debugPrint("❌ Update profile error: $e");
-      throw Exception(e.toString());
+      rethrow;
     }
   }
 
@@ -150,13 +147,12 @@ class VendorAuthService {
   }) async {
     try {
       if (documentPath != null) {
-        // Upload with file
         Map<String, String> data = {};
         if (nin != null) data['nin'] = nin;
         if (bvn != null) data['bvn'] = bvn;
 
         final response = await _apiService.upload(
-          '/v1/vendor/nin/verify',
+          'v1/vendor/nin/verify',
           data,
           filePath: documentPath,
           fileField: 'document',
@@ -165,13 +161,12 @@ class VendorAuthService {
         );
         return jsonDecode(response.body);
       } else {
-        // Regular post without file
         Map<String, dynamic> data = {};
         if (nin != null) data['nin'] = nin;
         if (bvn != null) data['bvn'] = bvn;
 
         final response = await _apiService.post(
-          '/v1/vendor/verify-identity',
+          'v1/vendor/verify-identity',
           data,
           isProtected: true,
           userType: userType,
@@ -180,7 +175,7 @@ class VendorAuthService {
       }
     } catch (e) {
       debugPrint("❌ Identity verification error: $e");
-      throw Exception(e.toString());
+      rethrow;
     }
   }
 }

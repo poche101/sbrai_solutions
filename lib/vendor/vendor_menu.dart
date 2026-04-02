@@ -11,7 +11,15 @@ import 'package:sbrai_solutions/vendor/screen/settings/vendor_settings_screen.da
 import 'package:sbrai_solutions/vendor/screen/login_screen.dart';
 
 class VendorMenu extends StatefulWidget {
-  const VendorMenu({super.key});
+  // Added userName and userEmail parameters to the constructor
+  final String userName;
+  final String userEmail;
+
+  const VendorMenu({
+    super.key,
+    required this.userName,
+    required this.userEmail,
+  });
 
   @override
   State<VendorMenu> createState() => _VendorMenuState();
@@ -20,8 +28,6 @@ class VendorMenu extends StatefulWidget {
 class _VendorMenuState extends State<VendorMenu> {
   bool _isLoggingOut = false;
   final VendorAuthService _authService = VendorAuthService();
-
-  // Show logout confirmation dialog
 
   // Handle logout process
   Future<void> _handleLogout() async {
@@ -110,13 +116,20 @@ class _VendorMenuState extends State<VendorMenu> {
                     ],
                   ),
                   const SizedBox(height: 15),
-                  const Text(
-                    'Igwe',
-                    style: TextStyle(
+                  // Updated to use the dynamic userName passed from HomeScreen
+                  Text(
+                    widget.userName,
+                    style: const TextStyle(
                       color: Colors.black87,
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
                     ),
+                  ),
+                  const SizedBox(height: 4),
+                  // Added userEmail display
+                  Text(
+                    widget.userEmail,
+                    style: const TextStyle(color: Colors.black45, fontSize: 13),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -218,7 +231,6 @@ class _VendorMenuState extends State<VendorMenu> {
                     );
                   }),
 
-                  // KYC NAVIGATION
                   _buildMenuItem(Icons.verified_user_outlined, 'KYC', () {
                     final navigator = Navigator.of(context);
                     navigator.pop();
@@ -229,7 +241,6 @@ class _VendorMenuState extends State<VendorMenu> {
                     );
                   }),
 
-                  // LOGOUT MENU ITEM WITH LOADING STATE
                   _isLoggingOut
                       ? const Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
@@ -262,7 +273,7 @@ class _VendorMenuState extends State<VendorMenu> {
               child: Column(
                 children: [
                   Image.asset(
-                    'images/logo.png',
+                    'assets/images/logo.png', // Ensure path matches HomeScreen
                     height: 40,
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) => const Icon(
