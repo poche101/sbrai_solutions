@@ -5,11 +5,11 @@ import 'package:sbrai_solutions/buyer/screens/profile_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/favorite_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/message_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/settings_screen.dart';
-import 'package:sbrai_solutions/buyer/screens/settings/kyc_screen.dart'; // Added KYC screen import
+import 'package:sbrai_solutions/buyer/screens/settings/kyc_screen.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:sbrai_solutions/buyer/screens/signin_screen.dart';
 
-// Added ProfileService (with alias) and Model imports (with alias)
+// ProfileService and Model imports
 import 'package:sbrai_solutions/buyer_service/profile_service.dart' as service;
 import 'package:sbrai_solutions/models/buyer/user_profile_model.dart' as model;
 
@@ -39,16 +39,19 @@ class _BuyersMenuState extends State<BuyersMenu> {
 
   bool _isLoggingOut = false;
   bool _isUploading = false;
-  bool _isFetching = false; // Track profile fetching state
+  bool _isFetching = false;
 
-  // Local state for fetched profile data
   String? _fetchedName;
   String? _fetchedEmail;
   String? _fetchedPhoto;
+  String? _fetchedJoinDate;
 
   @override
   void initState() {
     super.initState();
+    _fetchedName = widget.userName;
+    _fetchedEmail = widget.userEmail;
+    _fetchedPhoto = widget.userPhotoUrl;
     _getLatestProfile();
   }
 
@@ -57,14 +60,31 @@ class _BuyersMenuState extends State<BuyersMenu> {
     setState(() => _isFetching = true);
 
     try {
-      // 1. Get the profile from the service
       model.UserProfile profile = await _profileService.fetchProfile();
 
       if (mounted) {
         setState(() {
-          _fetchedName = profile.fullName;
-          _fetchedEmail = profile.email;
-          _fetchedPhoto = profile.photoUrl;
+          _fetchedName = profile.fullName.isNotEmpty
+              ? profile.fullName
+              : _fetchedName;
+          _fetchedEmail = profile.email.isNotEmpty
+              ? profile.email
+              : _fetchedEmail;
+
+          // --- THE "STAY ON SCREEN" FIX ---
+          if (profile.photoUrl != null && profile.photoUrl!.isNotEmpty) {
+            // 1. Server gave us a real URL!
+            final timestamp = DateTime.now().millisecondsSinceEpoch;
+            final connector = profile.photoUrl!.contains('?') ? '&' : '?';
+            _fetchedPhoto =
+                "${profile.photoUrl}$connector"
+                "v=$timestamp";
+
+            // 2. Only now do we stop showing the local File
+            _imageFile = null;
+          }
+          // 3. If profile.photoUrl is NULL, we DO NOT change _fetchedPhoto or _imageFile.
+          // This keeps the last known good image on the screen.
         });
       }
     } catch (e) {
@@ -91,18 +111,15 @@ class _BuyersMenuState extends State<BuyersMenu> {
 
         if (mounted) {
           _showCustomToast("Profile picture updated!");
-          _getLatestProfile(); // Refresh header data
+          // Wait for the fresh profile data before letting go of the local preview
+          await _getLatestProfile();
         }
       }
     } catch (e) {
       debugPrint("Error updating image: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Failed to upload image"),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Reset local preview only if the actual upload fails
+        setState(() => _imageFile = null);
       }
     } finally {
       if (mounted) setState(() => _isUploading = false);
@@ -130,20 +147,15 @@ class _BuyersMenuState extends State<BuyersMenu> {
           ),
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Colors.black,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check, color: Colors.white, size: 16),
-              ),
+              const Icon(Icons.check_circle, color: Colors.green, size: 20),
               const SizedBox(width: 12),
-              Text(
-                message,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
@@ -159,12 +171,9 @@ class _BuyersMenuState extends State<BuyersMenu> {
     try {
       await _apiService.logout();
     } catch (e) {
-      debugPrint("Plugin failed, clearing local data manually: $e");
       await _apiService.clearToken();
     } finally {
       if (mounted) {
-        setState(() => _isLoggingOut = false);
-        _showCustomToast("Logged out successfully");
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const SigninScreen()),
@@ -174,18 +183,29 @@ class _BuyersMenuState extends State<BuyersMenu> {
     }
   }
 
+  void _navigateTo(Widget screen) {
+    if (Navigator.canPop(context)) Navigator.pop(context);
+    Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: widget.isDesktop ? 280 : MediaQuery.of(context).size.width * 0.75,
+      width: widget.isDesktop ? 280 : MediaQuery.of(context).size.width * 0.80,
       height: double.infinity,
       color: Colors.white,
       child: Column(
         children: [
           _buildUserHeader(context),
+          if (_isFetching)
+            const LinearProgressIndicator(
+              backgroundColor: Colors.transparent,
+              color: Color(0xFFFF6B35),
+              minHeight: 2,
+            ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 20),
+              padding: const EdgeInsets.symmetric(vertical: 10),
               children: [
                 _buildMenuItem(
                   Icons.home_outlined,
@@ -195,44 +215,20 @@ class _BuyersMenuState extends State<BuyersMenu> {
                 _buildMenuItem(
                   Icons.person_outline,
                   "Profile",
-                  onTap: () {
-                    if (Navigator.canPop(context)) Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ProfileScreen(),
-                      ),
-                    );
-                  },
+                  onTap: () => _navigateTo(const ProfileScreen()),
                 ),
                 _buildMenuItem(
                   Icons.favorite_outline,
                   "Favorites",
-                  onTap: () {
-                    if (Navigator.canPop(context)) Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const FavoriteScreen(),
-                      ),
-                    );
-                  },
+                  onTap: () => _navigateTo(const FavoriteScreen()),
                 ),
                 _buildMenuItem(
                   Icons.chat_bubble_outline,
                   "Messages",
-                  onTap: () {
-                    if (Navigator.canPop(context)) Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const MessageScreen(),
-                      ),
-                    );
-                  },
+                  onTap: () => _navigateTo(const MessageScreen()),
                 ),
                 const Divider(
-                  height: 40,
+                  height: 30,
                   thickness: 1,
                   indent: 20,
                   endIndent: 20,
@@ -240,34 +236,18 @@ class _BuyersMenuState extends State<BuyersMenu> {
                 _buildMenuItem(
                   Icons.settings_outlined,
                   "Settings",
-                  onTap: () {
-                    if (Navigator.canPop(context)) Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SettingsScreen(),
-                      ),
-                    );
-                  },
+                  onTap: () => _navigateTo(const SettingsScreen()),
                 ),
-                // Added KYC Menu Item
                 _buildMenuItem(
                   Icons.verified_user_outlined,
                   "KYC",
-                  onTap: () {
-                    if (Navigator.canPop(context)) Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const KYCScreen(),
-                      ),
-                    );
-                  },
+                  onTap: () => _navigateTo(const KYCScreen()),
                 ),
+                const SizedBox(height: 10),
                 _buildMenuItem(
                   Icons.logout_outlined,
                   _isLoggingOut ? "Logging out..." : "Logout",
-                  color: Colors.red,
+                  color: Colors.redAccent,
                   onTap: _isLoggingOut ? () {} : _handleLogout,
                 ),
               ],
@@ -280,119 +260,156 @@ class _BuyersMenuState extends State<BuyersMenu> {
   }
 
   Widget _buildUserHeader(BuildContext context) {
-    if (_isFetching && _fetchedName == null) {
-      return Container(
-        height: 160,
-        width: double.infinity,
-        color: const Color(0xFFFF6B35),
-        child: const Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
-      );
-    }
-
     final name =
         _fetchedName ??
-        (widget.userName.isNotEmpty ? widget.userName : "No Name Found");
+        (widget.userName.isNotEmpty ? widget.userName : "Welcome Guest");
     final email =
         _fetchedEmail ??
-        (widget.userEmail.isNotEmpty ? widget.userEmail : "No Email Found");
-    final photo = _fetchedPhoto ?? widget.userPhotoUrl;
+        (widget.userEmail.isNotEmpty
+            ? widget.userEmail
+            : "Sign in to sync data");
+
+    final String? photoUrl = _fetchedPhoto ?? widget.userPhotoUrl;
+    final joinDate = _fetchedJoinDate ?? "---";
 
     ImageProvider? imageProvider;
+    // We prioritize the local file during the upload/fetch cycle
     if (_imageFile != null) {
       imageProvider = FileImage(_imageFile!);
-    } else if (photo != null && photo.isNotEmpty) {
-      imageProvider = NetworkImage(photo);
+    } else if (photoUrl != null && photoUrl.isNotEmpty) {
+      imageProvider = NetworkImage(photoUrl);
     }
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 50, 15, 25),
-      color: const Color(0xFFFF6B35),
-      child: Stack(
+      padding: const EdgeInsets.fromLTRB(16, 60, 8, 30),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFF6B35),
+        borderRadius: BorderRadius.only(bottomRight: Radius.circular(40)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              GestureDetector(
-                onTap: _isUploading ? null : _handleImageSelection,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    CircleAvatar(
-                      radius: 35,
-                      backgroundColor: Colors.white24,
-                      backgroundImage: imageProvider,
-                      child: imageProvider == null
-                          ? const Icon(
-                              Icons.person,
-                              color: Colors.white,
-                              size: 40,
-                            )
-                          : null,
-                    ),
-                    if (_isUploading)
-                      const CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
+          GestureDetector(
+            onTap: _isUploading ? null : _handleImageSelection,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
                       ),
-                  ],
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 32,
+                    backgroundColor: Colors.white12,
+                    backgroundImage: imageProvider,
+                    child: (imageProvider == null)
+                        ? const Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 32,
+                          )
+                        : null,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                if (_isUploading)
+                  const CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                Text(
+                  email,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 11,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                const SizedBox(height: 10),
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      email,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
+                        horizontal: 8,
+                        vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.black.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Text(
-                        "Buyer",
+                        "BUYER",
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_month,
+                          color: Colors.white60,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            "Joined $joinDate",
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          Positioned(
-            right: 0,
-            top: 0,
-            child: GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: const Icon(Icons.close, color: Colors.black54, size: 24),
+              ],
             ),
+          ),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(
+              Icons.chevron_left,
+              color: Colors.white70,
+              size: 24,
+            ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
           ),
         ],
       ),
@@ -406,6 +423,7 @@ class _BuyersMenuState extends State<BuyersMenu> {
     required VoidCallback onTap,
   }) {
     return ListTile(
+      visualDensity: const VisualDensity(vertical: -2),
       leading: Icon(icon, color: color ?? Colors.black54, size: 22),
       title: Text(
         title,
@@ -421,18 +439,21 @@ class _BuyersMenuState extends State<BuyersMenu> {
 
   Widget _buildFooter() {
     return Padding(
-      padding: const EdgeInsets.all(20.0),
+      padding: const EdgeInsets.symmetric(vertical: 20),
       child: Column(
         children: [
-          Image.asset(
-            'assets/images/logo.png',
-            height: 30,
-            errorBuilder: (context, error, stackTrace) =>
-                const Icon(Icons.hub_rounded, color: Colors.orange, size: 30),
+          Opacity(
+            opacity: 0.5,
+            child: Image.asset(
+              'assets/images/logo.png',
+              height: 25,
+              errorBuilder: (_, __, ___) =>
+                  const Icon(Icons.hub_rounded, color: Colors.grey),
+            ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
           const Text(
-            "Version 1.1",
+            "Version 1.1.0",
             style: TextStyle(
               color: Colors.grey,
               fontSize: 10,

@@ -13,7 +13,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   // SIMULATED LOGIN DATA
   // In a real app, get these from your Auth Provider or Database
-  final String userName = "John Doe";
+  final String userName = "buyer";
   final String userEmail = "johndoe@example.com";
 
   String selectedState = "All Nigeria";
@@ -111,7 +111,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // FIXED: Passing the required user data to the BuyersMenu
       drawer: BuyersMenu(userName: userName, userEmail: userEmail),
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -131,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
-                userName.split(' ')[0], // Displays first name (e.g., "John")
+                userName.split(' ')[0],
                 style: const TextStyle(
                   color: Colors.black87,
                   fontSize: 13,
@@ -358,6 +357,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildLanguageDropdown() {
+    // Map to handle display codes for the new languages
+    final Map<String, String> languageCodes = {
+      "English": "EN",
+      "French": "FR",
+      "Yoruba": "YO",
+      "Hausa": "HA",
+      "Igbo": "IG",
+    };
+
     return PopupMenuButton<String>(
       onSelected: (value) => setState(() => selectedLanguage = value),
       child: Container(
@@ -369,8 +377,12 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           children: [
             Text(
-              selectedLanguage.substring(0, 2).toUpperCase(),
-              style: const TextStyle(color: Colors.black, fontSize: 12),
+              languageCodes[selectedLanguage] ?? "EN",
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const Icon(
               Icons.keyboard_arrow_down,
@@ -383,6 +395,9 @@ class _HomeScreenState extends State<HomeScreen> {
       itemBuilder: (context) => [
         const PopupMenuItem(value: "English", child: Text("English")),
         const PopupMenuItem(value: "French", child: Text("Français")),
+        const PopupMenuItem(value: "Yoruba", child: Text("Yorùbá")),
+        const PopupMenuItem(value: "Hausa", child: Text("Hausa")),
+        const PopupMenuItem(value: "Igbo", child: Text("Igbo")),
       ],
     );
   }

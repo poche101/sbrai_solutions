@@ -351,9 +351,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ... (Keep existing _buildLanguageDropdown, _buildTrendingSection, and _buildDynamicProductCard as they are)
-
   Widget _buildLanguageDropdown() {
+    // Map full language names to 2-letter codes for the display
+    final Map<String, String> languageCodes = {
+      "English": "EN",
+      "French": "FR",
+      "Yoruba": "YO",
+      "Hausa": "HA",
+      "Igbo": "IG",
+    };
+
     return PopupMenuButton<String>(
       onSelected: (value) => setState(() => selectedLanguage = value),
       child: Container(
@@ -365,8 +372,12 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           children: [
             Text(
-              selectedLanguage.substring(0, 2).toUpperCase(),
-              style: const TextStyle(color: Colors.black, fontSize: 12),
+              languageCodes[selectedLanguage] ?? "NG",
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const Icon(
               Icons.keyboard_arrow_down,
@@ -379,6 +390,9 @@ class _HomeScreenState extends State<HomeScreen> {
       itemBuilder: (context) => [
         const PopupMenuItem(value: "English", child: Text("English")),
         const PopupMenuItem(value: "French", child: Text("Français")),
+        const PopupMenuItem(value: "Yoruba", child: Text("Yorùbá")),
+        const PopupMenuItem(value: "Hausa", child: Text("Harshen Hausa")),
+        const PopupMenuItem(value: "Igbo", child: Text("Asụsụ Igbo")),
       ],
     );
   }
