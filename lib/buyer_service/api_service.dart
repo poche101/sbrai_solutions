@@ -154,6 +154,30 @@ class ApiService {
     }
   }
 
+  /// --- UPDATED PUT METHOD ---
+  /// Use this specifically for the profile update route
+  Future<http.Response> put(
+    String endpoint,
+    Map<String, dynamic> data, {
+    bool isProtected = true,
+    required String userType,
+  }) async {
+    try {
+      final url = _buildUrl(endpoint);
+      final headers = await _getHeaders(protected: isProtected);
+      debugPrint("🚀 API PUT ($userType): $url");
+
+      // We send a real PUT request here
+      final response = await http
+          .put(url, headers: headers, body: jsonEncode(data))
+          .timeout(const Duration(seconds: 15));
+
+      return _handleResponse(response);
+    } catch (e) {
+      throw _processError(e, "PUT", endpoint);
+    }
+  }
+
   Future<http.Response> postMultipart(
     String endpoint,
     File file,
@@ -191,23 +215,6 @@ class ApiService {
     }
   }
 
-  Future<http.Response> put(
-    String endpoint,
-    Map<String, dynamic> data, {
-    bool isProtected = true,
-  }) async {
-    try {
-      final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
-      final response = await http
-          .put(url, headers: headers, body: jsonEncode(data))
-          .timeout(const Duration(seconds: 15));
-      return _handleResponse(response);
-    } catch (e) {
-      throw _processError(e, "PUT", endpoint);
-    }
-  }
-
   Future<http.Response> delete(
     String endpoint, {
     bool isProtected = true,
@@ -216,6 +223,8 @@ class ApiService {
     try {
       final url = _buildUrl(endpoint);
       final headers = await _getHeaders(protected: isProtected);
+      debugPrint("🚀 API DELETE ($userType): $url");
+
       final response = await http
           .delete(url, headers: headers)
           .timeout(const Duration(seconds: 15));
@@ -303,21 +312,25 @@ class ApiService {
   http.Response _handleResponse(http.Response response) {
     final int statusCode = response.statusCode;
 
+    // Log response for debugging
+    debugPrint("📥 RESPONSE [${response.statusCode}]: ${response.body}");
+
     if (statusCode >= 200 && statusCode < 300) {
       return response;
     }
 
-    final Map<String, dynamic> decoded = jsonDecode(response.body);
+    final dynamic decoded = jsonDecode(response.body);
 
     // Handle Session Expiry
     if (statusCode == 401 &&
+        decoded is Map &&
         decoded['message'] != 'Incorrect email or password.') {
       clearToken();
       throw "Session expired. Please sign in again.";
     }
 
     // Handle Validation Errors (422)
-    if (statusCode == 422 && decoded['errors'] != null) {
+    if (statusCode == 422 && decoded is Map && decoded['errors'] != null) {
       Map<String, dynamic> errors = decoded['errors'];
       String errorMessage = "";
       errors.forEach((key, value) {
@@ -330,14 +343,17 @@ class ApiService {
       throw errorMessage.trim();
     }
 
-    throw decoded['message'] ?? "Server error ($statusCode)";
+    if (decoded is Map && decoded.containsKey('message')) {
+      throw decoded['message'];
+    }
+
+    throw "Server error ($statusCode)";
   }
 
   String _processError(dynamic e, String method, String endpoint) {
     debugPrint("❌ $method ERROR [$endpoint]: $e");
     if (e is SocketException) return "No internet connection.";
     if (e is TimeoutException) return "Connection timed out.";
-    // Ensure we strip the Exception prefix if it exists
     return e.toString().replaceFirst('Exception: ', '');
   }
 }

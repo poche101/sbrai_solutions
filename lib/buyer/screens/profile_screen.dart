@@ -25,47 +25,74 @@ class UserProfile {
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
-    final userData = json['user'] ?? json;
+    // 1. Dig into the response. Laravel usually nests data in 'user' or 'data'.
+    final userData = json['data'] ?? json['user'] ?? json;
 
+    // 2. Handle Date Formatting safely
     String formattedDate = "Joined recently";
-    String? dateStr = json['created_at'] ?? userData['created_at'];
-
-    if (dateStr != null) {
+    dynamic rawDate = userData['created_at'] ?? json['created_at'];
+    if (rawDate != null) {
       try {
-        DateTime dt = DateTime.parse(dateStr);
+        DateTime dt = DateTime.parse(rawDate.toString());
         formattedDate = DateFormat('MMM yyyy').format(dt);
       } catch (e) {
         formattedDate = "N/A";
       }
     }
 
+    // 3. Handle Display Name
     String displayName =
-        json['full_name'] ??
+        userData['full_name'] ??
         userData['name'] ??
         userData['email']?.split('@')[0] ??
         'User';
 
+    // 4. THE FIX: Smart Photo URL Construction
+    // We check both 'photo' and 'profile_photo' keys
+    String? rawPhoto = userData['photo'] ?? userData['profile_photo'];
+    String? finalPhotoUrl;
+
+    if (rawPhoto != null && rawPhoto.isNotEmpty) {
+      if (rawPhoto.startsWith('http')) {
+        // If the API already gave us a full URL, use it as is
+        finalPhotoUrl = rawPhoto;
+      } else {
+        // If it's just a path, clean it up
+        // Remove leading slashes so we don't get sbraisolutions.com//storage
+        String path = rawPhoto.startsWith('/')
+            ? rawPhoto.substring(1)
+            : rawPhoto;
+
+        // Prevent "storage/storage" duplicates
+        if (path.startsWith('storage/')) {
+          path = path.replaceFirst('storage/', '');
+        }
+
+        finalPhotoUrl = "https://sbraisolutions.com/storage/$path";
+      }
+    }
+
     return UserProfile(
       fullName: displayName,
       email: userData['email'] ?? 'Not provided',
-      phone: json['phone'] ?? userData['phone'] ?? '',
-      address: json['address'] ?? userData['address'] ?? '',
+      phone:
+          userData['phone']?.toString() ??
+          '', // Convert to string to avoid int crashes
+      address: userData['address']?.toString() ?? '',
       joinDate: formattedDate,
-      photoUrl: json['profile_photo'] != null
-          ? "https://sbraisolutions.com/storage/${json['profile_photo']}"
-          : null,
+      photoUrl: finalPhotoUrl,
     );
   }
 }
 
-// --- Updated Service ---
+// --- Updated Service Section ---
 class ProfileService {
   final ApiService _api = ApiService();
 
   Future<UserProfile> fetchProfile() async {
     try {
       final response = await _api.get(
-        'buyers/profile', // Removed leading slash
+        'buyers/profile',
         isProtected: true,
         userType: 'buyer',
       );
@@ -81,16 +108,18 @@ class ProfileService {
 
   Future<UserProfile> updateProfile(Map<String, dynamic> data) async {
     try {
-      final response = await _api.post(
+      final response = await _api.put(
         'buyers/profile/update',
         data,
         isProtected: true,
         userType: 'buyer',
       );
+
       final decoded = jsonDecode(response.body);
       final profileData = (decoded is Map && decoded.containsKey('data'))
           ? decoded['data']
           : decoded;
+
       return UserProfile.fromJson(profileData);
     } catch (e) {
       rethrow;
@@ -101,7 +130,7 @@ class ProfileService {
     try {
       final response = await _api.upload(
         'buyers/profile/upload-photo',
-        {},
+        {'_method': 'PUT'},
         filePath: imageFile.path,
         fileField: 'profile_photo',
         isProtected: true,
@@ -199,25 +228,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _user = updatedUser;
           _isLoading = false;
         });
-        _showSuccess("Profile picture updated!");
+        _showToast("Profile picture updated!", isError: false);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showError(e.toString());
+        _showToast(e.toString(), isError: true);
       }
     }
   }
 
   Future<void> _saveProfile() async {
     if (_nameController.text.trim().isEmpty) {
-      _showError("Name cannot be empty");
+      _showToast("Name cannot be empty", isError: true);
       return;
     }
 
     setState(() => _isLoading = true);
 
-    // FIX: Changed 'fullName' to 'name' to match Laravel validation keys
     final updateData = {
       'name': _nameController.text.trim(),
       'phone': _phoneController.text.trim(),
@@ -233,15 +261,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isEditing = false;
           _isLoading = false;
         });
-        _showSuccess("Profile updated successfully");
+        _showToast("Profile updated successfully", isError: false);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showError(e.toString());
+        _showToast(e.toString(), isError: true);
       }
     }
   }
+
+  /// Custom Toast with White BG and Black Circle Checkmark
+  void _showToast(String message, {bool isError = false}) {
+    final overlay = Overlay.of(context);
+    final overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 50,
+        left: 20,
+        right: 20,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.black,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isError ? Icons.close : Icons.check,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message.replaceFirst('Exception: ', ''),
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+    Future.delayed(const Duration(seconds: 3), () {
+      overlayEntry.remove();
+    });
+  }
+
+  // Delete these two lines entirely:
+  void _showError(String message) => _showToast(message, isError: true);
 
   @override
   void dispose() {
@@ -249,26 +341,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _phoneController.dispose();
     _addressController.dispose();
     super.dispose();
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message.replaceFirst('Exception: ', '')),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   @override
