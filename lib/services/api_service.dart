@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 class ApiService {
+<<<<<<< HEAD
   // FIX: Remove /v1 from here if you plan to include it in your Service paths,
   // OR keep it here and remove it from your Service paths.
   // Recommendation: Keep the base as the root API and let services define versions.
@@ -13,49 +14,71 @@ class ApiService {
 
   static const String _buyerTokenKey = 'buyer_auth_token';
   static const String _vendorTokenKey = 'vendor_auth_token';
+=======
+  static const String baseUrl = "https://sbraisolutions.com/api/v1";
+
+  /// ✅ Vendor token only
+  static const String _tokenKey = 'vendor_auth_token';
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
 
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
 
+<<<<<<< HEAD
   /// --- TOKEN MANAGEMENT ---
   Future<void> saveToken(String token, {required String userType}) async {
     final prefs = await SharedPreferences.getInstance();
     final key = userType == 'vendor' ? _vendorTokenKey : _buyerTokenKey;
     await prefs.setString(key, token);
+=======
+  /// ---------------- TOKEN ----------------
+
+  Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tokenKey, token);
+    debugPrint("🔐 Vendor token saved");
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
   }
 
-  Future<String?> getToken({required String userType}) async {
+  Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
-    final key = userType == 'vendor' ? _vendorTokenKey : _buyerTokenKey;
-    return prefs.getString(key);
+    return prefs.getString(_tokenKey);
   }
 
-  Future<void> clearToken({required String userType}) async {
+  Future<void> clearToken() async {
     final prefs = await SharedPreferences.getInstance();
+<<<<<<< HEAD
     final key = userType == 'vendor' ? _vendorTokenKey : _buyerTokenKey;
     await prefs.remove(key);
+=======
+    await prefs.remove(_tokenKey);
+    debugPrint("🔐 Vendor token cleared");
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
   }
 
-  /// --- PRIVATE HELPERS ---
-  Future<Map<String, String>> _getHeaders({
-    bool protected = false,
-    required String userType,
-  }) async {
+  /// ---------------- HEADERS ----------------
+
+  Future<Map<String, String>> _getHeaders({bool protected = false}) async {
     Map<String, String> headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
 
     if (protected) {
-      String? token = await getToken(userType: userType);
+      final token = await getToken();
+
       if (token != null) {
         headers['Authorization'] = 'Bearer $token';
+      } else {
+        debugPrint("⚠️ No token found for protected route");
       }
     }
+
     return headers;
   }
 
+<<<<<<< HEAD
   // FIX: Robust URL builder that prevents double slashes and versioning conflicts
   Uri _buildUrl(String endpoint) {
     // Remove leading slash if present
@@ -66,16 +89,23 @@ class ApiService {
     // Final URL assembly
     final finalUrl = '$baseUrl/$cleanEndpoint';
     return Uri.parse(finalUrl);
+=======
+  /// ---------------- URL ----------------
+
+  Uri _buildUrl(String endpoint) {
+    final cleanEndpoint =
+    endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    return Uri.parse('$baseUrl/$cleanEndpoint');
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
   }
 
-  /// --- CORE METHODS ---
-  Future<http.Response> get(
-    String endpoint, {
-    bool isProtected = true,
-    required String userType,
-  }) async {
+  /// ---------------- GET ----------------
+
+  Future<http.Response> get(String endpoint,
+      {bool isProtected = true}) async {
     try {
       final url = _buildUrl(endpoint);
+<<<<<<< HEAD
       final headers = await _getHeaders(
         protected: isProtected,
         userType: userType,
@@ -85,19 +115,33 @@ class ApiService {
           .get(url, headers: headers)
           .timeout(const Duration(seconds: 15));
       return _handleResponse(response, userType: userType);
+=======
+      final headers = await _getHeaders(protected: isProtected);
+
+      debugPrint("🚀 GET: $url");
+
+      final response = await http
+          .get(url, headers: headers)
+          .timeout(const Duration(seconds: 15));
+
+      return _handleResponse(response);
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
     } catch (e) {
-      return _processError(e, "GET", endpoint);
+      _processError(e, "GET", endpoint);
+      rethrow;
     }
   }
 
+  /// ---------------- POST ----------------
+
   Future<http.Response> post(
-    String endpoint,
-    Map<String, dynamic> data, {
-    bool isProtected = false,
-    required String userType,
-  }) async {
+      String endpoint,
+      Map<String, dynamic> data, {
+        bool isProtected = false,
+      }) async {
     try {
       final url = _buildUrl(endpoint);
+<<<<<<< HEAD
       final headers = await _getHeaders(
         protected: isProtected,
         userType: userType,
@@ -107,11 +151,25 @@ class ApiService {
           .post(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
       return _handleResponse(response, userType: userType);
+=======
+      final headers = await _getHeaders(protected: isProtected);
+
+      debugPrint("🚀 POST: $url");
+      debugPrint("📦 ${jsonEncode(data)}");
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(data))
+          .timeout(const Duration(seconds: 15));
+
+      return _handleResponse(response);
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
     } catch (e) {
-      return _processError(e, "POST", endpoint);
+      _processError(e, "POST", endpoint);
+      rethrow;
     }
   }
 
+<<<<<<< HEAD
   Future<http.Response> upload(
     String endpoint,
     Map<String, String> data, {
@@ -143,15 +201,18 @@ class ApiService {
       return _processError(e, "UPLOAD", endpoint);
     }
   }
+=======
+  /// ---------------- PUT ----------------
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
 
   Future<http.Response> put(
-    String endpoint,
-    Map<String, dynamic> data, {
-    bool isProtected = true,
-    required String userType,
-  }) async {
+      String endpoint,
+      Map<String, dynamic> data, {
+        bool isProtected = true,
+      }) async {
     try {
       final url = _buildUrl(endpoint);
+<<<<<<< HEAD
       final headers = await _getHeaders(
         protected: isProtected,
         userType: userType,
@@ -160,18 +221,30 @@ class ApiService {
           .put(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
       return _handleResponse(response, userType: userType);
+=======
+      final headers = await _getHeaders(protected: isProtected);
+
+      debugPrint("🚀 PUT: $url");
+
+      final response = await http
+          .put(url, headers: headers, body: jsonEncode(data))
+          .timeout(const Duration(seconds: 15));
+
+      return _handleResponse(response);
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
     } catch (e) {
-      return _processError(e, "PUT", endpoint);
+      _processError(e, "PUT", endpoint);
+      rethrow;
     }
   }
 
-  Future<http.Response> delete(
-    String endpoint, {
-    bool isProtected = true,
-    required String userType,
-  }) async {
+  /// ---------------- DELETE ----------------
+
+  Future<http.Response> delete(String endpoint,
+      {bool isProtected = true}) async {
     try {
       final url = _buildUrl(endpoint);
+<<<<<<< HEAD
       final headers = await _getHeaders(
         protected: isProtected,
         userType: userType,
@@ -180,11 +253,24 @@ class ApiService {
           .delete(url, headers: headers)
           .timeout(const Duration(seconds: 15));
       return _handleResponse(response, userType: userType);
+=======
+      final headers = await _getHeaders(protected: isProtected);
+
+      debugPrint("🚀 DELETE: $url");
+
+      final response = await http
+          .delete(url, headers: headers)
+          .timeout(const Duration(seconds: 15));
+
+      return _handleResponse(response);
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
     } catch (e) {
-      return _processError(e, "DELETE", endpoint);
+      _processError(e, "DELETE", endpoint);
+      rethrow;
     }
   }
 
+<<<<<<< HEAD
   http.Response _handleResponse(
     http.Response response, {
     required String userType,
@@ -195,10 +281,64 @@ class ApiService {
     if (statusCode == 401) {
       clearToken(userType: userType);
       throw "Session expired or unauthorized.";
+=======
+  /// ---------------- UPLOAD ----------------
+
+  Future<http.Response> upload(
+      String endpoint,
+      Map<String, String> data, {
+        required String filePath,
+        required String fileField,
+        bool isProtected = true,
+      }) async {
+    try {
+      final url = _buildUrl(endpoint);
+      final token = await getToken();
+
+      final request = http.MultipartRequest('POST', url);
+
+      request.headers['Accept'] = 'application/json';
+
+      if (isProtected && token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      data.forEach((key, value) {
+        request.fields[key] = value;
+      });
+
+      request.files.add(
+        await http.MultipartFile.fromPath(fileField, filePath),
+      );
+
+      debugPrint("🚀 UPLOAD: $url");
+
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+
+      return _handleResponse(response);
+    } catch (e) {
+      _processError(e, "UPLOAD", endpoint);
+      rethrow;
+    }
+  }
+
+  /// ---------------- RESPONSE ----------------
+
+  http.Response _handleResponse(http.Response response) {
+    final statusCode = response.statusCode;
+
+    debugPrint("📥 STATUS: $statusCode");
+
+    if (statusCode == 401) {
+      clearToken();
+      throw "Session expired. Please login again.";
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
     }
 
     if (statusCode >= 200 && statusCode < 300) {
       return response;
+<<<<<<< HEAD
     } else if (statusCode == 422) {
       final decoded = jsonDecode(response.body);
       if (decoded['errors'] != null) {
@@ -208,14 +348,37 @@ class ApiService {
       }
       throw decoded['message'] ?? "Validation failed";
     } else {
+=======
+    }
+
+    try {
+      final decoded = jsonDecode(response.body);
+      throw decoded['message'] ?? "Server error ($statusCode)";
+    } catch (_) {
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
       throw "Server error: $statusCode";
     }
   }
 
-  http.Response _processError(dynamic e, String method, String endpoint) {
+  /// ---------------- ERROR ----------------
+
+  void _processError(dynamic e, String method, String endpoint) {
     debugPrint("❌ $method ERROR [$endpoint]: $e");
+<<<<<<< HEAD
     if (e is SocketException) throw "No internet connection.";
     if (e is TimeoutException) throw "Connection timed out.";
     throw e.toString().replaceAll("Exception: ", "");
+=======
+
+    if (e is SocketException) {
+      throw "No internet connection.";
+    } else if (e is TimeoutException) {
+      throw "Request timeout.";
+    } else if (e is HandshakeException) {
+      throw "SSL error.";
+    } else {
+      throw e.toString();
+    }
+>>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
   }
 }
