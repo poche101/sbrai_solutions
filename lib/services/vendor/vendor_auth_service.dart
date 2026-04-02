@@ -20,11 +20,7 @@ class VendorAuthService {
       debugPrint("🔐 Attempting vendor registration for: $email");
 
       final response = await _apiService.post(
-<<<<<<< HEAD
-        'v1/vendor/register', // Standardized path
-=======
         '/vendor/register',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
         {
           'full_name': name,
           'email': email,
@@ -65,16 +61,11 @@ class VendorAuthService {
       debugPrint("🔐 Attempting vendor login for: $email");
 
       final response = await _apiService.post(
-<<<<<<< HEAD
-        'v1/vendor/login', // Added v1 to match registration pattern
-        {'email': email, 'password': password},
-=======
         '/vendor/login',
         {
           'email': email,
           'password': password,
         },
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
         isProtected: false,
       );
 
@@ -94,18 +85,6 @@ class VendorAuthService {
 
       return responseData;
     } catch (e) {
-<<<<<<< HEAD
-      debugPrint("❌ Login service error: $e");
-      rethrow;
-    }
-  }
-
-  // Vendor Logout
-  Future<void> logout() async {
-    try {
-      await _apiService.post(
-        'v1/vendor/logout', // Consistent naming
-=======
       debugPrint("❌ Login error: $e");
 
       if (e.toString().contains("Invalid email or password") ||
@@ -122,7 +101,6 @@ class VendorAuthService {
     try {
       await _apiService.post(
         '/vendor/logout',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
         {},
         isProtected: true,
       );
@@ -131,12 +109,8 @@ class VendorAuthService {
     } catch (e) {
       debugPrint("❌ Logout API error: $e");
     } finally {
-<<<<<<< HEAD
-      await _apiService.clearToken(userType: userType);
-=======
       /// ✅ Always clear token
       await _apiService.clearToken();
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
       debugPrint("🔐 Vendor token cleared");
     }
   }
@@ -155,11 +129,7 @@ class VendorAuthService {
       debugPrint("🔐 Fetching vendor profile");
 
       final response = await _apiService.get(
-<<<<<<< HEAD
-        'v1/vendor/profile',
-=======
         '/vendor/profile',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
         isProtected: true,
       );
 
@@ -184,11 +154,7 @@ class VendorAuthService {
       debugPrint("🔐 Updating vendor profile");
 
       final response = await _apiService.put(
-<<<<<<< HEAD
-        'v1/vendor/profile',
-=======
         '/vendor/profile',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
         {
           'full_name': name,
           'phone_number': phone,
@@ -223,11 +189,7 @@ class VendorAuthService {
         if (bvn != null) data['bvn'] = bvn;
 
         final response = await _apiService.upload(
-<<<<<<< HEAD
-          'v1/vendor/nin/verify',
-=======
           '/vendor/nin/verify',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
           data,
           filePath: documentPath,
           fileField: 'document',
@@ -241,11 +203,7 @@ class VendorAuthService {
         if (bvn != null) data['bvn'] = bvn;
 
         final response = await _apiService.post(
-<<<<<<< HEAD
-          'v1/vendor/verify-identity',
-=======
           '/vendor/verify-identity',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
           data,
           isProtected: true,
         );
