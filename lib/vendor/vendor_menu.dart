@@ -5,13 +5,12 @@ import 'screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/kyc_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart'
-    as vendor;
+as vendor;
 import 'package:sbrai_solutions/vendor/screen/message_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/vendor_settings_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/login_screen.dart';
 
 class VendorMenu extends StatefulWidget {
-  // Added userName and userEmail parameters to the constructor
   final String userName;
   final String userEmail;
 
@@ -27,7 +26,52 @@ class VendorMenu extends StatefulWidget {
 
 class _VendorMenuState extends State<VendorMenu> {
   bool _isLoggingOut = false;
+  bool _isLoadingProfile = false;
   final VendorAuthService _authService = VendorAuthService();
+
+  // Dynamic user data from API
+  String _displayName = '';
+  String _displayEmail = '';
+  bool _isVerified = false;
+  String? _businessName;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize with passed values
+    _displayName = widget.userName;
+    _displayEmail = widget.userEmail;
+    // Load fresh profile data
+    _loadProfileData();
+  }
+
+  // Load latest profile data from API
+  Future<void> _loadProfileData() async {
+    setState(() => _isLoadingProfile = true);
+
+    try {
+      final response = await _authService.getProfile();
+
+      if (response['status'] == 'success' && response['data'] != null) {
+        final vendor = response['data'];
+
+        setState(() {
+          _displayName = vendor['full_name'] ?? widget.userName;
+          _displayEmail = vendor['email'] ?? widget.userEmail;
+          _businessName = vendor['business_name'];
+          _isVerified = vendor['email_verified_at'] != null ||
+              vendor['nin_verified_at'] != null;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading profile in menu: $e');
+      // Keep using the passed values if API fails
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingProfile = false);
+      }
+    }
+  }
 
   // Handle logout process
   Future<void> _handleLogout() async {
@@ -48,7 +92,7 @@ class _VendorMenuState extends State<VendorMenu> {
         // Clear all routes and go to login
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (route) => false,
+              (route) => false,
         );
       }
     } catch (e) {
@@ -116,22 +160,52 @@ class _VendorMenuState extends State<VendorMenu> {
                     ],
                   ),
                   const SizedBox(height: 15),
-                  // Updated to use the dynamic userName passed from HomeScreen
-                  Text(
-                    widget.userName,
-                    style: const TextStyle(
-                      color: Colors.black87,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
+
+                  // Show loading or user data
+                  if (_isLoadingProfile)
+                    const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Color(0xFFFF7043),
+                        ),
+                      ),
+                    )
+                  else ...[
+                    Text(
+                      _displayName,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  // Added userEmail display
-                  Text(
-                    widget.userEmail,
-                    style: const TextStyle(color: Colors.black45, fontSize: 13),
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _displayEmail,
+                      style: const TextStyle(
+                        color: Colors.black45,
+                        fontSize: 13,
+                      ),
+                    ),
+                    if (_businessName != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _businessName!,
+                        style: const TextStyle(
+                          color: Colors.black54,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+
                   const SizedBox(height: 12),
+
+                  // Status badges
                   Row(
                     children: [
                       _buildBadge(
@@ -141,10 +215,13 @@ class _VendorMenuState extends State<VendorMenu> {
                       ),
                       const SizedBox(width: 8),
                       _buildBadge(
-                        'Not Verified',
-                        Colors.grey.shade400,
-                        icon: Icons.pending_actions_rounded,
-                        isVerified: false,
+                        _isVerified ? 'Verified' : 'Not Verified',
+                        _isVerified
+                            ? const Color(0xFF00C853)
+                            : Colors.grey.shade400,
+                        icon: _isVerified
+                            ? Icons.verified_rounded
+                            : Icons.pending_actions_rounded,
                       ),
                     ],
                   ),
@@ -160,20 +237,23 @@ class _VendorMenuState extends State<VendorMenu> {
                   _buildMenuItem(
                     Icons.home_outlined,
                     'Home',
-                    () => Navigator.pop(context),
+                        () => Navigator.pop(context),
                   ),
+
+                  // Profile - Now opens the API-integrated ProfileScreen
                   _buildMenuItem(Icons.person_outline, 'Profile', () {
                     Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => ProfileScreen(
-                          joinedDate: DateTime(2026, 1, 1),
-                          isVerified: false,
-                        ),
+                        builder: (context) => const ProfileScreen(),
                       ),
-                    );
+                    ).then((_) {
+                      // Refresh profile data when returning from profile screen
+                      _loadProfileData();
+                    });
                   }),
+
                   _buildMenuItem(Icons.add_box_outlined, 'Post Ad', () {
                     Navigator.pop(context);
                     Navigator.push(
@@ -183,6 +263,7 @@ class _VendorMenuState extends State<VendorMenu> {
                       ),
                     );
                   }),
+
                   _buildMenuItem(Icons.dashboard_outlined, 'Dashboard', () {
                     Navigator.pop(context);
                     Navigator.push(
@@ -243,26 +324,26 @@ class _VendorMenuState extends State<VendorMenu> {
 
                   _isLoggingOut
                       ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Center(
-                            child: SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.red,
-                                ),
-                              ),
-                            ),
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.red,
                           ),
-                        )
-                      : _buildMenuItem(
-                          Icons.logout_outlined,
-                          'Logout',
-                          () async => await _handleLogout(),
-                          color: Colors.red.shade300,
                         ),
+                      ),
+                    ),
+                  )
+                      : _buildMenuItem(
+                    Icons.logout_outlined,
+                    'Logout',
+                        () async => await _handleLogout(),
+                    color: Colors.red.shade300,
+                  ),
                 ],
               ),
             ),
@@ -273,7 +354,7 @@ class _VendorMenuState extends State<VendorMenu> {
               child: Column(
                 children: [
                   Image.asset(
-                    'assets/images/logo.png', // Ensure path matches HomeScreen
+                    'assets/images/logo.png',
                     height: 40,
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) => const Icon(
@@ -297,11 +378,10 @@ class _VendorMenuState extends State<VendorMenu> {
   }
 
   Widget _buildBadge(
-    String label,
-    Color color, {
-    required IconData icon,
-    bool isVerified = true,
-  }) {
+      String label,
+      Color color, {
+        required IconData icon,
+      }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -327,11 +407,11 @@ class _VendorMenuState extends State<VendorMenu> {
   }
 
   Widget _buildMenuItem(
-    IconData icon,
-    String title,
-    VoidCallback onTap, {
-    Color? color,
-  }) {
+      IconData icon,
+      String title,
+      VoidCallback onTap, {
+        Color? color,
+      }) {
     return ListTile(
       leading: Icon(icon, color: color ?? Colors.black45, size: 22),
       title: Text(

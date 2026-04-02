@@ -1,75 +1,193 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../services/vendor/vendor_auth_service.dart';
 
 class ProfileScreen extends StatefulWidget {
-  final bool isVerified;
-  final DateTime joinedDate;
-  final double rating;
-  final String userName;
-  final String email;
-  final String phone;
-  final String businessName;
-
-  const ProfileScreen({
-    super.key,
-    this.isVerified = false, // Defaults to false (Not Verified)
-    required this.joinedDate,
-    this.rating = 0.0,
-    this.userName = 'Demo User',
-    this.email = 'user@example.com',
-    this.phone = '000-000-0000',
-    this.businessName = 'My Business',
-  });
+  const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final VendorAuthService _authService = VendorAuthService();
+
   bool isEditing = false;
+  bool isLoading = true;
+  bool isVerified = false;
+  double rating = 0.0;
+  String joinedDate = '';
+
+  // User data
+  String userName = '';
+  String email = '';
+  String phone = '';
+  String businessName = '';
+  String businessAddress = '';
+  String nin = '';
+
+  // Statistics
+  int activeListings = 0;
+  int totalViews = 0;
+  int totalChats = 0;
 
   late TextEditingController nameController;
   late TextEditingController phoneController;
   late TextEditingController businessController;
+  late TextEditingController addressController;
 
-  late String currentName;
-  late String currentPhone;
-  late String currentBusinessName;
+  String currentName = '';
+  String currentPhone = '';
+  String currentBusinessName = '';
+  String currentBusinessAddress = '';
 
   @override
   void initState() {
     super.initState();
-    // DEBUG: Check your console! If this prints 'true',
-    // the parent widget is passing 'true' and overriding your default.
-    debugPrint("ProfileScreen isVerified: ${widget.isVerified}");
-
-    currentName = widget.userName;
-    currentPhone = widget.phone;
-    currentBusinessName = widget.businessName;
-
-    _resetControllers();
+    _initializeControllers();
+    _loadProfile();
   }
 
-  void _resetControllers() {
-    nameController = TextEditingController(text: currentName);
-    phoneController = TextEditingController(text: currentPhone);
-    businessController = TextEditingController(text: currentBusinessName);
+  void _initializeControllers() {
+    nameController = TextEditingController();
+    phoneController = TextEditingController();
+    businessController = TextEditingController();
+    addressController = TextEditingController();
+  }
+
+  Future<void> _loadProfile() async {
+    if (!mounted) return;
+    setState(() => isLoading = true);
+
+    try {
+      final response = await _authService.getProfile();
+
+      if (!mounted) return;
+
+      if (response['status'] == 'success' && response['data'] != null) {
+        final vendor = response['data'];
+
+        setState(() {
+          userName = vendor['full_name'] ?? 'Vendor Name';
+          email = vendor['email'] ?? '';
+          phone = vendor['phone_number'] ?? '';
+          businessName = vendor['business_name'] ?? 'My Business';
+          businessAddress = vendor['business_address'] ?? '';
+          nin = vendor['nin'] ?? '';
+          isVerified = (vendor['email_verified_at'] != null) ||
+              (vendor['nin_verified_at'] != null);
+          rating = (vendor['rating'] ?? 0.0).toDouble();
+
+          // Format joined date
+          if (vendor['created_at'] != null) {
+            try {
+              final date = DateTime.parse(vendor['created_at']);
+              joinedDate = DateFormat('MMM yyyy').format(date);
+            } catch (e) {
+              joinedDate = 'Recently';
+            }
+          }
+
+          // Load statistics if available
+          activeListings = vendor['active_listings'] ?? 0;
+          totalViews = vendor['total_views'] ?? 0;
+          totalChats = vendor['total_chats'] ?? 0;
+
+          currentName = userName;
+          currentPhone = phone;
+          currentBusinessName = businessName;
+          currentBusinessAddress = businessAddress;
+
+          _updateControllers();
+        });
+      } else {
+        _showToast(response['message'] ?? 'Failed to load profile', isError: true);
+      }
+    } catch (e) {
+      debugPrint('Error loading profile: $e');
+      if (mounted) {
+        _showToast('Error loading profile: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
+  void _updateControllers() {
+    nameController.text = currentName;
+    phoneController.text = currentPhone;
+    businessController.text = currentBusinessName;
+    addressController.text = currentBusinessAddress;
+  }
+
+  Future<void> _updateProfile() async {
+    if (!mounted) return;
+    setState(() => isLoading = true);
+
+    try {
+      final response = await _authService.updateProfile(
+        name: nameController.text.trim(),
+        phone: phoneController.text.trim(),
+        businessName: businessController.text.trim(),
+        address: addressController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (response['status'] == 'success') {
+        setState(() {
+          currentName = nameController.text;
+          currentPhone = phoneController.text;
+          currentBusinessName = businessController.text;
+          currentBusinessAddress = addressController.text;
+          userName = currentName;
+          phone = currentPhone;
+          businessName = currentBusinessName;
+          businessAddress = currentBusinessAddress;
+          isEditing = false;
+        });
+
+        _showToast(response['message'] ?? 'Profile updated successfully!');
+      } else {
+        _showToast(response['message'] ?? 'Update failed', isError: true);
+      }
+    } catch (e) {
+      debugPrint('Error updating profile: $e');
+      if (mounted) {
+        _showToast('Error updating profile: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
   }
 
   void _showToast(String message, {bool isError = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: isError ? Colors.redAccent : Colors.green,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
-    String formattedDate = DateFormat('MMM yyyy').format(widget.joinedDate);
+  void dispose() {
+    nameController.dispose();
+    phoneController.dispose();
+    businessController.dispose();
+    addressController.dispose();
+    super.dispose();
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -82,7 +200,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.black87,
             size: 20,
           ),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+          },
         ),
         title: const Text(
           'My Profile',
@@ -93,9 +215,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         actions: [
-          if (!isEditing)
+          if (!isEditing && !isLoading)
             IconButton(
-              onPressed: () => setState(() => isEditing = true),
+              onPressed: () {
+                setState(() {
+                  isEditing = true;
+                  _updateControllers();
+                });
+              },
               icon: const Icon(
                 Icons.edit_note_rounded,
                 color: Color(0xFFFF7043),
@@ -104,107 +231,108 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: isLoading
+          ? const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFFFF7043),
+        ),
+      )
+          : SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // --- HEADER SECTION ---
-            _buildSectionCard(
-              child: Column(
-                children: [
-                  const CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Color(0xFFFFF3E0),
-                    child: Icon(
-                      Icons.storefront_rounded,
-                      size: 50,
-                      color: Color(0xFFFF7043),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    currentName,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildStatusBadge('Vendor', const Color(0xFFFF7043)),
-                      const SizedBox(width: 8),
-                      // UI LOGIC:
-                      _buildStatusBadge(
-                        widget.isVerified ? 'Verified' : 'Not Verified',
-                        widget.isVerified
-                            ? const Color(0xFF00C853)
-                            : Colors.grey.shade400,
-                        icon: widget.isVerified
-                            ? Icons.verified_rounded
-                            : Icons.pending_rounded,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.calendar_today_rounded,
-                        size: 16,
-                        color: Colors.black45,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Joined $formattedDate',
-                        style: const TextStyle(
-                          color: Colors.black45,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Icon(
-                        Icons.star_rounded,
-                        size: 18,
-                        color: Colors.amber,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${widget.rating} rating',
-                        style: const TextStyle(
-                          color: Colors.black45,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            _buildHeaderSection(),
             const SizedBox(height: 16),
-
-            // --- ACCOUNT INFORMATION / EDIT FORM ---
             _buildSectionCard(
               title: 'Account Information',
               child: isEditing ? _buildEditForm() : _buildInfoList(),
             ),
             const SizedBox(height: 16),
-
-            // --- STATISTICS SECTION ---
-            _buildSectionCard(
-              title: 'Your Statistics',
-              child: Row(
-                children: [
-                  _buildStatItem('0', 'Active\nListings'),
-                  _buildStatItem('0', 'Total Views'),
-                  _buildStatItem('0', 'Chats'),
-                ],
-              ),
-            ),
+            _buildStatisticsSection(),
+            if (nin.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _buildKycSection(),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderSection() {
+    return _buildSectionCard(
+      child: Column(
+        children: [
+          const CircleAvatar(
+            radius: 50,
+            backgroundColor: Color(0xFFFFF3E0),
+            child: Icon(
+              Icons.storefront_rounded,
+              size: 50,
+              color: Color(0xFFFF7043),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            currentName,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildStatusBadge('Vendor', const Color(0xFFFF7043)),
+              const SizedBox(width: 8),
+              _buildStatusBadge(
+                isVerified ? 'Verified' : 'Not Verified',
+                isVerified
+                    ? const Color(0xFF00C853)
+                    : Colors.grey.shade400,
+                icon: isVerified
+                    ? Icons.verified_rounded
+                    : Icons.pending_rounded,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.calendar_today_rounded,
+                size: 16,
+                color: Colors.black45,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Joined ${joinedDate.isEmpty ? 'Recently' : joinedDate}',
+                style: const TextStyle(
+                  color: Colors.black45,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (rating > 0) ...[
+                const SizedBox(width: 12),
+                const Icon(
+                  Icons.star_rounded,
+                  size: 18,
+                  color: Colors.amber,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  rating.toString(),
+                  style: const TextStyle(
+                    color: Colors.black45,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -212,12 +340,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildInfoList() {
     return Column(
       children: [
-        _buildInfoTile(Icons.alternate_email_rounded, 'Email', widget.email),
+        _buildInfoTile(Icons.alternate_email_rounded, 'Email', email),
         _buildInfoTile(Icons.phone_iphone_rounded, 'Phone', currentPhone),
         _buildInfoTile(
           Icons.business_center_rounded,
           'Business Name',
           currentBusinessName,
+        ),
+        _buildInfoTile(
+          Icons.location_on_rounded,
+          'Business Address',
+          currentBusinessAddress.isEmpty ? 'Not provided' : currentBusinessAddress,
         ),
       ],
     );
@@ -233,6 +366,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _buildEditField(phoneController, "Enter phone number"),
         _buildLabel("Business Name"),
         _buildEditField(businessController, "Enter business name"),
+        _buildLabel("Business Address"),
+        _buildEditField(
+          addressController,
+          "Enter business address",
+          maxLines: 2,
+        ),
         const SizedBox(height: 24),
         Row(
           children: [
@@ -241,7 +380,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: () {
                   setState(() {
                     isEditing = false;
-                    _resetControllers();
+                    _updateControllers();
                   });
                 },
                 icon: const Icon(Icons.close, size: 18),
@@ -259,16 +398,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    currentName = nameController.text;
-                    currentPhone = phoneController.text;
-                    currentBusinessName = businessController.text;
-                    isEditing = false;
-                  });
-                  _showToast("Profile updated successfully!");
-                },
-                icon: const Icon(
+                onPressed: isLoading ? null : _updateProfile,
+                icon: isLoading
+                    ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+                    : const Icon(
                   Icons.save_as_outlined,
                   size: 18,
                   color: Colors.white,
@@ -293,6 +433,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildStatisticsSection() {
+    return _buildSectionCard(
+      title: 'Your Statistics',
+      child: Row(
+        children: [
+          _buildStatItem(
+            activeListings.toString(),
+            'Active\nListings',
+          ),
+          _buildStatItem(
+            totalViews.toString(),
+            'Total Views',
+          ),
+          _buildStatItem(
+            totalChats.toString(),
+            'Chats',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKycSection() {
+    return _buildSectionCard(
+      title: 'KYC Information',
+      child: Column(
+        children: [
+          _buildInfoTile(
+            Icons.credit_card_rounded,
+            'NIN',
+            nin,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLabel(String text) => Padding(
     padding: const EdgeInsets.only(bottom: 6, top: 10),
     child: Text(
@@ -301,11 +478,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ),
   );
 
-  Widget _buildEditField(TextEditingController controller, String hint) {
+  Widget _buildEditField(TextEditingController controller, String hint,
+      {int maxLines = 1}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
       child: TextField(
         controller: controller,
+        maxLines: maxLines,
         decoration: InputDecoration(
           hintText: hint,
           filled: true,
@@ -368,7 +547,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: const TextStyle(color: Colors.black38, fontSize: 12),
                 ),
                 Text(
-                  value,
+                  value.isEmpty ? 'Not provided' : value,
                   style: const TextStyle(
                     color: Colors.black87,
                     fontWeight: FontWeight.w500,
