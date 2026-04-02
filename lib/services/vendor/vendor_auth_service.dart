@@ -20,11 +20,7 @@ class VendorAuthService {
       debugPrint("🔐 Attempting vendor registration for: $email");
 
       final response = await _apiService.post(
-<<<<<<< HEAD
-        'v1/vendor/register', // Standardized path
-=======
-        '/vendor/register',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
+        'v1/vendor/register', // Standardized path with versioning
         {
           'full_name': name,
           'email': email,
@@ -40,7 +36,7 @@ class VendorAuthService {
       final responseData = jsonDecode(response.body);
       debugPrint("📦 Registration response: $responseData");
 
-      /// ✅ FIXED: Correct token path
+      // Save token if registration automatically logs the user in
       if (responseData['data'] != null &&
           responseData['data']['token'] != null) {
         await _apiService.saveToken(responseData['data']['token']);
@@ -65,16 +61,8 @@ class VendorAuthService {
       debugPrint("🔐 Attempting vendor login for: $email");
 
       final response = await _apiService.post(
-<<<<<<< HEAD
-        'v1/vendor/login', // Added v1 to match registration pattern
+        'v1/vendor/login', // Standardized path
         {'email': email, 'password': password},
-=======
-        '/vendor/login',
-        {
-          'email': email,
-          'password': password,
-        },
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
         isProtected: false,
       );
 
@@ -82,7 +70,6 @@ class VendorAuthService {
       debugPrint("📦 Login response status: ${response.statusCode}");
       debugPrint("📦 Login response body: $responseData");
 
-      /// ✅ FIXED: Correct token path
       if (responseData['data'] != null &&
           responseData['data']['token'] != null) {
         await _apiService.saveToken(responseData['data']['token']);
@@ -94,50 +81,28 @@ class VendorAuthService {
 
       return responseData;
     } catch (e) {
-<<<<<<< HEAD
       debugPrint("❌ Login service error: $e");
-      rethrow;
-    }
-  }
 
-  // Vendor Logout
-  Future<void> logout() async {
-    try {
-      await _apiService.post(
-        'v1/vendor/logout', // Consistent naming
-=======
-      debugPrint("❌ Login error: $e");
-
-      if (e.toString().contains("Invalid email or password") ||
+      // Better user-facing error messages for common auth failures
+      if (e.toString().contains("401") ||
           e.toString().contains("Invalid credentials")) {
         throw Exception("Invalid email or password. Please try again.");
       }
-
-      throw Exception(e.toString());
+      rethrow;
     }
   }
 
   /// ---------------- LOGOUT ----------------
   Future<void> logout() async {
     try {
-      await _apiService.post(
-        '/vendor/logout',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
-        {},
-        isProtected: true,
-      );
-
-      debugPrint("✅ Vendor logged out successfully");
+      await _apiService.post('v1/vendor/logout', {}, isProtected: true);
+      debugPrint("✅ Vendor logged out successfully from server");
     } catch (e) {
-      debugPrint("❌ Logout API error: $e");
+      debugPrint("❌ Logout API error (server-side): $e");
     } finally {
-<<<<<<< HEAD
-      await _apiService.clearToken(userType: userType);
-=======
-      /// ✅ Always clear token
+      // Always clear the local token regardless of server success
       await _apiService.clearToken();
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
-      debugPrint("🔐 Vendor token cleared");
+      debugPrint("🔐 Local vendor token cleared");
     }
   }
 
@@ -145,7 +110,7 @@ class VendorAuthService {
   Future<bool> isAuthenticated() async {
     final token = await _apiService.getToken();
     final isAuth = token != null && token.isNotEmpty;
-    debugPrint("🔐 Vendor authenticated: $isAuth");
+    debugPrint("🔐 Vendor authenticated check: $isAuth");
     return isAuth;
   }
 
@@ -155,11 +120,7 @@ class VendorAuthService {
       debugPrint("🔐 Fetching vendor profile");
 
       final response = await _apiService.get(
-<<<<<<< HEAD
         'v1/vendor/profile',
-=======
-        '/vendor/profile',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
         isProtected: true,
       );
 
@@ -183,20 +144,12 @@ class VendorAuthService {
     try {
       debugPrint("🔐 Updating vendor profile");
 
-      final response = await _apiService.put(
-<<<<<<< HEAD
-        'v1/vendor/profile',
-=======
-        '/vendor/profile',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
-        {
-          'full_name': name,
-          'phone_number': phone,
-          'business_name': businessName,
-          'business_address': address,
-        },
-        isProtected: true,
-      );
+      final response = await _apiService.put('v1/vendor/profile', {
+        'full_name': name,
+        'phone_number': phone,
+        'business_name': businessName,
+        'business_address': address,
+      }, isProtected: true);
 
       final responseData = jsonDecode(response.body);
       debugPrint("✅ Profile updated successfully");
@@ -208,7 +161,7 @@ class VendorAuthService {
     }
   }
 
-  /// ---------------- KYC ----------------
+  /// ---------------- KYC / IDENTITY ----------------
   Future<Map<String, dynamic>> verifyIdentity({
     String? nin,
     String? bvn,
@@ -218,16 +171,13 @@ class VendorAuthService {
       debugPrint("🔐 Starting identity verification");
 
       if (documentPath != null) {
+        // Multi-part upload for files
         Map<String, String> data = {};
         if (nin != null) data['nin'] = nin;
         if (bvn != null) data['bvn'] = bvn;
 
         final response = await _apiService.upload(
-<<<<<<< HEAD
           'v1/vendor/nin/verify',
-=======
-          '/vendor/nin/verify',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
           data,
           filePath: documentPath,
           fileField: 'document',
@@ -236,16 +186,13 @@ class VendorAuthService {
 
         return jsonDecode(response.body);
       } else {
+        // Standard JSON post for textual data only
         Map<String, dynamic> data = {};
         if (nin != null) data['nin'] = nin;
         if (bvn != null) data['bvn'] = bvn;
 
         final response = await _apiService.post(
-<<<<<<< HEAD
           'v1/vendor/verify-identity',
-=======
-          '/vendor/verify-identity',
->>>>>>> 5c994598d3001bdbece74318c1bd11712be62327
           data,
           isProtected: true,
         );
