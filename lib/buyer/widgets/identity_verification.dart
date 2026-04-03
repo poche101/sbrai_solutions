@@ -12,13 +12,14 @@ class IdentityVerification extends StatefulWidget {
 
 class _IdentityVerificationState extends State<IdentityVerification> {
   final TextEditingController _ninController = TextEditingController();
-  final TextEditingController _bvnController = TextEditingController();
+  // BVN COMMENTED OUT - Will be re-enabled when BVN integration is ready
+  // final TextEditingController _bvnController = TextEditingController();
   String? _fileName;
-  File? _selectedFile; // Changed from PlatformFile to File
+  File? _selectedFile;
   bool _isButtonEnabled = false;
   bool _isLoading = false;
   String? _ninError;
-  String? _bvnError;
+  // String? _bvnError; // COMMENTED OUT
 
   final VendorAuthService _authService = VendorAuthService();
 
@@ -26,12 +27,12 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   void initState() {
     super.initState();
     _ninController.addListener(_validateFields);
-    _bvnController.addListener(_validateFields);
+    // _bvnController.addListener(_validateFields); // COMMENTED OUT
   }
 
   void _validateFields() {
     setState(() {
-      // Validate NIN
+      // Validate NIN (Required now)
       if (_ninController.text.trim().isNotEmpty) {
         if (_ninController.text.trim().length != 11) {
           _ninError = 'NIN must be exactly 11 digits';
@@ -41,36 +42,35 @@ class _IdentityVerificationState extends State<IdentityVerification> {
           _ninError = null;
         }
       } else {
-        _ninError = null;
+        _ninError = 'NIN is required for verification'; // Changed to required
       }
 
-      // Validate BVN
-      if (_bvnController.text.trim().isNotEmpty) {
-        if (_bvnController.text.trim().length != 11) {
-          _bvnError = 'BVN must be exactly 11 digits';
-        } else if (!RegExp(r'^[0-9]+$').hasMatch(_bvnController.text.trim())) {
-          _bvnError = 'BVN must contain only numbers';
-        } else {
-          _bvnError = null;
-        }
-      } else {
-        _bvnError = null;
-      }
+      // BVN VALIDATION COMMENTED OUT
+      // if (_bvnController.text.trim().isNotEmpty) {
+      //   if (_bvnController.text.trim().length != 11) {
+      //     _bvnError = 'BVN must be exactly 11 digits';
+      //   } else if (!RegExp(r'^[0-9]+$').hasMatch(_bvnController.text.trim())) {
+      //     _bvnError = 'BVN must contain only numbers';
+      //   } else {
+      //     _bvnError = null;
+      //   }
+      // } else {
+      //   _bvnError = null;
+      // }
 
-      final hasValidNin =
-          _ninController.text.trim().isNotEmpty && _ninError == null;
-      final hasValidBvn =
-          _bvnController.text.trim().isNotEmpty && _bvnError == null;
+      // Only NIN is required now
+      final hasValidNin = _ninController.text.trim().isNotEmpty && _ninError == null;
+      // final hasValidBvn = _bvnController.text.trim().isNotEmpty && _bvnError == null; // COMMENTED OUT
 
-      _isButtonEnabled = (hasValidNin || hasValidBvn);
+      _isButtonEnabled = hasValidNin; // Only NIN for now
     });
   }
 
   void _showCustomToast(
-    BuildContext context,
-    String message, {
-    bool isError = false,
-  }) {
+      BuildContext context,
+      String message, {
+        bool isError = false,
+      }) {
     final overlay = Overlay.of(context);
     late OverlayEntry overlayEntry;
 
@@ -154,19 +154,16 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     setState(() => _isLoading = true);
 
     try {
-      // Use the clean VendorAuthService method instead of direct API calls
+      // Only sending NIN now (BVN commented out)
       final result = await _authService.verifyIdentity(
-        nin: _ninController.text.trim().isNotEmpty
-            ? _ninController.text.trim()
-            : null,
-        bvn: _bvnController.text.trim().isNotEmpty
-            ? _bvnController.text.trim()
-            : null,
+        nin: _ninController.text.trim(), // NIN is required
+        // bvn: _bvnController.text.trim().isNotEmpty // COMMENTED OUT
+        //     ? _bvnController.text.trim()
+        //     : null,
         documentPath: _selectedFile?.path,
       );
 
       if (mounted) {
-        // Check if verification was successful
         if (result['status'] == 'success' ||
             result['message']?.contains('success') == true) {
           _showCustomToast(context, 'Identity verified successfully!');
@@ -181,20 +178,12 @@ class _IdentityVerificationState extends State<IdentityVerification> {
       if (mounted) {
         String errorMessage = e.toString().replaceAll('Exception: ', '');
 
-        // User-friendly error messages
         if (errorMessage.contains('NIN already used') ||
             errorMessage.contains('already been used')) {
           errorMessage = 'This NIN has already been used for verification';
-        } else if (errorMessage.contains('BVN already used')) {
-          errorMessage = 'This BVN has already been used for verification';
         } else if (errorMessage.contains('Invalid NIN') ||
             errorMessage.contains('invalid nin')) {
-          errorMessage =
-              'The NIN provided is invalid. Please check and try again.';
-        } else if (errorMessage.contains('Invalid BVN') ||
-            errorMessage.contains('invalid bvn')) {
-          errorMessage =
-              'The BVN provided is invalid. Please check and try again.';
+          errorMessage = 'The NIN provided is invalid. Please check and try again.';
         } else if (errorMessage.contains('network') ||
             errorMessage.contains('internet')) {
           errorMessage = 'Network error. Please check your connection.';
@@ -212,7 +201,7 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   @override
   void dispose() {
     _ninController.dispose();
-    _bvnController.dispose();
+    // _bvnController.dispose(); // COMMENTED OUT
     super.dispose();
   }
 
@@ -282,7 +271,7 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                           ),
                         ),
                         Text(
-                          'Provide your NIN or BVN',
+                          'Provide your NIN',
                           style: TextStyle(color: Colors.grey, fontSize: 14),
                         ),
                       ],
@@ -292,7 +281,7 @@ class _IdentityVerificationState extends State<IdentityVerification> {
               ),
               const SizedBox(height: 30),
 
-              _buildLabel('National Identification Number (NIN)'),
+              _buildLabel('National Identification Number (NIN) *'),
               _buildTextField(
                 _ninController,
                 '12345678901',
@@ -300,17 +289,41 @@ class _IdentityVerificationState extends State<IdentityVerification> {
               ),
               _buildSubLabel('11-digit NIN issued by NIMC'),
 
-              const SizedBox(height: 20),
-              _buildDividerWithText('OR'),
-              const SizedBox(height: 20),
+              // BVN SECTION COMMENTED OUT - Will be re-enabled later
+              // const SizedBox(height: 20),
+              // _buildDividerWithText('OR'),
+              // const SizedBox(height: 20),
+              //
+              // _buildLabel('Bank Verification Number (BVN)'),
+              // _buildTextField(
+              //   _bvnController,
+              //   '22334455667',
+              //   errorText: _bvnError,
+              // ),
+              // _buildSubLabel('11-digit BVN from your bank'),
 
-              _buildLabel('Bank Verification Number (BVN)'),
-              _buildTextField(
-                _bvnController,
-                '22334455667',
-                errorText: _bvnError,
+              // Optional: Show a note about BVN coming soon
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.grey, size: 20),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'BVN verification will be available in a future update',
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              _buildSubLabel('11-digit BVN from your bank'),
 
               const SizedBox(height: 24),
 
@@ -387,20 +400,20 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                   ),
                   child: _isLoading
                       ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
                       : const Text(
-                          'Submit for Verification',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                    'Verify with NIN',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -431,10 +444,10 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   }
 
   Widget _buildTextField(
-    TextEditingController controller,
-    String hint, {
-    String? errorText,
-  }) {
+      TextEditingController controller,
+      String hint, {
+        String? errorText,
+      }) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
@@ -464,19 +477,20 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     );
   }
 
-  Widget _buildDividerWithText(String text) {
-    return Row(
-      children: [
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text(
-            text,
-            style: const TextStyle(color: Colors.grey, fontSize: 12),
-          ),
-        ),
-        const Expanded(child: Divider()),
-      ],
-    );
-  }
+// Divider method kept but commented out for future use
+// Widget _buildDividerWithText(String text) {
+//   return Row(
+//     children: [
+//       const Expanded(child: Divider()),
+//       Padding(
+//         padding: const EdgeInsets.symmetric(horizontal: 8),
+//         child: Text(
+//           text,
+//           style: const TextStyle(color: Colors.grey, fontSize: 12),
+//         ),
+//       ),
+//       const Expanded(child: Divider()),
+//     ],
+//   );
+// }
 }

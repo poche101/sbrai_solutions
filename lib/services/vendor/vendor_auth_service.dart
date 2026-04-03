@@ -153,8 +153,8 @@ class VendorAuthService {
     try {
       debugPrint("🔐 Updating vendor profile");
 
-      final response = await _apiService.put(
-        '/vendor/profile',
+      final response = await _apiService.post(
+        '/vendor/update-profile',
         {
           'full_name': name,
           'phone_number': phone,
@@ -176,42 +176,65 @@ class VendorAuthService {
 
   /// ---------------- KYC ----------------
   Future<Map<String, dynamic>> verifyIdentity({
-    String? nin,
-    String? bvn,
-    String? documentPath,
+    required String nin, // Make nin required
+    String? documentPath, // Document is optional
   }) async {
     try {
-      debugPrint("🔐 Starting identity verification");
+      debugPrint("🔐 Starting NIN verification");
+      debugPrint("🆔 NIN: $nin");
 
-      if (documentPath != null) {
-        Map<String, String> data = {};
-        if (nin != null) data['nin'] = nin;
-        if (bvn != null) data['bvn'] = bvn;
-
-        final response = await _apiService.upload(
-          '/vendor/nin/verify',
-          data,
-          filePath: documentPath,
-          fileField: 'document',
-          isProtected: true,
-        );
-
-        return jsonDecode(response.body);
-      } else {
-        Map<String, dynamic> data = {};
-        if (nin != null) data['nin'] = nin;
-        if (bvn != null) data['bvn'] = bvn;
-
-        final response = await _apiService.post(
-          '/vendor/verify-identity',
-          data,
-          isProtected: true,
-        );
-
-        return jsonDecode(response.body);
+      // Validate NIN format
+      if (nin.length != 11 || !RegExp(r'^[0-9]+$').hasMatch(nin)) {
+        throw Exception('Invalid NIN format. NIN must be 11 digits.');
       }
+
+
+      final response = await _apiService.post(
+        '/vendor/nin/verify',
+        {'nin': nin},
+        isProtected: true,
+      );
+
+      final responseData = jsonDecode(response.body);
+      debugPrint("📦 NIN verification response: $responseData");
+
+      return responseData;
     } catch (e) {
-      debugPrint("❌ Identity verification error: $e");
+      debugPrint("❌ NIN verification error: $e");
+      rethrow;
+    }
+  }
+
+// Helper method to check NIN verification status
+  Future<Map<String, dynamic>> checkNINStatus(String nin) async {
+    try {
+      debugPrint("🔐 Checking NIN status for: $nin");
+
+      final response = await _apiService.get(
+        '/vendor/nin/$nin/status',
+        isProtected: true,
+      );
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      debugPrint("❌ Check NIN status error: $e");
+      rethrow;
+    }
+  }
+
+// Helper method to get NIN verification details
+  Future<Map<String, dynamic>> getNINDetails(String nin) async {
+    try {
+      debugPrint("🔐 Getting NIN details for: $nin");
+
+      final response = await _apiService.get(
+        '/vendor/nin/$nin/details',
+        isProtected: true,
+      );
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      debugPrint("❌ Get NIN details error: $e");
       rethrow;
     }
   }
