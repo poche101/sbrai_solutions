@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:path/path.dart' as path;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,6 +25,8 @@ class _PostAdScreenState extends State<PostAdScreen> {
   String _propertyStatus = 'For Rent';
   String? _selectedCategory;
   List<XFile> _selectedImages = [];
+
+  // This variable is now being used in _handlePublish
   int? _selectedCategoryId;
 
   // --- CONTROLLERS ---
@@ -60,9 +63,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
     'Fumigation',
   ];
 
-  // Category ID mapping (you'll need to update these with your actual category IDs from backend)
   final Map<String, int> _categoryIdMap = {
-    // Product categories
     'Sharp Sand': 1,
     'Granite': 2,
     'Blocks': 3,
@@ -71,12 +72,10 @@ class _PostAdScreenState extends State<PostAdScreen> {
     'Paints': 6,
     'Furniture': 7,
     'Scaffolding': 8,
-    // Service categories
     'Logistics': 9,
     'Borehole': 10,
     'Cleaning': 11,
     'Fumigation': 12,
-    // Property categories
     'Apartment': 13,
     'House': 14,
     'Commercial': 15,
@@ -117,9 +116,9 @@ class _PostAdScreenState extends State<PostAdScreen> {
 
     bool commonFields =
         _titleController.text.trim().isNotEmpty &&
-            _priceController.text.trim().isNotEmpty &&
-            _locationController.text.trim().isNotEmpty &&
-            _descriptionController.text.trim().isNotEmpty;
+        _priceController.text.trim().isNotEmpty &&
+        _locationController.text.trim().isNotEmpty &&
+        _descriptionController.text.trim().isNotEmpty;
 
     if (_selectedType == 'Property') {
       return commonFields &&
@@ -141,56 +140,27 @@ class _PostAdScreenState extends State<PostAdScreen> {
         });
       }
     } catch (e) {
-      debugPrint("Error picking images: $e");
       _showCustomToast(message: 'Error picking images: $e', isError: true);
     }
   }
 
   void _showCustomToast({required String message, bool isError = false}) {
-    final scaffold = ScaffoldMessenger.of(context);
-    scaffold.showSnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
-        duration: const Duration(seconds: 3),
         content: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: isError ? Colors.red : Colors.white,
+            color: isError ? Colors.red : Colors.black87,
             borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
           ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: isError ? Colors.white : Colors.black,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  isError ? Icons.close : Icons.check,
-                  color: isError ? Colors.red : Colors.white,
-                  size: 14,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message,
-                  style: TextStyle(
-                    color: isError ? Colors.white : Colors.black,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+          child: Text(
+            message,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ),
@@ -206,121 +176,75 @@ class _PostAdScreenState extends State<PostAdScreen> {
     setState(() => _isPublishing = true);
 
     try {
-      // Validate price
       final price = double.tryParse(_priceController.text.trim());
-      if (price == null) {
-        throw 'Invalid price format';
+      if (price == null) throw 'Invalid price format';
+
+      // UTILIZING THE FIELD HERE TO FIX THE WARNING
+      if (_selectedCategoryId == null) {
+        throw 'Please select a valid category';
       }
 
-      // Get category ID
-      if (_selectedCategory == null) {
-        throw 'Please select a category';
-      }
-
-      final categoryId = _categoryIdMap[_selectedCategory];
-      if (categoryId == null) {
-        throw 'Invalid category selected';
-      }
-
-      // Prepare the product data
       final token = await _getVendorToken();
-      if (token == null) {
-        throw 'Authentication required. Please login again.';
-      }
+      if (token == null) throw 'Authentication required. Please login again.';
 
-      final url = Uri.parse('https://sbraisolutions.com/api/v1/vendor/products');
-
+      final url = Uri.parse(
+        'https://sbraisolutions.com/api/v1/vendor/products',
+      );
       final request = http.MultipartRequest('POST', url);
-      request.headers['Accept'] = 'application/json';
-      request.headers['Authorization'] = 'Bearer $token';
 
-      // Add form fields
-      request.fields['category_id'] = categoryId.toString();
+      request.headers.addAll({
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      });
+
+      request.fields['category_id'] = _selectedCategoryId.toString();
       request.fields['title'] = _titleController.text.trim();
       request.fields['description'] = _descriptionController.text.trim();
       request.fields['price'] = price.toString();
       request.fields['price_unit'] = _priceUnitController.text.trim();
       request.fields['location'] = _locationController.text.trim();
 
-      // Add additional fields for property
       if (_selectedType == 'Property') {
         request.fields['property_status'] = _propertyStatus;
         request.fields['bedrooms'] = _bedroomController.text.trim();
         request.fields['sqft'] = _sqftController.text.trim();
       }
 
-      // Add images
-      for (int i = 0; i < _selectedImages.length && i < 5; i++) {
-        final file = File(_selectedImages[i].path);
-        final stream = http.ByteStream(file.openRead());
-        final length = await file.length();
+      for (var image in _selectedImages) {
+        final file = File(image.path);
+        final extension = path.extension(file.path).replaceAll('.', '');
 
-        final multipartFile = http.MultipartFile(
-          'photos[$i]',
-          stream,
-          length,
-          filename: path.basename(file.path),
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'photos[]',
+            file.path,
+            contentType: MediaType(
+              'image',
+              extension.isEmpty ? 'jpeg' : extension,
+            ),
+          ),
         );
-
-        request.files.add(multipartFile);
       }
-
-      debugPrint('🚀 UPLOAD: $url');
-      debugPrint('📦 Fields: ${request.fields}');
-      debugPrint('📷 Files: ${request.files.length}');
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
-
-      // ADD THIS LOGGING
-      debugPrint('📥 STATUS CODE: ${response.statusCode}');
-      debugPrint('📥 RESPONSE BODY: ${response.body}');
 
       if (!mounted) return;
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        debugPrint('✅ Success: $responseData');
-
-        if (responseData['status'] == true) {
-          _showCustomToast(
-            message: responseData['message'] ?? 'Ad Published Successfully!',
-          );
-
-          // Navigate back to vendor home
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (context) => const Scaffold(
-                body: Center(child: Text("Vendor Home Screen")),
-              ),
-            ),
-                (route) => false,
-          );
-        } else {
-          throw responseData['message'] ?? 'Failed to publish ad';
-        }
+        _showCustomToast(
+          message: responseData['message'] ?? 'Ad Published Successfully!',
+        );
+        Navigator.of(context).pop();
       } else {
-        // Try to parse error message
-        try {
-          final errorData = jsonDecode(response.body);
-          debugPrint('❌ Error Response: $errorData');
-          throw errorData['message'] ?? 'Server error: ${response.statusCode}';
-        } catch (_) {
-          throw 'Server error: ${response.statusCode}';
-        }
+        final errorData = jsonDecode(response.body);
+        throw errorData['message'] ?? 'Error: ${response.statusCode}';
       }
     } catch (e) {
-      debugPrint('❌ Exception: $e');
-      if (mounted) {
-        _showCustomToast(
-          message: e.toString(),
-          isError: true,
-        );
-      }
+      _showCustomToast(message: e.toString(), isError: true);
     } finally {
-      if (mounted) {
-        setState(() => _isPublishing = false);
-      }
+      if (mounted) setState(() => _isPublishing = false);
     }
   }
 
@@ -355,21 +279,23 @@ class _PostAdScreenState extends State<PostAdScreen> {
       ),
       body: _isPublishing
           ? const Center(
-        child: CircularProgressIndicator(color: Color(0xFFFF7D54)),
-      )
+              child: CircularProgressIndicator(color: Color(0xFFFF7D54)),
+            )
           : Column(
-        children: [
-          const SizedBox(height: 20),
-          _buildStepIndicator(),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [_buildStep1(), _buildStep2(), _buildStep3()],
+              children: [
+                const SizedBox(height: 20),
+                _buildStepIndicator(),
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    onPageChanged: (index) =>
+                        setState(() => _currentStep = index + 1),
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [_buildStep1(), _buildStep2(), _buildStep3()],
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -419,8 +345,8 @@ class _PostAdScreenState extends State<PostAdScreen> {
     List<String> currentList = _selectedType == 'Property'
         ? _propertyCategories
         : (_selectedType == 'Product'
-        ? _productCategories
-        : _serviceCategories);
+              ? _productCategories
+              : _serviceCategories);
     return _stepWrapper(
       title: 'Select Category',
       children: [
@@ -454,14 +380,15 @@ class _PostAdScreenState extends State<PostAdScreen> {
           items: currentList
               .map(
                 (c) => DropdownMenuItem(
-              value: c,
-              child: Text(c, style: const TextStyle(fontSize: 14)),
-            ),
-          )
+                  value: c,
+                  child: Text(c, style: const TextStyle(fontSize: 14)),
+                ),
+              )
               .toList(),
           onChanged: (v) => setState(() {
             _selectedCategory = v;
-            _selectedCategoryId = _categoryIdMap[v];
+            _selectedCategoryId =
+                _categoryIdMap[v]; // This updates the used variable
           }),
         ),
         const SizedBox(height: 30),
@@ -470,7 +397,6 @@ class _PostAdScreenState extends State<PostAdScreen> {
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
           );
-          setState(() => _currentStep = 2);
         }),
       ],
     );
@@ -519,7 +445,6 @@ class _PostAdScreenState extends State<PostAdScreen> {
                 ),
               );
             }
-
             return Stack(
               children: [
                 Positioned.fill(
@@ -559,7 +484,6 @@ class _PostAdScreenState extends State<PostAdScreen> {
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut,
                 );
-                setState(() => _currentStep = 3);
               }),
             ),
           ],
@@ -582,7 +506,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
         TextField(
           controller: _descriptionController,
           maxLines: 3,
-          decoration: _inputStyle('Describe your product/service/property...'),
+          decoration: _inputStyle('Describe your product...'),
         ),
         const SizedBox(height: 12),
         if (_selectedType == 'Property') ...[
@@ -719,7 +643,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
         onTap: () => setState(() {
           _selectedType = label;
           _selectedCategory = null;
-          _selectedCategoryId = null;
+          _selectedCategoryId = null; // Resetting ID when type changes
         }),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -811,17 +735,13 @@ class _PostAdScreenState extends State<PostAdScreen> {
   }
 
   Widget _backBtn() => OutlinedButton(
-    onPressed: () {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-      setState(() => _currentStep--);
-    },
+    onPressed: () => _pageController.previousPage(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    ),
     style: OutlinedButton.styleFrom(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      side: const BorderSide(color: Color(0xFFF1F4F7)),
     ),
     child: const Text(
       'Back',

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:sbrai_solutions/services/vendor/vendor_auth_service.dart';
-import 'package:sbrai_solutions/services/vendor/nin_verification_service.dart';
 
 class IdentityVerification extends StatefulWidget {
   const IdentityVerification({super.key});
@@ -19,14 +18,12 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   bool _isButtonEnabled = false;
   bool _isLoading = false;
   String? _ninError;
-  String? _bvnError;
 
   // NIN verification result
   Map<String, dynamic>? _ninVerificationData;
   bool _ninVerified = false;
 
   final VendorAuthService _authService = VendorAuthService();
-  final NINVerificationService _ninService = NINVerificationService();
 
   @override
   void initState() {
@@ -37,11 +34,11 @@ class _IdentityVerificationState extends State<IdentityVerification> {
 
   void _validateFields() {
     setState(() {
-      // Validate NIN (required for now)
-      if (_ninController.text.trim().isNotEmpty) {
-        if (_ninController.text.trim().length != 11) {
+      final ninText = _ninController.text.trim();
+      if (ninText.isNotEmpty) {
+        if (ninText.length != 11) {
           _ninError = 'NIN must be exactly 11 digits';
-        } else if (!RegExp(r'^[0-9]+$').hasMatch(_ninController.text.trim())) {
+        } else if (!RegExp(r'^[0-9]+$').hasMatch(ninText)) {
           _ninError = 'NIN must contain only numbers';
         } else {
           _ninError = null;
@@ -50,32 +47,16 @@ class _IdentityVerificationState extends State<IdentityVerification> {
         _ninError = 'NIN is required for verification';
       }
 
-      // BVN validation (commented out - on hold)
-      // if (_bvnController.text.trim().isNotEmpty) {
-      //   if (_bvnController.text.trim().length != 11) {
-      //     _bvnError = 'BVN must be exactly 11 digits';
-      //   } else if (!RegExp(r'^[0-9]+$').hasMatch(_bvnController.text.trim())) {
-      //     _bvnError = 'BVN must contain only numbers';
-      //   } else {
-      //     _bvnError = null;
-      //   }
-      // } else {
-      //   _bvnError = null;
-      // }
-
-      // Button enabled only if NIN is valid
-      final hasValidNin = _ninController.text.trim().isNotEmpty && _ninError == null;
-      // final hasValidBvn = _bvnController.text.trim().isNotEmpty && _bvnError == null;
-
-      _isButtonEnabled = hasValidNin; // Only NIN for now
+      final hasValidNin = ninText.isNotEmpty && _ninError == null;
+      _isButtonEnabled = hasValidNin;
     });
   }
 
   void _showCustomToast(
-      BuildContext context,
-      String message, {
-        bool isError = false,
-      }) {
+    BuildContext context,
+    String message, {
+    bool isError = false,
+  }) {
     final overlay = Overlay.of(context);
     late OverlayEntry overlayEntry;
 
@@ -153,6 +134,7 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     }
   }
 
+  /// ✅ UPDATED: Handles File upload and response mapping accurately
   Future<void> _handleSubmit() async {
     if (!_isButtonEnabled) return;
 
@@ -160,46 +142,46 @@ class _IdentityVerificationState extends State<IdentityVerification> {
 
     try {
       final nin = _ninController.text.trim();
-
-      _showCustomToast(context, 'Verifying NIN...', isError: false);
+      _showCustomToast(context, 'Verifying identity...', isError: false);
 
       debugPrint("🆔 Submitting NIN: $nin");
 
-      // Use the correct verifyIdentity method with only NIN
-      final response = await _authService.verifyIdentity(nin: nin);
+      // Pass the File object directly to the 'document' parameter
+      final response = await _authService.verifyIdentity(
+        nin: nin,
+        document: _selectedFile,
+      );
 
-      debugPrint("📦 Response: $response");
+      debugPrint("📦 Verification Response: $response");
 
-      if (response['status'] == 'success') {
+      // Check for success status from backend
+      if (response['status'] == 'success' || response['success'] == true) {
+        final responseData = response['data'];
+
         setState(() {
-          _ninVerified = true;
-          _ninVerificationData = response['data']?['nin_data'];
+          // Update verification state based on backend response
+          _ninVerified = responseData?['nin_verified'] ?? true;
+          _ninVerificationData = responseData?['nin_data'] ?? responseData;
         });
 
-        _showCustomToast(context, response['message'] ?? 'NIN verified successfully!');
+        _showCustomToast(
+          context,
+          response['message'] ?? 'Identity verification successful!',
+        );
 
-
-        Future.delayed(const Duration(milliseconds: 800), () {
+        // Optional: Navigate back or proceed after success
+        Future.delayed(const Duration(milliseconds: 2000), () {
           if (mounted) Navigator.pop(context, true);
         });
       } else {
-        throw Exception(response['message'] ?? 'NIN verification failed');
+        // Handle cases where the backend returns success: false or error status
+        throw Exception(response['message'] ?? 'Verification failed');
       }
     } catch (e) {
       if (mounted) {
+        // Remove "Exception: " prefix for cleaner UI feedback
         String errorMessage = e.toString().replaceAll('Exception: ', '');
-
-        debugPrint("❌ Error: $errorMessage");
-
-        if (errorMessage.contains('401') || errorMessage.contains('unauthenticated')) {
-          errorMessage = 'Session expired. Please login again.';
-        } else if (errorMessage.contains('NIN already used')) {
-          errorMessage = 'This NIN has already been used for verification';
-        } else if (errorMessage.contains('Invalid NIN')) {
-          errorMessage = 'The NIN provided is invalid. Please check and try again.';
-        } else if (errorMessage.contains('network')) {
-          errorMessage = 'Network error. Please check your connection.';
-        }
+        debugPrint("❌ Verification Error: $errorMessage");
 
         _showCustomToast(context, errorMessage, isError: true);
       }
@@ -286,7 +268,10 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                             ),
                             Text(
                               'Verify with your NIN',
-                              style: TextStyle(color: Colors.grey, fontSize: 14),
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 14,
+                              ),
                             ),
                           ],
                         ),
@@ -295,7 +280,6 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                   ),
                   const SizedBox(height: 30),
 
-                  // NIN Section (Active)
                   _buildLabel('National Identification Number (NIN) *'),
                   _buildTextField(
                     _ninController,
@@ -304,7 +288,6 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                   ),
                   _buildSubLabel('11-digit NIN issued by NIMC'),
 
-                  // Show NIN verification details if verified
                   if (_ninVerified && _ninVerificationData != null) ...[
                     const SizedBox(height: 16),
                     Container(
@@ -312,14 +295,20 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                       decoration: BoxDecoration(
                         color: Colors.green.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green.withOpacity(0.3)),
+                        border: Border.all(
+                          color: Colors.green.withOpacity(0.3),
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.verified, color: Colors.green, size: 20),
+                              Icon(
+                                Icons.verified,
+                                color: Colors.green,
+                                size: 20,
+                              ),
                               SizedBox(width: 8),
                               Text(
                                 'NIN Verified Successfully!',
@@ -331,64 +320,36 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          _buildVerifiedInfo('Full Name',
-                              '${_ninVerificationData?['surname'] ?? ''} ${_ninVerificationData?['firstname'] ?? ''} ${_ninVerificationData?['middlename'] ?? ''}'.trim()),
+                          _buildVerifiedInfo(
+                            'Full Name',
+                            '${_ninVerificationData?['surname'] ?? ''} ${_ninVerificationData?['firstname'] ?? ''} ${_ninVerificationData?['middlename'] ?? ''}'
+                                .trim(),
+                          ),
                           const SizedBox(height: 6),
-                          _buildVerifiedInfo('Date of Birth', _ninVerificationData?['birthdate'] ?? 'N/A'),
+                          _buildVerifiedInfo(
+                            'Date of Birth',
+                            _ninVerificationData?['birthdate'] ?? 'N/A',
+                          ),
                           const SizedBox(height: 6),
-                          _buildVerifiedInfo('Gender', _ninVerificationData?['gender'] ?? 'N/A'),
+                          _buildVerifiedInfo(
+                            'Gender',
+                            _ninVerificationData?['gender'] ?? 'N/A',
+                          ),
                         ],
                       ),
                     ),
                   ],
 
                   const SizedBox(height: 20),
-
-                  // Divider with note about BVN
                   _buildDividerWithText('BVN Verification Coming Soon'),
                   const SizedBox(height: 20),
 
-                  // BVN Section (Disabled/Hold)
                   _buildLabel('Bank Verification Number (BVN)'),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: TextField(
-                      controller: _bvnController,
-                      keyboardType: TextInputType.number,
-                      enabled: false, // Disabled until BVN integration is ready
-                      style: TextStyle(color: Colors.grey.shade400),
-                      decoration: InputDecoration(
-                        hintText: '22334455667',
-                        hintStyle: TextStyle(color: Colors.grey.shade300),
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        suffixIcon: Container(
-                          margin: const EdgeInsets.all(12),
-                          child: const Icon(
-                            Icons.lock_outline,
-                            size: 20,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  _buildDisabledBvnField(),
                   _buildSubLabel('BVN verification will be available soon'),
 
                   const SizedBox(height: 24),
 
-                  // Document Upload Section
                   _buildLabel('Upload ID Document (Optional)'),
                   InkWell(
                     onTap: _pickDocument,
@@ -462,66 +423,103 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                       ),
                       child: _isLoading
                           ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
                           : const Text(
-                        'Verify with NIN',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                              'Verify Identity',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
                 ],
               ),
             ),
-
-            // Info Box
             const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFDBEAFE)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Color(0xFF2563EB), size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Why verify your NIN?',
-                        style: TextStyle(
-                          color: Color(0xFF1E40AF),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'NIN verification helps us confirm your identity and provides:',
-                    style: TextStyle(color: Color(0xFF1E40AF), fontSize: 13),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildBullet('Verified badge on your profile'),
-                  _buildBullet('Increased trust from customers'),
-                  _buildBullet('Access to premium features'),
-                  _buildBullet('Higher listing limits'),
-                ],
-              ),
-            ),
+            _buildInfoBox(),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- UI HELPERS ---
+
+  Widget _buildDisabledBvnField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: TextField(
+        controller: _bvnController,
+        enabled: false,
+        style: TextStyle(color: Colors.grey.shade400),
+        decoration: InputDecoration(
+          hintText: '22334455667',
+          hintStyle: TextStyle(color: Colors.grey.shade300),
+          filled: true,
+          fillColor: Colors.grey.shade50,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+          suffixIcon: const Icon(
+            Icons.lock_outline,
+            size: 20,
+            color: Colors.grey,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoBox() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDBEAFE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.info_outline, color: Color(0xFF2563EB), size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Why verify your identity?',
+                style: TextStyle(
+                  color: Color(0xFF1E40AF),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Verification helps confirm your identity and provides:',
+            style: TextStyle(color: Color(0xFF1E40AF), fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          _buildBullet('Verified badge on your profile'),
+          _buildBullet('Increased trust from customers'),
+          _buildBullet('Access to premium features'),
+          _buildBullet('Higher listing limits'),
+        ],
       ),
     );
   }
@@ -552,16 +550,12 @@ class _IdentityVerificationState extends State<IdentityVerification> {
 
   Widget _buildVerifiedInfo(String label, String value) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
           width: 90,
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.black54,
-              fontSize: 13,
-            ),
+            style: const TextStyle(color: Colors.black54, fontSize: 13),
           ),
         ),
         Expanded(
@@ -578,31 +572,24 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     );
   }
 
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-      ),
-    );
-  }
+  Widget _buildLabel(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8.0),
+    child: Text(
+      text,
+      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+    ),
+  );
 
-  Widget _buildSubLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 4.0),
-      child: Text(
-        text,
-        style: const TextStyle(color: Colors.grey, fontSize: 12),
-      ),
-    );
-  }
+  Widget _buildSubLabel(String text) => Padding(
+    padding: const EdgeInsets.only(top: 4.0),
+    child: Text(text, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+  );
 
   Widget _buildTextField(
-      TextEditingController controller,
-      String hint, {
-        String? errorText,
-      }) {
+    TextEditingController controller,
+    String hint, {
+    String? errorText,
+  }) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,

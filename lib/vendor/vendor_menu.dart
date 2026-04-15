@@ -4,8 +4,9 @@ import 'screen/profile_screen.dart';
 import 'screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/kyc_screen.dart';
+import 'package:sbrai_solutions/models/buyer/product_model.dart'; // Ensure this is imported for the Product model
 import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart'
-as vendor;
+    as vendor;
 import 'package:sbrai_solutions/vendor/screen/message_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/vendor_settings_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/login_screen.dart';
@@ -35,17 +36,17 @@ class _VendorMenuState extends State<VendorMenu> {
   bool _isVerified = false;
   String? _businessName;
 
+  // Placeholder for favorite products - You can populate this from your API later
+  List<Product> _favoriteProducts = [];
+
   @override
   void initState() {
     super.initState();
-    // Initialize with passed values
     _displayName = widget.userName;
     _displayEmail = widget.userEmail;
-    // Load fresh profile data
     _loadProfileData();
   }
 
-  // Load latest profile data from API
   Future<void> _loadProfileData() async {
     setState(() => _isLoadingProfile = true);
 
@@ -53,19 +54,19 @@ class _VendorMenuState extends State<VendorMenu> {
       final response = await _authService.getProfile();
 
       if (response['status'] == 'success' && response['data'] != null) {
-        final vendor = response['data'];
+        final vendorData = response['data'];
 
         setState(() {
-          _displayName = vendor['full_name'] ?? widget.userName;
-          _displayEmail = vendor['email'] ?? widget.userEmail;
-          _businessName = vendor['business_name'];
-          _isVerified = vendor['email_verified_at'] != null ||
-              vendor['nin_verified_at'] != null;
+          _displayName = vendorData['full_name'] ?? widget.userName;
+          _displayEmail = vendorData['email'] ?? widget.userEmail;
+          _businessName = vendorData['business_name'];
+          _isVerified =
+              vendorData['email_verified_at'] != null ||
+              vendorData['nin_verified_at'] != null;
         });
       }
     } catch (e) {
       debugPrint('Error loading profile in menu: $e');
-      // Keep using the passed values if API fails
     } finally {
       if (mounted) {
         setState(() => _isLoadingProfile = false);
@@ -73,7 +74,6 @@ class _VendorMenuState extends State<VendorMenu> {
     }
   }
 
-  // Handle logout process
   Future<void> _handleLogout() async {
     setState(() => _isLoggingOut = true);
 
@@ -89,10 +89,9 @@ class _VendorMenuState extends State<VendorMenu> {
           ),
         );
 
-        // Clear all routes and go to login
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (route) => false,
+          (route) => false,
         );
       }
     } catch (e) {
@@ -160,8 +159,6 @@ class _VendorMenuState extends State<VendorMenu> {
                     ],
                   ),
                   const SizedBox(height: 15),
-
-                  // Show loading or user data
                   if (_isLoadingProfile)
                     const SizedBox(
                       height: 20,
@@ -202,10 +199,7 @@ class _VendorMenuState extends State<VendorMenu> {
                       ),
                     ],
                   ],
-
                   const SizedBox(height: 12),
-
-                  // Status badges
                   Row(
                     children: [
                       _buildBadge(
@@ -237,10 +231,8 @@ class _VendorMenuState extends State<VendorMenu> {
                   _buildMenuItem(
                     Icons.home_outlined,
                     'Home',
-                        () => Navigator.pop(context),
+                    () => Navigator.pop(context),
                   ),
-
-                  // Profile - Now opens the API-integrated ProfileScreen
                   _buildMenuItem(Icons.person_outline, 'Profile', () {
                     Navigator.pop(context);
                     Navigator.push(
@@ -248,12 +240,8 @@ class _VendorMenuState extends State<VendorMenu> {
                       MaterialPageRoute(
                         builder: (context) => const ProfileScreen(),
                       ),
-                    ).then((_) {
-                      // Refresh profile data when returning from profile screen
-                      _loadProfileData();
-                    });
+                    ).then((_) => _loadProfileData());
                   }),
-
                   _buildMenuItem(Icons.add_box_outlined, 'Post Ad', () {
                     Navigator.pop(context);
                     Navigator.push(
@@ -263,7 +251,6 @@ class _VendorMenuState extends State<VendorMenu> {
                       ),
                     );
                   }),
-
                   _buildMenuItem(Icons.dashboard_outlined, 'Dashboard', () {
                     Navigator.pop(context);
                     Navigator.push(
@@ -274,12 +261,15 @@ class _VendorMenuState extends State<VendorMenu> {
                     );
                   }),
 
+                  // FIXED: Added required initialFavorites parameter
                   _buildMenuItem(Icons.favorite_outline, 'Favorites', () {
                     Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const vendor.FavoriteScreen(),
+                        builder: (context) => vendor.FavoriteScreen(
+                          initialFavorites: _favoriteProducts,
+                        ),
                       ),
                     );
                   }),
@@ -293,7 +283,6 @@ class _VendorMenuState extends State<VendorMenu> {
                       ),
                     );
                   }),
-
                   const Divider(
                     height: 30,
                     thickness: 0.8,
@@ -301,49 +290,46 @@ class _VendorMenuState extends State<VendorMenu> {
                     endIndent: 25,
                     color: Color(0xFFF1F1F1),
                   ),
-
                   _buildMenuItem(Icons.settings_outlined, 'Settings', () {
-                    final navigator = Navigator.of(context);
-                    navigator.pop();
-                    navigator.push(
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
                       MaterialPageRoute(
                         builder: (context) => const VendorSettingsScreen(),
                       ),
                     );
                   }),
-
                   _buildMenuItem(Icons.verified_user_outlined, 'KYC', () {
-                    final navigator = Navigator.of(context);
-                    navigator.pop();
-                    navigator.push(
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
                       MaterialPageRoute(
                         builder: (context) => const KYCScreen(),
                       ),
                     );
                   }),
-
                   _isLoggingOut
                       ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Center(
-                      child: SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.red,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(
+                            child: SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.red,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
-                  )
+                        )
                       : _buildMenuItem(
-                    Icons.logout_outlined,
-                    'Logout',
-                        () async => await _handleLogout(),
-                    color: Colors.red.shade300,
-                  ),
+                          Icons.logout_outlined,
+                          'Logout',
+                          () async => await _handleLogout(),
+                          color: Colors.red.shade300,
+                        ),
                 ],
               ),
             ),
@@ -377,11 +363,7 @@ class _VendorMenuState extends State<VendorMenu> {
     );
   }
 
-  Widget _buildBadge(
-      String label,
-      Color color, {
-        required IconData icon,
-      }) {
+  Widget _buildBadge(String label, Color color, {required IconData icon}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -407,11 +389,11 @@ class _VendorMenuState extends State<VendorMenu> {
   }
 
   Widget _buildMenuItem(
-      IconData icon,
-      String title,
-      VoidCallback onTap, {
-        Color? color,
-      }) {
+    IconData icon,
+    String title,
+    VoidCallback onTap, {
+    Color? color,
+  }) {
     return ListTile(
       leading: Icon(icon, color: color ?? Colors.black45, size: 22),
       title: Text(

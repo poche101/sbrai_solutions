@@ -1,5 +1,6 @@
 // lib/services/vendor/vendor_auth_service.dart
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../api_service.dart';
 
@@ -19,33 +20,41 @@ class VendorAuthService {
     try {
       debugPrint("🔐 Attempting vendor registration for: $email");
 
-      final response = await _apiService.post(
-        '/vendor/register',
-        {
-          'full_name': name,
-          'email': email,
-          'phone_number': phone,
-          'business_name': businessName,
-          'business_address': address,
-          'password': password,
-          'password_confirmation': confirmPassword,
-        },
-        isProtected: false,
-      );
+      final response = await _apiService.post('/vendor/register', {
+        'full_name': name,
+        'email': email,
+        'phone_number': phone,
+        'business_name': businessName,
+        'business_address': address,
+        'password': password,
+        'password_confirmation': confirmPassword,
+      }, isProtected: false);
 
       final responseData = jsonDecode(response.body);
       debugPrint("📦 Registration response: $responseData");
 
-      /// ✅ FIXED: Correct token path
-      if (responseData['data'] != null &&
-          responseData['data']['token'] != null) {
-        await _apiService.saveToken(responseData['data']['token']);
-        debugPrint("🔐 Vendor token saved after registration");
-      } else {
-        debugPrint("⚠️ No token in registration response");
+      // Handle Laravel Validation Errors (422)
+      if (response.statusCode == 422) {
+        if (responseData['errors'] != null) {
+          Map<String, dynamic> errors = responseData['errors'];
+          // Extract the first specific error message
+          String firstError = errors.values.first[0].toString();
+          throw Exception(firstError);
+        }
+        throw Exception(responseData['message'] ?? "Validation failed");
       }
 
-      return responseData;
+      // Handle Success
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (responseData['data'] != null &&
+            responseData['data']['token'] != null) {
+          await _apiService.saveToken(responseData['data']['token']);
+          debugPrint("🔐 Vendor token saved after registration");
+        }
+        return responseData;
+      } else {
+        throw Exception(responseData['message'] ?? "Registration failed");
+      }
     } catch (e) {
       debugPrint("❌ Registration service error: $e");
       rethrow;
@@ -60,56 +69,45 @@ class VendorAuthService {
     try {
       debugPrint("🔐 Attempting vendor login for: $email");
 
-      final response = await _apiService.post(
-        '/vendor/login',
-        {
-          'email': email,
-          'password': password,
-        },
-        isProtected: false,
-      );
+      final response = await _apiService.post('/vendor/login', {
+        'email': email,
+        'password': password,
+      }, isProtected: false);
 
       final responseData = jsonDecode(response.body);
-      debugPrint("📦 Login response status: ${response.statusCode}");
       debugPrint("📦 Login response body: $responseData");
 
-      /// ✅ FIXED: Correct token path
-      if (responseData['data'] != null &&
-          responseData['data']['token'] != null) {
-        await _apiService.saveToken(responseData['data']['token']);
-        debugPrint("🔐 Vendor token saved after login");
-        debugPrint("✅ Login successful for: $email");
-      } else {
-        debugPrint("⚠️ No token in login response");
+      if (response.statusCode == 422 || response.statusCode == 401) {
+        throw Exception(
+          responseData['message'] ?? "Invalid email or password.",
+        );
       }
 
-      return responseData;
+      if (response.statusCode == 200) {
+        if (responseData['data'] != null &&
+            responseData['data']['token'] != null) {
+          await _apiService.saveToken(responseData['data']['token']);
+          debugPrint("🔐 Vendor token saved after login");
+          debugPrint("✅ Login successful for: $email");
+        }
+        return responseData;
+      } else {
+        throw Exception("Login failed: ${response.statusCode}");
+      }
     } catch (e) {
       debugPrint("❌ Login error: $e");
-
-      if (e.toString().contains("Invalid email or password") ||
-          e.toString().contains("Invalid credentials")) {
-        throw Exception("Invalid email or password. Please try again.");
-      }
-
-      throw Exception(e.toString());
+      rethrow;
     }
   }
 
   /// ---------------- LOGOUT ----------------
   Future<void> logout() async {
     try {
-      await _apiService.post(
-        '/vendor/logout',
-        {},
-        isProtected: true,
-      );
-
+      await _apiService.post('/vendor/logout', {}, isProtected: true);
       debugPrint("✅ Vendor logged out successfully");
     } catch (e) {
       debugPrint("❌ Logout API error: $e");
     } finally {
-      /// ✅ Always clear token
       await _apiService.clearToken();
       debugPrint("🔐 Vendor token cleared");
     }
@@ -118,25 +116,21 @@ class VendorAuthService {
   /// ---------------- AUTH CHECK ----------------
   Future<bool> isAuthenticated() async {
     final token = await _apiService.getToken();
-    final isAuth = token != null && token.isNotEmpty;
-    debugPrint("🔐 Vendor authenticated: $isAuth");
-    return isAuth;
+    return token != null && token.isNotEmpty;
   }
 
   /// ---------------- GET PROFILE ----------------
   Future<Map<String, dynamic>> getProfile() async {
     try {
       debugPrint("🔐 Fetching vendor profile");
-
       final response = await _apiService.get(
         '/vendor/profile',
         isProtected: true,
       );
-
       final responseData = jsonDecode(response.body);
-      debugPrint("✅ Profile fetched successfully");
 
-      return responseData;
+      if (response.statusCode == 200) return responseData;
+      throw Exception(responseData['message'] ?? "Failed to fetch profile");
     } catch (e) {
       debugPrint("❌ Get profile error: $e");
       rethrow;
@@ -151,90 +145,77 @@ class VendorAuthService {
     required String address,
   }) async {
     try {
-      debugPrint("🔐 Updating vendor profile");
-
-      final response = await _apiService.post(
-        '/vendor/update-profile',
-        {
-          'full_name': name,
-          'phone_number': phone,
-          'business_name': businessName,
-          'business_address': address,
-        },
-        isProtected: true,
-      );
+      final response = await _apiService.post('/vendor/update-profile', {
+        'full_name': name,
+        'phone_number': phone,
+        'business_name': businessName,
+        'business_address': address,
+      }, isProtected: true);
 
       final responseData = jsonDecode(response.body);
-      debugPrint("✅ Profile updated successfully");
+      if (response.statusCode == 200) return responseData;
 
-      return responseData;
+      throw Exception(responseData['message'] ?? "Profile update failed");
     } catch (e) {
       debugPrint("❌ Update profile error: $e");
       rethrow;
     }
   }
 
-  /// ---------------- KYC ----------------
+  /// ---------------- KYC / NIN VERIFY ----------------
   Future<Map<String, dynamic>> verifyIdentity({
-    required String nin, // Make nin required
-    String? documentPath, // Document is optional
+    required String nin,
+    File? document,
   }) async {
     try {
-      debugPrint("🔐 Starting NIN verification");
-      debugPrint("🆔 NIN: $nin");
+      debugPrint("🔐 Starting NIN verification: $nin");
 
-      // Validate NIN format
       if (nin.length != 11 || !RegExp(r'^[0-9]+$').hasMatch(nin)) {
         throw Exception('Invalid NIN format. NIN must be 11 digits.');
       }
 
-
-      final response = await _apiService.post(
-        '/vendor/nin/verify',
-        {'nin': nin},
-        isProtected: true,
-      );
+      final response = await _apiService.post('/vendor/nin/verify', {
+        'nin': nin,
+      }, isProtected: true);
 
       final responseData = jsonDecode(response.body);
-      debugPrint("📦 NIN verification response: $responseData");
 
-      return responseData;
+      if (response.statusCode == 422) {
+        String msg = responseData['errors'] != null
+            ? responseData['errors'].values.first[0].toString()
+            : (responseData['message'] ?? "Verification failed");
+        throw Exception(msg);
+      }
+
+      if (response.statusCode == 200) return responseData;
+      throw Exception(responseData['message'] ?? "NIN verification failed");
     } catch (e) {
       debugPrint("❌ NIN verification error: $e");
       rethrow;
     }
   }
 
-// Helper method to check NIN verification status
+  /// ---------------- HELPERS ----------------
   Future<Map<String, dynamic>> checkNINStatus(String nin) async {
     try {
-      debugPrint("🔐 Checking NIN status for: $nin");
-
       final response = await _apiService.get(
         '/vendor/nin/$nin/status',
         isProtected: true,
       );
-
       return jsonDecode(response.body);
     } catch (e) {
-      debugPrint("❌ Check NIN status error: $e");
       rethrow;
     }
   }
 
-// Helper method to get NIN verification details
   Future<Map<String, dynamic>> getNINDetails(String nin) async {
     try {
-      debugPrint("🔐 Getting NIN details for: $nin");
-
       final response = await _apiService.get(
         '/vendor/nin/$nin/details',
         isProtected: true,
       );
-
       return jsonDecode(response.body);
     } catch (e) {
-      debugPrint("❌ Get NIN details error: $e");
       rethrow;
     }
   }

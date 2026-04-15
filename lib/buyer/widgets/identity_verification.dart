@@ -59,7 +59,8 @@ class _IdentityVerificationState extends State<IdentityVerification> {
       // }
 
       // Only NIN is required now
-      final hasValidNin = _ninController.text.trim().isNotEmpty && _ninError == null;
+      final hasValidNin =
+          _ninController.text.trim().isNotEmpty && _ninError == null;
       // final hasValidBvn = _bvnController.text.trim().isNotEmpty && _bvnError == null; // COMMENTED OUT
 
       _isButtonEnabled = hasValidNin; // Only NIN for now
@@ -67,10 +68,10 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   }
 
   void _showCustomToast(
-      BuildContext context,
-      String message, {
-        bool isError = false,
-      }) {
+    BuildContext context,
+    String message, {
+    bool isError = false,
+  }) {
     final overlay = Overlay.of(context);
     late OverlayEntry overlayEntry;
 
@@ -156,11 +157,10 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     try {
       // Only sending NIN now (BVN commented out)
       final result = await _authService.verifyIdentity(
-        nin: _ninController.text.trim(), // NIN is required
-        // bvn: _bvnController.text.trim().isNotEmpty // COMMENTED OUT
-        //     ? _bvnController.text.trim()
-        //     : null,
-        documentPath: _selectedFile?.path,
+        nin: _ninController.text.trim(),
+        // Use 'document' instead of 'documentPath'
+        // and pass the File object (_selectedFile) instead of just the path string
+        document: _selectedFile,
       );
 
       if (mounted) {
@@ -183,7 +183,8 @@ class _IdentityVerificationState extends State<IdentityVerification> {
           errorMessage = 'This NIN has already been used for verification';
         } else if (errorMessage.contains('Invalid NIN') ||
             errorMessage.contains('invalid nin')) {
-          errorMessage = 'The NIN provided is invalid. Please check and try again.';
+          errorMessage =
+              'The NIN provided is invalid. Please check and try again.';
         } else if (errorMessage.contains('network') ||
             errorMessage.contains('internet')) {
           errorMessage = 'Network error. Please check your connection.';
@@ -400,20 +401,20 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                   ),
                   child: _isLoading
                       ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Text(
-                    'Verify with NIN',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                          'Verify with NIN',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -444,10 +445,10 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   }
 
   Widget _buildTextField(
-      TextEditingController controller,
-      String hint, {
-        String? errorText,
-      }) {
+    TextEditingController controller,
+    String hint, {
+    String? errorText,
+  }) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
@@ -477,20 +478,20 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     );
   }
 
-// Divider method kept but commented out for future use
-// Widget _buildDividerWithText(String text) {
-//   return Row(
-//     children: [
-//       const Expanded(child: Divider()),
-//       Padding(
-//         padding: const EdgeInsets.symmetric(horizontal: 8),
-//         child: Text(
-//           text,
-//           style: const TextStyle(color: Colors.grey, fontSize: 12),
-//         ),
-//       ),
-//       const Expanded(child: Divider()),
-//     ],
-//   );
-// }
+  // Divider method kept but commented out for future use
+  // Widget _buildDividerWithText(String text) {
+  //   return Row(
+  //     children: [
+  //       const Expanded(child: Divider()),
+  //       Padding(
+  //         padding: const EdgeInsets.symmetric(horizontal: 8),
+  //         child: Text(
+  //           text,
+  //           style: const TextStyle(color: Colors.grey, fontSize: 12),
+  //         ),
+  //       ),
+  //       const Expanded(child: Divider()),
+  //     ],
+  //   );
+  // }
 }

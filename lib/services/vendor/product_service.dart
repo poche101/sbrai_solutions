@@ -19,75 +19,33 @@ class ProductService {
     List<File> images = const [],
   }) async {
     try {
-      // Check if we have images to upload
       if (images.isEmpty) {
-        // Simple POST without images
-        final response = await _apiService.post(
-          '/vendor/products',
-          {
-            'category_id': categoryId,
-            'title': title,
-            'description': description,
-            'price': price,
-            'price_unit': priceUnit,
-            'location': location,
-          },
-          isProtected: true,
-        );
+        final response = await _apiService.post('/vendor/products', {
+          'category_id': categoryId,
+          'title': title,
+          'description': description,
+          'price': price,
+          'price_unit': priceUnit,
+          'location': location,
+        }, isProtected: true);
 
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-        return responseData;
+        return jsonDecode(response.body);
       }
 
-      // With images - using multipart request
-      final token = await _apiService.getToken();
-      final url = Uri.parse('${ApiService.baseUrl}/vendor/products');
-
-      final request = http.MultipartRequest('POST', url);
-      request.headers['Accept'] = 'application/json';
-
-      if (token != null) {
-        request.headers['Authorization'] = 'Bearer $token';
-      }
-
-      // Add fields
-      request.fields['category_id'] = categoryId.toString();
-      request.fields['title'] = title;
-      request.fields['description'] = description;
-      request.fields['price'] = price.toString();
-      request.fields['price_unit'] = priceUnit;
-      request.fields['location'] = location;
-
-      // Add images (max 5)
-      for (int i = 0; i < images.length && i < 5; i++) {
-        final file = images[i];
-        final stream = http.ByteStream(file.openRead());
-        final length = await file.length();
-
-        final multipartFile = http.MultipartFile(
-          'photos[$i]',  // Backend expects array format
-          stream,
-          length,
-          filename: path.basename(file.path),
-        );
-
-        request.files.add(multipartFile);
-      }
-
-      debugPrint('🚀 UPLOAD: $url');
-      debugPrint('📦 Fields: ${request.fields}');
-      debugPrint('📷 Files: ${request.files.length}');
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-        return responseData;
-      } else {
-        throw _handleError(response);
-      }
-
+      // Handle Multipart for creation
+      return await _handleMultipartRequest(
+        urlPath: '/vendor/products',
+        method: 'POST',
+        fields: {
+          'category_id': categoryId.toString(),
+          'title': title,
+          'description': description,
+          'price': price.toString(),
+          'price_unit': priceUnit,
+          'location': location,
+        },
+        images: images,
+      );
     } catch (e) {
       debugPrint('❌ Product creation error: $e');
       rethrow;
@@ -106,57 +64,24 @@ class ProductService {
     List<File>? newImages,
   }) async {
     try {
-      final data = <String, dynamic>{};
+      final Map<String, String> data = {};
 
-      if (categoryId != null) data['category_id'] = categoryId;
+      if (categoryId != null) data['category_id'] = categoryId.toString();
       if (title != null) data['title'] = title;
       if (description != null) data['description'] = description;
-      if (price != null) data['price'] = price;
+      if (price != null) data['price'] = price.toString();
       if (priceUnit != null) data['price_unit'] = priceUnit;
       if (location != null) data['location'] = location;
 
-      // If we have new images to upload
       if (newImages != null && newImages.isNotEmpty) {
-        final token = await _apiService.getToken();
-        final url = Uri.parse('${ApiService.baseUrl}/vendor/products/$productId');
-
-        final request = http.MultipartRequest('POST', url);
-        request.headers['Accept'] = 'application/json';
-
-        if (token != null) {
-          request.headers['Authorization'] = 'Bearer $token';
-        }
-
-        // Add fields
-        data.forEach((key, value) {
-          request.fields[key] = value.toString();
-        });
-
-        // Add images (max 5)
-        for (int i = 0; i < newImages.length && i < 5; i++) {
-          final file = newImages[i];
-          final stream = http.ByteStream(file.openRead());
-          final length = await file.length();
-
-          final multipartFile = http.MultipartFile(
-            'photos[$i]',
-            stream,
-            length,
-            filename: path.basename(file.path),
-          );
-
-          request.files.add(multipartFile);
-        }
-
-        final streamedResponse = await request.send();
-        final response = await http.Response.fromStream(streamedResponse);
-
-        if (response.statusCode == 200) {
-          final Map<String, dynamic> responseData = jsonDecode(response.body);
-          return responseData;
-        } else {
-          throw _handleError(response);
-        }
+        // Laravel Method Spoofing: Use POST with _method=PUT for multipart updates
+        data['_method'] = 'PUT';
+        return await _handleMultipartRequest(
+          urlPath: '/vendor/products/$productId',
+          method: 'POST',
+          fields: data,
+          images: newImages,
+        );
       } else {
         // Simple PUT without images
         final response = await _apiService.put(
@@ -164,81 +89,158 @@ class ProductService {
           data,
           isProtected: true,
         );
-
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-        return responseData;
+        return jsonDecode(response.body);
       }
-
     } catch (e) {
       debugPrint('❌ Product update error: $e');
       rethrow;
     }
   }
 
-  /// Get all products for the vendor
-  Future<Map<String, dynamic>> getProducts({
-    int page = 1,
-    int perPage = 10,
-  }) async {
+  // --- FAVORITES SECTION ---
+
+  /// Toggle favorite status (Add/Remove)
+  /// Hits your Laravel FavoriteController@toggle
+  Future<Map<String, dynamic>> toggleFavorite(int productId) async {
+    try {
+      final response = await _apiService.post('/buyer/favorites/toggle', {
+        'product_id': productId,
+      }, isProtected: true);
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      debugPrint('❌ Toggle favorite error: $e');
+      rethrow;
+    }
+  }
+
+  /// Get all favorite items for the user
+  /// Hits your Laravel FavoriteController@index
+  Future<Map<String, dynamic>> getFavorites() async {
     try {
       final response = await _apiService.get(
-        '/vendor/products?page=$page&per_page=$perPage',
+        '/buyer/favorites',
         isProtected: true,
       );
 
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-      return responseData;
+      return jsonDecode(response.body);
+    } catch (e) {
+      debugPrint('❌ Get favorites error: $e');
+      rethrow;
+    }
+  }
+
+  // --- FETCHING & FILTERS ---
+
+  Future<Map<String, dynamic>> getProducts({
+    int page = 1,
+    int perPage = 10,
+    String? state,
+    String? search,
+    String? category,
+  }) async {
+    try {
+      final Map<String, String> queryParams = {
+        'page': page.toString(),
+        'per_page': perPage.toString(),
+      };
+
+      if (state != null) queryParams['state'] = state;
+      if (search != null) queryParams['search'] = search;
+      if (category != null) queryParams['category'] = category;
+
+      final queryString = Uri(queryParameters: queryParams).query;
+      final response = await _apiService.get(
+        '/vendor/products?$queryString',
+        isProtected: true,
+      );
+
+      return jsonDecode(response.body);
     } catch (e) {
       debugPrint('❌ Get products error: $e');
       rethrow;
     }
   }
 
-  /// Get a single product by ID
   Future<Map<String, dynamic>> getProduct(int id) async {
     try {
       final response = await _apiService.get(
         '/vendor/products/$id',
         isProtected: true,
       );
-
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-      return responseData;
+      return jsonDecode(response.body);
     } catch (e) {
       debugPrint('❌ Get product error: $e');
       rethrow;
     }
   }
 
-  /// Delete a product
   Future<Map<String, dynamic>> deleteProduct(int id) async {
     try {
       final response = await _apiService.delete(
         '/vendor/products/$id',
         isProtected: true,
       );
-
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-      return responseData;
+      return jsonDecode(response.body);
     } catch (e) {
       debugPrint('❌ Delete product error: $e');
       rethrow;
     }
   }
 
-  /// Get product categories
   Future<Map<String, dynamic>> getCategories() async {
     try {
       final response = await _apiService.get(
         '/vendor/categories',
         isProtected: false,
       );
-
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-      return responseData;
+      return jsonDecode(response.body);
     } catch (e) {
       debugPrint('❌ Get categories error: $e');
       rethrow;
+    }
+  }
+
+  // --- PRIVATE HELPERS ---
+
+  /// Helper to handle complex Multipart requests
+  Future<Map<String, dynamic>> _handleMultipartRequest({
+    required String urlPath,
+    required String method,
+    required Map<String, String> fields,
+    required List<File> images,
+  }) async {
+    final token = await _apiService.getToken();
+    final url = Uri.parse('${ApiService.baseUrl}$urlPath');
+
+    final request = http.MultipartRequest(method, url);
+    request.headers['Accept'] = 'application/json';
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
+    // Add Text Fields
+    request.fields.addAll(fields);
+
+    // Add Images
+    for (int i = 0; i < images.length && i < 5; i++) {
+      final file = images[i];
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'photos[$i]',
+          file.path,
+          filename: path.basename(file.path),
+        ),
+      );
+    }
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body);
+    } else {
+      throw _handleError(response);
     }
   }
 
