@@ -1,0 +1,17 @@
+{
+  "@@locale": "en",
+  "appTitle": "Sbrai Solutions",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+  "home": "Home",
+  "profile": "Profile",
+  "postAd": "Post Ad",
+  "dashboard": "Dashboard",
+  "favorites": "Favorites",
+  "messages": "Messages",
+  "settings": "Settings",
+  "logout": "Logout",
+  "login": "Login",
+  "register": "Register"
+}

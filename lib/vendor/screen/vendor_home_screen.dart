@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:sbrai_solutions/models/buyer/product_model.dart';
 import 'package:sbrai_solutions/services/vendor/product_service.dart';
 import 'package:sbrai_solutions/vendor/vendor_menu.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
-// Ensure these imports match your actual file structure
-// import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
-// import 'package:sbrai_solutions/screens/vendor_favorite_screen.dart';
+import 'package:sbrai_solutions/providers/language_provider.dart';
+import 'package:sbrai_solutions/l10n/app_localizations.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,7 +17,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final ProductService _productService = ProductService();
   String selectedState = "All Nigeria";
-  String selectedLanguage = "English";
   String? selectedCategory;
   final TextEditingController _searchController = TextEditingController();
 
@@ -25,7 +24,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Product> displayedProducts = [];
   bool isLoading = true;
 
-  // Local list to track favorite product IDs
   final Set<int> _favoriteProductIds = {};
 
   final List<String> nigeriaStates = [
@@ -132,9 +130,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchProducts();
   }
 
-  // Toggle Favorite logic
   void _toggleFavorite(Product product) {
-    if (product.id == null) return; // Safety check
+    if (product.id == null) return;
 
     setState(() {
       if (_favoriteProductIds.contains(product.id)) {
@@ -148,9 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
             action: SnackBarAction(
               label: "View",
               textColor: Colors.white,
-              onPressed: () {
-                // Navigate to favorites screen
-              },
+              onPressed: () {},
             ),
           ),
         );
@@ -160,6 +155,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    
     return Scaffold(
       backgroundColor: Colors.white,
       drawer: const VendorMenu(
@@ -177,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         title: Image.asset('assets/images/logo.png', height: 25),
         actions: [
-          _buildLanguageDropdown(),
+          _buildLanguageDropdown(context),
           const SizedBox(width: 8),
           const Icon(Icons.person_outline, color: Colors.black87),
           const Center(
@@ -213,9 +210,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Column(
                   children: [
-                    const Text(
-                      "What are you looking for?",
-                      style: TextStyle(
+                    Text(
+                      l10n.appTitle, // Using translation
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -352,15 +349,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   top: 8,
                   right: 8,
                   child: GestureDetector(
-                    onTap: () =>
-                        _toggleFavorite(product), // Functional Love Icon
+                    onTap: () => _toggleFavorite(product),
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.9),
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(color: Colors.black12, blurRadius: 4),
+                          const BoxShadow(color: Colors.black12, blurRadius: 4),
                         ],
                       ),
                       child: Icon(
@@ -446,9 +442,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         "Call",
                         Icons.call_outlined,
                         false,
-                        onTap: () {
-                          // Implement Call logic (url_launcher)
-                        },
+                        onTap: () {},
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -457,10 +451,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         "Chat",
                         Icons.chat_bubble_outline,
                         true,
-                        onTap: () {
-                          // Functional Chat Navigation
-                          // Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatScreen()));
-                        },
+                        onTap: () {},
                       ),
                     ),
                   ],
@@ -483,9 +474,7 @@ class _HomeScreenState extends State<HomeScreen> {
       height: 36,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          backgroundColor: isPrimary
-              ? const Color(0xFFE85D22)
-              : Colors.transparent,
+          backgroundColor: isPrimary ? const Color(0xFFE85D22) : Colors.transparent,
           side: BorderSide(
             color: isPrimary ? const Color(0xFFE85D22) : Colors.grey.shade300,
           ),
@@ -655,16 +644,24 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildLanguageDropdown() {
-    final Map<String, String> languageCodes = {
-      "English": "EN",
-      "French": "FR",
-      "Yoruba": "YO",
-      "Hausa": "HA",
-      "Igbo": "IG",
+  Widget _buildLanguageDropdown(BuildContext context) {
+    final languageProvider = Provider.of<LanguageProvider>(context);
+    
+    final Map<String, String> languages = {
+      "English": "en",
+      "Spanish": "es",
+      "French": "fr",
     };
+
+    String currentLangName = languages.entries
+        .firstWhere((e) => e.value == languageProvider.locale.languageCode, 
+            orElse: () => languages.entries.first)
+        .key;
+
     return PopupMenuButton<String>(
-      onSelected: (value) => setState(() => selectedLanguage = value),
+      onSelected: (value) {
+        languageProvider.setLanguage(Locale(languages[value]!));
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -674,7 +671,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           children: [
             Text(
-              languageCodes[selectedLanguage] ?? "NG",
+              currentLangName.substring(0, 2).toUpperCase(),
               style: const TextStyle(
                 color: Colors.black,
                 fontSize: 12,
@@ -689,7 +686,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-      itemBuilder: (context) => languageCodes.keys
+      itemBuilder: (context) => languages.keys
           .map((l) => PopupMenuItem(value: l, child: Text(l)))
           .toList(),
     );
