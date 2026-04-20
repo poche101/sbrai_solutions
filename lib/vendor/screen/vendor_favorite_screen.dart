@@ -4,7 +4,8 @@ import 'package:sbrai_solutions/services/vendor/product_service.dart';
 import 'package:sbrai_solutions/buyer/screens/home_screen.dart';
 
 class FavoriteScreen extends StatefulWidget {
-  const FavoriteScreen({super.key});
+  final List<Product>? initialFavorites;
+  const FavoriteScreen({super.key, this.initialFavorites});
 
   @override
   State<FavoriteScreen> createState() => _FavoriteScreenState();
@@ -19,7 +20,12 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
   @override
   void initState() {
     super.initState();
-    _loadFavorites();
+    if (widget.initialFavorites != null && widget.initialFavorites!.isNotEmpty) {
+      favoriteItems = List.from(widget.initialFavorites!);
+      _isLoading = false;
+    } else {
+      _loadFavorites();
+    }
   }
 
   Future<void> _loadFavorites() async {

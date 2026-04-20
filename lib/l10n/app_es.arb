@@ -1,0 +1,14 @@
+{
+  "@@locale": "es",
+  "appTitle": "Soluciones Sbrai",
+  "home": "Inicio",
+  "profile": "Perfil",
+  "postAd": "Publicar anuncio",
+  "dashboard": "Panel de control",
+  "favorites": "Favoritos",
+  "messages": "Mensajes",
+  "settings": "Ajustes",
+  "logout": "Cerrar sesión",
+  "login": "Iniciar sesión",
+  "register": "Registrarse"
+}
