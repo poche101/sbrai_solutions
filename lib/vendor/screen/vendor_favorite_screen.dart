@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/models/buyer/product_model.dart';
-import 'package:sbrai_solutions/services/vendor/product_service.dart'; // Ensure this path is correct
+import 'package:sbrai_solutions/services/vendor/product_service.dart';
 import 'package:sbrai_solutions/buyer/screens/home_screen.dart';
 
 class FavoriteScreen extends StatefulWidget {
@@ -22,8 +22,8 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
     _loadFavorites();
   }
 
-  /// Fetch favorites from Laravel FavoriteController@index
   Future<void> _loadFavorites() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -34,23 +34,30 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
 
       if (response['status'] == 'success') {
         final List data = response['data'];
+        if (mounted) {
+          setState(() {
+            favoriteItems = data.map((item) => Product.fromJson(item)).toList();
+            _isLoading = false;
+          });
+        }
+      } else {
+        throw Exception(response['message'] ?? "Failed to load favorites");
+      }
+    } catch (e, stackTrace) {
+      // UPDATED: Printing full error and stack trace for better debugging
+      debugPrint("❌ Load Favorites Error: $e");
+      debugPrint("Stack Trace: $stackTrace");
+
+      if (mounted) {
         setState(() {
-          favoriteItems = data.map((item) => Product.fromJson(item)).toList();
           _isLoading = false;
+          _errorMessage = "Could not load your wishlist: $e";
         });
       }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = "Could not load your wishlist.";
-      });
-      debugPrint("Load Favorites Error: $e");
     }
   }
 
-  /// Remove item using FavoriteController@toggle
   Future<void> _removeItem(int productId, int index) async {
-    // Optimistic UI update: remove from list immediately
     final removedItem = favoriteItems[index];
     setState(() {
       favoriteItems.removeAt(index);
@@ -58,17 +65,22 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
 
     try {
       await _productService.toggleFavorite(productId);
-      // Backend returns 'Removed from favorites' based on your PHP logic
-    } catch (e) {
-      // Rollback on failure
-      setState(() {
-        favoriteItems.insert(index, removedItem);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Failed to update wishlist. Check your connection."),
-        ),
-      );
+    } catch (e, stackTrace) {
+      // UPDATED: Printing full error and stack trace for better debugging
+      debugPrint("❌ Remove Favorite Error: $e");
+      debugPrint("Stack Trace: $stackTrace");
+
+      if (mounted) {
+        setState(() {
+          favoriteItems.insert(index, removedItem);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to update wishlist: $e"),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 
@@ -78,14 +90,9 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0.5,
-        centerTitle: false,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            size: 20,
-            color: Colors.black87,
-          ),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Column(
@@ -94,24 +101,17 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
             const Text(
               'My Favorites',
               style: TextStyle(
-                color: Colors.black87,
-                fontSize: 16,
+                color: Colors.black,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            if (!_isLoading)
-              Text(
-                '${favoriteItems.length} items saved',
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
-              ),
+            Text(
+              '${favoriteItems.length} items',
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
           ],
         ),
-        actions: [
-          IconButton(
-            onPressed: _loadFavorites,
-            icon: const Icon(Icons.refresh, color: Colors.black87, size: 20),
-          ),
-        ],
       ),
       body: _buildBody(),
     );
@@ -120,72 +120,96 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(color: Color(0xFFE85D22)),
+        child: CircularProgressIndicator(color: Color(0xFFFF7043)),
       );
     }
 
     if (_errorMessage != null) {
       return Center(
-        child: Text(
-          _errorMessage!,
-          style: const TextStyle(color: Colors.redAccent),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Colors.redAccent,
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: _loadFavorites,
+                child: const Text(
+                  "Try Again",
+                  style: TextStyle(color: Color(0xFFFF7043)),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    return favoriteItems.isEmpty ? _buildEmptyState() : _buildFavoritesList();
+    return favoriteItems.isEmpty ? _buildEmptyState() : _buildFavoritesGrid();
   }
 
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.symmetric(horizontal: 40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.all(30),
-              decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
+            CircleAvatar(
+              radius: 50,
+              backgroundColor: Colors.grey.shade100,
+              child: Icon(
                 Icons.favorite_border,
-                size: 80,
-                color: Colors.blueGrey,
+                size: 50,
+                color: Colors.blueGrey.shade200,
               ),
             ),
             const SizedBox(height: 24),
             const Text(
-              'Your wishlist is empty',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+              'No Favorites Yet',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 8),
+            const Text(
+              'Save items you like to view them later',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
             SizedBox(
-              width: double.infinity,
-              height: 50,
+              width: 200,
+              height: 48,
               child: ElevatedButton(
-                onPressed: () => Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const HomeScreen()),
-                ),
+                onPressed: () {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => const HomeScreen()),
+                    (route) => false,
+                  );
+                },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE85D22),
+                  backgroundColor: const Color(0xFFFF7043),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   elevation: 0,
                 ),
                 child: const Text(
-                  'Explore Products',
+                  'Start Shopping',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
                   ),
                 ),
               ),
@@ -196,112 +220,187 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
     );
   }
 
-  Widget _buildFavoritesList() {
-    return ListView.builder(
-      itemCount: favoriteItems.length,
+  Widget _buildFavoritesGrid() {
+    return GridView.builder(
       padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.7,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: favoriteItems.length,
       itemBuilder: (context, index) {
         final item = favoriteItems[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade100),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: InkWell(
-            onTap: () {
-              // Navigate to Detail Screen
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      item.imageUrl,
-                      width: 90,
-                      height: 90,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 90,
-                        height: 90,
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.image_not_supported),
+        return _buildProductCard(item, index);
+      },
+    );
+  }
+
+  Widget _buildProductCard(Product item, int index) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(12),
+                  ),
+                  child: Image.network(
+                    item.imageUrl,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        Container(color: Colors.grey[100]),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      "Verified",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              item.category.toUpperCase(),
-                              style: TextStyle(
-                                color: Colors.blueGrey.shade300,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1,
-                              ),
-                            ),
-                            GestureDetector(
-                              // Use '!' to tell Dart the ID is guaranteed to be there
-                              onTap: () => _removeItem(item.id!, index),
-                              child: const Icon(
-                                Icons.favorite,
-                                color: Colors.red,
-                                size: 20,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '₦${item.price.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                color: Color(0xFFE85D22),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            // Chat/Action Button
-                          ],
-                        ),
-                      ],
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: () => _removeItem(item.id!, index),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.red,
+                        size: 18,
+                      ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        );
-      },
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '₦${item.price.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          color: Color(0xFFFF7043),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const TextSpan(
+                        text: '/unit',
+                        style: TextStyle(color: Colors.grey, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 12,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        "Location", // Bind to item.location if available
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {},
+                        icon: const Icon(Icons.phone_outlined, size: 14),
+                        label: const Text(
+                          "Call",
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          side: BorderSide(color: Colors.grey.shade300),
+                          foregroundColor: Colors.black,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {},
+                        icon: const Icon(Icons.chat_bubble_outline, size: 14),
+                        label: const Text(
+                          "Chat",
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          backgroundColor: const Color(0xFFFF7043),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

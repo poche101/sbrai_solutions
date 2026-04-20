@@ -1,65 +1,105 @@
 class Product {
-  final int? id; // Added ID for favorite tracking and detail navigation
+  final int? id;
   final String name;
   final String location;
   final double price;
-  final String vendorName;
+  final String? priceUnit;
+  final String? description;
+  final String? vendorName;
+  final String? vendorPhone;
+  final String userName; // This holds 'Full Name' or 'Business Name'
   final double rating;
-  final String imageUrl;
+  final List<String> imageUrls; // Successfully updated to List
   final String category;
+  final String? createdAt;
 
   Product({
-    this.id, // Added to constructor
+    this.id,
     required this.name,
     required this.location,
     required this.price,
+    this.priceUnit,
+    this.description,
     required this.vendorName,
+    this.vendorPhone,
+    required this.userName,
     required this.rating,
-    required this.imageUrl,
+    required this.imageUrls,
     required this.category,
+    this.createdAt,
   });
 
-  // This factory constructor converts the JSON from your ProductService into a Product object
+  /// --- BACKWARD COMPATIBILITY GETTER ---
+  /// This fixes the "getter 'imageUrl' isn't defined" errors in your other files.
+  /// It returns the first image from the list or a placeholder if empty.
+  String get imageUrl =>
+      imageUrls.isNotEmpty ? imageUrls[0] : 'assets/images/placeholder.jpg';
+
   factory Product.fromJson(Map<String, dynamic> json) {
-    // Define your server's storage path
     const String storageBaseUrl = "https://sbraisolutions.com/api/storage/";
 
+    // Helper to extract the name from nested vendor object
+    String extractDisplayName(Map<String, dynamic> json) {
+      if (json['vendor'] != null && json['vendor'] is Map) {
+        var v = json['vendor'];
+        // Priority: Business Name -> Full Name -> Generic Fallback
+        return v['business_name']?.toString() ??
+            v['full_name']?.toString() ??
+            v['name']?.toString() ??
+            'Sbrai Vendor';
+      }
+      return json['full_name']?.toString() ?? 'Sbrai Vendor';
+    }
+
+    // --- IMAGE ARRAY LOGIC ---
+    List<String> images = [];
+    if (json['photos'] != null && json['photos'] is List) {
+      images = (json['photos'] as List).map((photo) {
+        String photoPath = photo.toString();
+        // If it's already a full URL, use it; otherwise, append base URL
+        return photoPath.startsWith('http')
+            ? photoPath
+            : storageBaseUrl + photoPath;
+      }).toList();
+    }
+
     return Product(
-      // 1. Map the 'id' from the API
       id: json['id'] is int
           ? json['id']
           : int.tryParse(json['id']?.toString() ?? ''),
 
-      // 2. Mapping 'title' from API to 'name' in Model
       name: json['title'] != null && json['title'].toString().isNotEmpty
           ? json['title']
           : (json['slug'] ?? 'Unknown Product').toString().replaceAll('-', ' '),
 
       location: json['location'] ?? 'Nigeria',
 
-      // 3. Handling price conversion safely
       price: double.tryParse(json['price'].toString()) ?? 0.0,
 
-      // 4. Checking if vendor object exists
+      priceUnit: json['price_unit']?.toString(),
+
+      description: json['description']?.toString(),
+
       vendorName: json['vendor'] != null && json['vendor'] is Map
-          ? json['vendor']['name']
+          ? json['vendor']['name']?.toString() ?? 'Sbrai Vendor'
           : 'Sbrai Vendor',
 
-      // 5. Handling rating safely
+      userName: extractDisplayName(json),
+
+      vendorPhone: json['vendor'] != null && json['vendor'] is Map
+          ? json['vendor']['phone']?.toString()
+          : json['vendor_phone']?.toString(),
+
       rating: double.tryParse(json['rating']?.toString() ?? '4.5') ?? 4.5,
 
-      /**
-       * 6. Extracting the first image from the 'photos' array.
-       * Concatenating storageBaseUrl with the relative path string.
-       */
-      imageUrl: (json['photos'] != null && (json['photos'] as List).isNotEmpty)
-          ? storageBaseUrl + json['photos'][0].toString()
-          : 'assets/images/placeholder.jpg',
+      // Assign the mapped list of images here
+      imageUrls: images.isNotEmpty ? images : ['assets/images/placeholder.jpg'],
 
-      // 7. Mapping the category name
       category: json['category'] != null && json['category'] is Map
-          ? json['category']['name']
+          ? json['category']['name']?.toString() ?? 'General'
           : 'General',
+
+      createdAt: json['created_at']?.toString(),
     );
   }
 }

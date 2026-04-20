@@ -58,15 +58,15 @@ class ApiService {
   /// ---------------- URL ----------------
 
   Uri _buildUrl(String endpoint) {
-    final cleanEndpoint =
-    endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    final cleanEndpoint = endpoint.startsWith('/')
+        ? endpoint.substring(1)
+        : endpoint;
     return Uri.parse('$baseUrl/$cleanEndpoint');
   }
 
   /// ---------------- GET ----------------
 
-  Future<http.Response> get(String endpoint,
-      {bool isProtected = true}) async {
+  Future<http.Response> get(String endpoint, {bool isProtected = true}) async {
     try {
       final url = _buildUrl(endpoint);
       final headers = await _getHeaders(protected: isProtected);
@@ -87,10 +87,10 @@ class ApiService {
   /// ---------------- POST ----------------
 
   Future<http.Response> post(
-      String endpoint,
-      Map<String, dynamic> data, {
-        bool isProtected = false,
-      }) async {
+    String endpoint,
+    Map<String, dynamic> data, {
+    bool isProtected = false,
+  }) async {
     try {
       final url = _buildUrl(endpoint);
       final headers = await _getHeaders(protected: isProtected);
@@ -112,10 +112,10 @@ class ApiService {
   /// ---------------- PUT ----------------
 
   Future<http.Response> put(
-      String endpoint,
-      Map<String, dynamic> data, {
-        bool isProtected = true,
-      }) async {
+    String endpoint,
+    Map<String, dynamic> data, {
+    bool isProtected = true,
+  }) async {
     try {
       final url = _buildUrl(endpoint);
       final headers = await _getHeaders(protected: isProtected);
@@ -135,8 +135,10 @@ class ApiService {
 
   /// ---------------- DELETE ----------------
 
-  Future<http.Response> delete(String endpoint,
-      {bool isProtected = true}) async {
+  Future<http.Response> delete(
+    String endpoint, {
+    bool isProtected = true,
+  }) async {
     try {
       final url = _buildUrl(endpoint);
       final headers = await _getHeaders(protected: isProtected);
@@ -157,12 +159,12 @@ class ApiService {
   /// ---------------- UPLOAD ----------------
 
   Future<http.Response> upload(
-      String endpoint,
-      Map<String, String> data, {
-        required String filePath,
-        required String fileField,
-        bool isProtected = true,
-      }) async {
+    String endpoint,
+    Map<String, String> data, {
+    required String filePath,
+    required String fileField,
+    bool isProtected = true,
+  }) async {
     try {
       final url = _buildUrl(endpoint);
       final token = await getToken();
@@ -179,9 +181,7 @@ class ApiService {
         request.fields[key] = value;
       });
 
-      request.files.add(
-        await http.MultipartFile.fromPath(fileField, filePath),
-      );
+      request.files.add(await http.MultipartFile.fromPath(fileField, filePath));
 
       debugPrint("🚀 UPLOAD: $url");
 

@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sbrai_solutions/models/chat_model.dart';
+import 'package:sbrai_solutions/models/buyer/product_model.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String userName;
+  final Product product;
+  final String userName; // This receives product.userName (e.g., "Poche Tech")
   final String? userInitial;
 
   const ChatScreen({
     super.key,
-    this.userName = "John Doe",
-    this.userInitial = "J",
+    required this.product,
+    required this.userName,
+    this.userInitial,
   });
 
   @override
@@ -23,8 +26,12 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
 
-  // Function to handle phone calls
-  Future<void> _makePhoneCall(String phoneNumber) async {
+  // Function to handle phone calls using the vendor's phone from the model
+  Future<void> _makePhoneCall(String? phoneNumber) async {
+    if (phoneNumber == null || phoneNumber.isEmpty) {
+      debugPrint('No phone number available for this vendor');
+      return;
+    }
     final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
     if (await canLaunchUrl(launchUri)) {
       await launchUrl(launchUri);
@@ -33,11 +40,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // Function to pick images (Works on Web/PC and Mobile)
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      // Logic to handle the picked image (e.g., upload or display in chat)
       setState(() {
         _messages.add(
           ChatMessage(
@@ -81,12 +86,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Determine the display name and initial dynamically
+    final String displayName = widget.userName.isNotEmpty
+        ? widget.userName
+        : "Sbrai User";
+    final String displayInitial =
+        widget.userInitial ??
+        (displayName.isNotEmpty ? displayName[0].toUpperCase() : "S");
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
-        titleSpacing: 0, // Reduces gap between back button and avatar
+        titleSpacing: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
@@ -95,23 +108,40 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: Colors.grey.shade200,
+              backgroundColor: const Color(0xFFF5F5F5),
               child: Text(
-                widget.userInitial ?? widget.userName[0],
-                style: TextStyle(color: Colors.orange.shade300, fontSize: 14),
+                displayInitial,
+                style: const TextStyle(
+                  color: Color(0xFFE85D22), // Matching your brand orange
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(width: 10),
-            // FIXED: Wrapped in Expanded to prevent overflow
             Expanded(
-              child: Text(
-                widget.userName,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    displayName,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Text(
+                    "Online",
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -119,8 +149,7 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.phone_outlined, color: Colors.black),
-            onPressed: () =>
-                _makePhoneCall('1234567890'), // Replace with actual number
+            onPressed: () => _makePhoneCall(widget.product.vendorPhone),
           ),
           IconButton(
             icon: const Icon(Icons.more_vert, color: Colors.black),
@@ -130,6 +159,28 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            color: Colors.grey.shade50,
+            width: double.infinity,
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.shopping_bag_outlined,
+                  size: 14,
+                  color: Colors.grey,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    "Product: ${widget.product.name}",
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: _messages.isEmpty
                 ? const Center(
@@ -164,7 +215,7 @@ class _ChatScreenState extends State<ChatScreen> {
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         decoration: BoxDecoration(
-          color: msg.isMe ? const Color(0xFFFF7043) : Colors.grey.shade200,
+          color: msg.isMe ? const Color(0xFFE85D22) : Colors.grey.shade200,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -193,7 +244,6 @@ class _ChatScreenState extends State<ChatScreen> {
       child: SafeArea(
         child: Row(
           children: [
-            // Image Picker Button
             Container(
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade300),
@@ -201,11 +251,10 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               child: IconButton(
                 icon: const Icon(Icons.image_outlined, color: Colors.black54),
-                onPressed: _pickImage, // Functional image picker
+                onPressed: _pickImage,
               ),
             ),
             const SizedBox(width: 8),
-            // Text Field
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -225,13 +274,12 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            // Send Button
             GestureDetector(
               onTap: _sendMessage,
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF7043),
+                  color: const Color(0xFFE85D22),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.send, color: Colors.white, size: 20),
@@ -241,5 +289,12 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 }

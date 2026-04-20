@@ -4,7 +4,6 @@ import 'screen/profile_screen.dart';
 import 'screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/kyc_screen.dart';
-import 'package:sbrai_solutions/models/buyer/product_model.dart'; // Ensure this is imported for the Product model
 import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart'
     as vendor;
 import 'package:sbrai_solutions/vendor/screen/message_screen.dart';
@@ -37,7 +36,6 @@ class _VendorMenuState extends State<VendorMenu> {
   String? _businessName;
 
   // Placeholder for favorite products - You can populate this from your API later
-  List<Product> _favoriteProducts = [];
 
   @override
   void initState() {
@@ -267,9 +265,7 @@ class _VendorMenuState extends State<VendorMenu> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => vendor.FavoriteScreen(
-                          initialFavorites: _favoriteProducts,
-                        ),
+                        builder: (context) => const vendor.FavoriteScreen(),
                       ),
                     );
                   }),

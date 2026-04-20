@@ -8,102 +8,11 @@ import '../api_service.dart';
 class ProductService {
   final ApiService _apiService = ApiService();
 
-  /// Create a product with images
-  Future<Map<String, dynamic>> createProduct({
-    required int categoryId,
-    required String title,
-    required String description,
-    required double price,
-    required String priceUnit,
-    required String location,
-    List<File> images = const [],
-  }) async {
-    try {
-      if (images.isEmpty) {
-        final response = await _apiService.post('/vendor/products', {
-          'category_id': categoryId,
-          'title': title,
-          'description': description,
-          'price': price,
-          'price_unit': priceUnit,
-          'location': location,
-        }, isProtected: true);
-
-        return jsonDecode(response.body);
-      }
-
-      // Handle Multipart for creation
-      return await _handleMultipartRequest(
-        urlPath: '/vendor/products',
-        method: 'POST',
-        fields: {
-          'category_id': categoryId.toString(),
-          'title': title,
-          'description': description,
-          'price': price.toString(),
-          'price_unit': priceUnit,
-          'location': location,
-        },
-        images: images,
-      );
-    } catch (e) {
-      debugPrint('❌ Product creation error: $e');
-      rethrow;
-    }
-  }
-
-  /// Update an existing product
-  Future<Map<String, dynamic>> updateProduct({
-    required int productId,
-    int? categoryId,
-    String? title,
-    String? description,
-    double? price,
-    String? priceUnit,
-    String? location,
-    List<File>? newImages,
-  }) async {
-    try {
-      final Map<String, String> data = {};
-
-      if (categoryId != null) data['category_id'] = categoryId.toString();
-      if (title != null) data['title'] = title;
-      if (description != null) data['description'] = description;
-      if (price != null) data['price'] = price.toString();
-      if (priceUnit != null) data['price_unit'] = priceUnit;
-      if (location != null) data['location'] = location;
-
-      if (newImages != null && newImages.isNotEmpty) {
-        // Laravel Method Spoofing: Use POST with _method=PUT for multipart updates
-        data['_method'] = 'PUT';
-        return await _handleMultipartRequest(
-          urlPath: '/vendor/products/$productId',
-          method: 'POST',
-          fields: data,
-          images: newImages,
-        );
-      } else {
-        // Simple PUT without images
-        final response = await _apiService.put(
-          '/vendor/products/$productId',
-          data,
-          isProtected: true,
-        );
-        return jsonDecode(response.body);
-      }
-    } catch (e) {
-      debugPrint('❌ Product update error: $e');
-      rethrow;
-    }
-  }
-
   // --- FAVORITES SECTION ---
 
-  /// Toggle favorite status (Add/Remove)
-  /// Hits your Laravel FavoriteController@toggle
   Future<Map<String, dynamic>> toggleFavorite(int productId) async {
     try {
-      final response = await _apiService.post('/buyer/favorites/toggle', {
+      final response = await _apiService.post('/v1/buyers/favorites/toggle', {
         'product_id': productId,
       }, isProtected: true);
 
@@ -114,18 +23,124 @@ class ProductService {
     }
   }
 
-  /// Get all favorite items for the user
-  /// Hits your Laravel FavoriteController@index
   Future<Map<String, dynamic>> getFavorites() async {
     try {
       final response = await _apiService.get(
-        '/buyer/favorites',
+        '/buyers/favorites',
         isProtected: true,
       );
-
       return jsonDecode(response.body);
     } catch (e) {
-      debugPrint('❌ Get favorites error: $e');
+      debugPrint('❌ GET ERROR [/v1/buyers/favorites]: $e');
+      rethrow;
+    }
+  }
+
+  // --- DYNAMIC LISTING MANAGEMENT (PRODUCTS & SERVICES) ---
+
+  /// Create a listing (Product or Service)
+  Future<Map<String, dynamic>> createListing({
+    required String type, // 'Product' or 'Service'
+    required int categoryId,
+    required String title,
+    required String description,
+    required double price,
+    required String priceUnit,
+    required String location,
+    List<File> images = const [],
+  }) async {
+    try {
+      // 1. Determine dynamic keys based on type
+      final bool isService = type.toLowerCase() == 'service';
+      final String urlPath = isService
+          ? '/vendor/services'
+          : '/vendor/products';
+      final String categoryKey = isService
+          ? 'service_category_id'
+          : 'category_id';
+      final String photoKey = isService ? 'images[]' : 'photos[]';
+
+      final Map<String, String> fields = {
+        categoryKey: categoryId.toString(),
+        'title': title,
+        'description': description,
+        'price': price.toString(),
+        'price_unit': priceUnit,
+        'location': location,
+      };
+
+      // 2. Route to Multipart if images exist, otherwise standard POST
+      if (images.isNotEmpty) {
+        return await _handleMultipartRequest(
+          urlPath: urlPath,
+          method: 'POST',
+          fields: fields,
+          images: images,
+          photoKey: photoKey,
+        );
+      }
+
+      final response = await _apiService.post(
+        urlPath,
+        fields,
+        isProtected: true,
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      debugPrint('❌ Creation error: $e');
+      rethrow;
+    }
+  }
+
+  /// Update an existing listing
+  Future<Map<String, dynamic>> updateListing({
+    required int id,
+    required String type,
+    int? categoryId,
+    String? title,
+    String? description,
+    double? price,
+    String? priceUnit,
+    String? location,
+    List<File>? newImages,
+  }) async {
+    try {
+      final bool isService = type.toLowerCase() == 'service';
+      final String urlPath = isService
+          ? '/vendor/services/$id'
+          : '/vendor/products/$id';
+      final String categoryKey = isService
+          ? 'service_category_id'
+          : 'category_id';
+      final String photoKey = isService ? 'images[]' : 'photos[]';
+
+      final Map<String, String> data = {};
+      if (categoryId != null) data[categoryKey] = categoryId.toString();
+      if (title != null) data['title'] = title;
+      if (description != null) data['description'] = description;
+      if (price != null) data['price'] = price.toString();
+      if (priceUnit != null) data['price_unit'] = priceUnit;
+      if (location != null) data['location'] = location;
+
+      if (newImages != null && newImages.isNotEmpty) {
+        data['_method'] = 'PUT'; // Laravel Method Spoofing
+        return await _handleMultipartRequest(
+          urlPath: urlPath,
+          method: 'POST',
+          fields: data,
+          images: newImages,
+          photoKey: photoKey,
+        );
+      } else {
+        final response = await _apiService.put(
+          urlPath,
+          data,
+          isProtected: true,
+        );
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      debugPrint('❌ Update error: $e');
       rethrow;
     }
   }
@@ -165,7 +180,7 @@ class ProductService {
   Future<Map<String, dynamic>> getProduct(int id) async {
     try {
       final response = await _apiService.get(
-        '/vendor/products/$id',
+        '/v1/vendor/products/$id',
         isProtected: true,
       );
       return jsonDecode(response.body);
@@ -175,40 +190,14 @@ class ProductService {
     }
   }
 
-  Future<Map<String, dynamic>> deleteProduct(int id) async {
-    try {
-      final response = await _apiService.delete(
-        '/vendor/products/$id',
-        isProtected: true,
-      );
-      return jsonDecode(response.body);
-    } catch (e) {
-      debugPrint('❌ Delete product error: $e');
-      rethrow;
-    }
-  }
-
-  Future<Map<String, dynamic>> getCategories() async {
-    try {
-      final response = await _apiService.get(
-        '/vendor/categories',
-        isProtected: false,
-      );
-      return jsonDecode(response.body);
-    } catch (e) {
-      debugPrint('❌ Get categories error: $e');
-      rethrow;
-    }
-  }
-
   // --- PRIVATE HELPERS ---
 
-  /// Helper to handle complex Multipart requests
   Future<Map<String, dynamic>> _handleMultipartRequest({
     required String urlPath,
     required String method,
     required Map<String, String> fields,
     required List<File> images,
+    required String photoKey,
   }) async {
     final token = await _apiService.getToken();
     final url = Uri.parse('${ApiService.baseUrl}$urlPath');
@@ -219,15 +208,13 @@ class ProductService {
       request.headers['Authorization'] = 'Bearer $token';
     }
 
-    // Add Text Fields
     request.fields.addAll(fields);
 
-    // Add Images
     for (int i = 0; i < images.length && i < 5; i++) {
       final file = images[i];
       request.files.add(
         await http.MultipartFile.fromPath(
-          'photos[$i]',
+          photoKey, // Uses 'photos[]' or 'images[]' dynamically
           file.path,
           filename: path.basename(file.path),
         ),
@@ -247,8 +234,10 @@ class ProductService {
   String _handleError(http.Response response) {
     try {
       final decoded = jsonDecode(response.body);
-      if (decoded is Map && decoded.containsKey('message')) {
-        return decoded['message'];
+      if (decoded is Map) {
+        // Return validation errors if they exist, otherwise the message
+        if (decoded.containsKey('errors')) return decoded['errors'].toString();
+        if (decoded.containsKey('message')) return decoded['message'];
       }
       return 'Server error: ${response.statusCode}';
     } catch (_) {

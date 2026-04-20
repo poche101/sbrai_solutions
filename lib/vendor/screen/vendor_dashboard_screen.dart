@@ -18,7 +18,7 @@ class VendorData {
     required this.totalSales,
     required this.voucherBalance,
     required this.activities,
-    this.products = const [], // Default empty
+    this.products = const [],
   });
 }
 
@@ -77,19 +77,56 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
   }
 
   void _loadDashboardData() {
-    // Note: Empty products list to trigger the "No products" state
+    // Demo Data: Populate with items to see the "My Listings" UI
+    List<ProductItem> myProducts = [
+      ProductItem(
+        title: "Modern Cement Mixer",
+        price: "₦ 250,000",
+        imageUrl:
+            "https://images.unsplash.com/photo-1589939705384-5185138a0470?q=80&w=500",
+        views: 124,
+        favorites: 12,
+        chats: 5,
+        category: "Machinery",
+      ),
+      ProductItem(
+        title: "High-Grade Steel Rods",
+        price: "₦ 45,000",
+        imageUrl:
+            "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=500",
+        views: 89,
+        favorites: 8,
+        chats: 2,
+        category: "Materials",
+      ),
+    ];
+
     currentData = VendorData(
-      activeListings: "0",
-      totalViews: "0",
-      messages: "0",
-      totalSales: "₦",
-      voucherBalance: 0.00,
-      products: [],
+      activeListings: myProducts.length.toString(),
+      totalViews: "213",
+      messages: "7",
+      totalSales: "₦ 0",
+      voucherBalance: 5000.00,
+      products: myProducts,
       activities: [
-        ActivityItem(Icons.visibility, Colors.blue, '', ''),
-        ActivityItem(Icons.chat_bubble, Colors.green, '', ''),
-        ActivityItem(Icons.favorite, Colors.red, '', ''),
-        ActivityItem(Icons.visibility, Colors.blue, '', ''),
+        ActivityItem(
+          Icons.visibility,
+          Colors.blue,
+          'New view on Cement Mixer',
+          '2 mins ago',
+        ),
+        ActivityItem(
+          Icons.chat_bubble,
+          Colors.green,
+          'New message from John',
+          '15 mins ago',
+        ),
+        ActivityItem(
+          Icons.favorite,
+          Colors.red,
+          'Someone liked your listing',
+          '1 hour ago',
+        ),
       ],
     );
   }
@@ -101,6 +138,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        centerTitle: false,
         leading: const BackButton(color: Colors.black),
         title: const Text(
           'Vendor Dashboard',
@@ -158,19 +196,31 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
 
               // Custom Tab Bar
               Container(
-                height: 45,
+                height: 48,
+                padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(25),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: TabBar(
                   controller: _tabController,
-                  onTap: (index) => setState(() {}), // Refresh UI on tab change
+                  onTap: (index) => setState(() {}),
                   indicator: BoxDecoration(
-                    borderRadius: BorderRadius.circular(25),
+                    borderRadius: BorderRadius.circular(10),
                     color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   labelColor: Colors.black,
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                   unselectedLabelColor: Colors.black54,
                   tabs: const [
                     Tab(text: "Overview"),
@@ -181,7 +231,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
               ),
               const SizedBox(height: 24),
 
-              // Dynamic Body based on Selected Tab
+              // Dynamic Body
               _buildDynamicTabContent(),
 
               const SizedBox(height: 40),
@@ -194,7 +244,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
 
   Widget _buildDynamicTabContent() {
     switch (_tabController.index) {
-      case 0: // Overview
+      case 0:
         return Column(
           children: [
             _buildVoucherSection(currentData.voucherBalance),
@@ -206,7 +256,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
             _buildQuickActions(context),
           ],
         );
-      case 1: // My Listings
+      case 1:
         return currentData.products.isEmpty
             ? _buildEmptyState("You haven't uploaded any products yet.")
             : Column(
@@ -214,14 +264,14 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
                     .map((p) => _buildProductCard(p))
                     .toList(),
               );
-      case 2: // Analytics
+      case 2:
         return _buildAnalyticsView();
       default:
         return const SizedBox();
     }
   }
 
-  // --- MY LISTINGS UI ---
+  // --- UPDATED MY LISTINGS UI ---
   Widget _buildProductCard(ProductItem product) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -230,20 +280,35 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Image Section
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             child: Image.network(
               product.imageUrl,
-              width: 100,
-              height: 100,
+              width: 110,
+              height: 110,
               fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                width: 110,
+                height: 110,
+                color: Colors.grey.shade200,
+                child: const Icon(Icons.image_not_supported),
+              ),
             ),
           ),
           const SizedBox(width: 16),
+          // Content Section
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -251,54 +316,59 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      product.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        product.category,
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    const Icon(Icons.more_vert, color: Colors.grey),
+                    const Icon(Icons.more_vert, color: Colors.grey, size: 20),
                   ],
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  product.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Text(
                   product.price,
                   style: const TextStyle(
                     color: Colors.deepOrangeAccent,
                     fontWeight: FontWeight.bold,
-                    fontSize: 18,
+                    fontSize: 17,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                // Engagement Metrics
                 Row(
                   children: [
-                    _iconStat(
-                      Icons.visibility_outlined,
-                      "${product.views} views",
-                    ),
+                    _iconStat(Icons.visibility_outlined, "${product.views}"),
                     const SizedBox(width: 12),
-                    _iconStat(
-                      Icons.favorite_border,
-                      "${product.favorites} favorites",
-                    ),
+                    _iconStat(Icons.favorite_border, "${product.favorites}"),
                     const SizedBox(width: 12),
-                    _iconStat(Icons.chat_outlined, "${product.chats} chats"),
+                    _iconStat(Icons.chat_bubble_outline, "${product.chats}"),
+                    const Spacer(),
+                    _buildBadge("Active", Colors.green.shade600),
                   ],
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.deepOrangeAccent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    "Active",
-                    style: TextStyle(color: Colors.white, fontSize: 12),
-                  ),
                 ),
               ],
             ),
@@ -308,12 +378,19 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
     );
   }
 
-  Widget _iconStat(IconData icon, String label) {
+  Widget _iconStat(IconData icon, String count) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: Colors.grey),
+        Icon(icon, size: 14, color: Colors.grey.shade600),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        Text(
+          count,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
@@ -322,15 +399,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
   Widget _buildAnalyticsView() {
     final int profileViews = int.tryParse(currentData.totalViews) ?? 0;
     final int activeListings = int.tryParse(currentData.activeListings) ?? 0;
-
-    final double profileViewsProgress = (profileViews / 1000).clamp(0.0, 1.0);
-    final double listingsProgress = (activeListings / 50).clamp(0.0, 1.0);
-
-    const String responseRate = "0%";
-    const double responseProgress = 0.0;
-
-    const String satisfactionScore = "0.0/5.0";
-    const double satisfactionProgress = 0.0;
 
     return Column(
       children: [
@@ -352,25 +420,20 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
               _buildProgressBar(
                 "Profile Views",
                 profileViews,
-                profileViewsProgress,
+                (profileViews / 1000).clamp(0.0, 1.0),
                 Colors.deepOrangeAccent,
               ),
               _buildProgressBar(
                 "Active Listings",
                 activeListings,
-                listingsProgress,
+                (activeListings / 50).clamp(0.0, 1.0),
                 Colors.blueAccent,
               ),
-              _buildProgressBar(
-                "Response Rate",
-                responseRate,
-                responseProgress,
-                Colors.green,
-              ),
+              _buildProgressBar("Response Rate", "85%", 0.85, Colors.green),
               _buildProgressBar(
                 "Customer Satisfaction",
-                satisfactionScore,
-                satisfactionProgress,
+                "4.8/5.0",
+                0.96,
                 Colors.orange,
               ),
             ],
@@ -382,7 +445,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
             ? _buildEmptyState("No performance data available yet.")
             : Column(
                 children: currentData.products
-                    .take(3)
+                    .take(2)
                     .map((p) => _buildProductCard(p))
                     .toList(),
               ),
@@ -455,15 +518,13 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
   // --- REUSED UI HELPER METHODS ---
   Widget _buildPostAdButton(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.only(right: 16),
       child: Center(
         child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const PostAdScreen()),
-            );
-          },
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const PostAdScreen()),
+          ),
           borderRadius: BorderRadius.circular(8),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -511,7 +572,14 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(icon, color: color, size: 28),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
               const Icon(Icons.trending_up, color: Colors.green, size: 16),
             ],
           ),
@@ -576,7 +644,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
                 ],
               ),
               const Spacer(),
-              _buildBadge("Active", Colors.greenAccent.shade700),
+              _buildBadge("Active", Colors.green.shade600),
             ],
           ),
           const SizedBox(height: 20),
@@ -603,35 +671,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
                     color: Color(0xFFFF7043),
                   ),
                 ),
-                const Row(
-                  children: [
-                    Icon(Icons.trending_up, color: Colors.green, size: 14),
-                    SizedBox(width: 4),
-                    Text(
-                      'Ready to use',
-                      style: TextStyle(color: Colors.green, fontSize: 12),
-                    ),
-                  ],
-                ),
               ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A237E),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                '🚀 Promotion Feature Coming Soon',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
             ),
           ),
         ],
@@ -648,19 +688,24 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       ),
       child: Column(
         children: items.asMap().entries.map((entry) {
-          int idx = entry.key;
-          ActivityItem item = entry.value;
           return Column(
             children: [
               ListTile(
-                leading: Icon(item.icon, color: item.color, size: 20),
-                title: Text(item.title, style: const TextStyle(fontSize: 13)),
+                leading: Icon(
+                  entry.value.icon,
+                  color: entry.value.color,
+                  size: 20,
+                ),
+                title: Text(
+                  entry.value.title,
+                  style: const TextStyle(fontSize: 13),
+                ),
                 subtitle: Text(
-                  item.time,
+                  entry.value.time,
                   style: const TextStyle(fontSize: 11, color: Colors.grey),
                 ),
               ),
-              if (idx < items.length - 1)
+              if (entry.key < items.length - 1)
                 Divider(
                   height: 1,
                   color: Colors.grey.shade100,
@@ -683,12 +728,14 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       crossAxisSpacing: 12,
       childAspectRatio: 1.8,
       children: [
-        _actionBtn(Icons.add, "Post New Ad", () {
-          Navigator.push(
+        _actionBtn(
+          Icons.add,
+          "Post New Ad",
+          () => Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const PostAdScreen()),
-          );
-        }),
+          ),
+        ),
         _actionBtn(Icons.people_outline, "View Messages", () {}),
         _actionBtn(
           Icons.analytics_outlined,
@@ -755,10 +802,10 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
 
   Widget _buildBadge(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         text,

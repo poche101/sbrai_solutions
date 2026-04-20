@@ -3,9 +3,9 @@ import 'package:sbrai_solutions/models/buyer/product_model.dart';
 import 'package:sbrai_solutions/services/vendor/product_service.dart';
 import 'package:sbrai_solutions/vendor/vendor_menu.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
-// Ensure these imports match your actual file structure
-// import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
-// import 'package:sbrai_solutions/screens/vendor_favorite_screen.dart';
+import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
+import 'package:sbrai_solutions/vendor/screen/product_details_screen.dart';
+import 'package:sbrai_solutions/services/vendor/services.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,16 +16,17 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ProductService _productService = ProductService();
+  final ServiceProvider _serviceProvider = ServiceProvider();
+
   String selectedState = "All Nigeria";
   String selectedLanguage = "English";
   String? selectedCategory;
   final TextEditingController _searchController = TextEditingController();
 
-  List<Product> allProducts = [];
   List<Product> displayedProducts = [];
   bool isLoading = true;
 
-  // Local list to track favorite product IDs
+  final String userFullName = "Demo User";
   final Set<int> _favoriteProductIds = {};
 
   final List<String> nigeriaStates = [
@@ -97,63 +98,80 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _fetchProducts() async {
     setState(() => isLoading = true);
     try {
-      final response = await _productService.getProducts(
-        page: 1,
-        perPage: 40,
-        state: selectedState == "All Nigeria" ? null : selectedState,
-        search: _searchController.text.isNotEmpty
-            ? _searchController.text
-            : null,
-        category: selectedCategory,
-      );
+      final List<String> serviceCategoryNames = [
+        'Logistics',
+        'Borehole',
+        'Cleaning',
+        'Fumigation',
+      ];
 
-      final List<dynamic> data = response['data'] ?? [];
+      if (selectedCategory != null &&
+          serviceCategoryNames.contains(selectedCategory)) {
+        final services = await _serviceProvider.getServices();
 
-      setState(() {
-        allProducts = data.map((json) => Product.fromJson(json)).toList();
-        displayedProducts = allProducts;
-        isLoading = false;
-      });
+        setState(() {
+          displayedProducts = services.map((s) {
+            // Fix: Safe URL resolution using firstOrNull to avoid dead code warnings
+            String resolvedImageUrl =
+                s.photos.firstOrNull?.fullUrl ??
+                "https://via.placeholder.com/150";
+
+            return Product(
+              id: s.id,
+              name: s.title,
+              price: s.price ?? 0.0,
+              // Wrap the single URL in a list to match the new model requirement
+              imageUrls: [resolvedImageUrl],
+              location: s.location ?? "Nigeria",
+              category: selectedCategory ?? "General",
+              userName: "Service Provider",
+              vendorName: "Professional Artisan",
+              rating: 0.0,
+            );
+          }).toList();
+          isLoading = false;
+        });
+      } else {
+        final response = await _productService.getProducts(
+          page: 1,
+          perPage: 40,
+          state: selectedState == "All Nigeria" ? null : selectedState,
+          search: _searchController.text.isNotEmpty
+              ? _searchController.text
+              : null,
+          category: selectedCategory,
+        );
+
+        final List<dynamic> data = response['data'] ?? [];
+        setState(() {
+          displayedProducts = data
+              .map((json) => Product.fromJson(json))
+              .toList();
+          isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint("❌ Error loading products: $e");
       setState(() => isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Failed to load products: $e")));
-      }
     }
   }
 
   void _filterByCategory(String categoryName) {
-    setState(() {
-      selectedCategory = categoryName;
-    });
+    setState(
+      () => selectedCategory = (selectedCategory == categoryName)
+          ? null
+          : categoryName,
+    );
     _fetchProducts();
   }
 
-  // Toggle Favorite logic
   void _toggleFavorite(Product product) {
-    if (product.id == null) return; // Safety check
-
+    if (product.id == null) return;
     setState(() {
       if (_favoriteProductIds.contains(product.id)) {
         _favoriteProductIds.remove(product.id);
       } else {
         _favoriteProductIds.add(product.id!);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("${product.name} added to favorites"),
-            duration: const Duration(seconds: 2),
-            action: SnackBarAction(
-              label: "View",
-              textColor: Colors.white,
-              onPressed: () {
-                // Navigate to favorites screen
-              },
-            ),
-          ),
-        );
       }
     });
   }
@@ -182,19 +200,17 @@ class _HomeScreenState extends State<HomeScreen> {
           const Icon(Icons.person_outline, color: Colors.black87),
           const Center(
             child: Text(
-              "  Vendor   ",
+              "  Vendor      ",
               style: TextStyle(color: Colors.black87, fontSize: 13),
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const PostAdScreen()),
-          );
-        },
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PostAdScreen()),
+        ),
         backgroundColor: const Color(0xFFE85D22),
         shape: const CircleBorder(),
         child: const Icon(Icons.add, color: Colors.white, size: 30),
@@ -203,6 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onRefresh: _fetchProducts,
         color: const Color(0xFFE85D22),
         child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
               child: Container(
@@ -246,17 +263,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (selectedCategory != null)
-                      TextButton(
-                        onPressed: () {
-                          setState(() => selectedCategory = null);
-                          _fetchProducts();
-                        },
-                        child: const Text(
-                          "Clear Filter",
-                          style: TextStyle(color: Color(0xFFE85D22)),
-                        ),
-                      ),
                     Text(
                       "${displayedProducts.length} items",
                       style: TextStyle(
@@ -284,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Center(
                       child: Padding(
                         padding: EdgeInsets.only(top: 50.0),
-                        child: Text("No products found."),
+                        child: Text("No items found."),
                       ),
                     ),
                   )
@@ -313,162 +319,186 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildDynamicProductCard(Product product) {
-    bool isFavorited = _favoriteProductIds.contains(product.id);
+    final bool isFavorited = _favoriteProductIds.contains(product.id);
+    final List<String> serviceCategories = [
+      'logistics',
+      'borehole',
+      'cleaning',
+      'fumigation',
+    ];
+    final bool isService = serviceCategories.contains(
+      product.category.toLowerCase(),
+    );
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              ProductDetailsScreen(product: product, userName: userFullName),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                  child: Image.network(
-                    product.imageUrl,
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey.shade200,
-                      child: const Icon(Icons.image, color: Colors.grey),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: () =>
-                        _toggleFavorite(product), // Functional Love Icon
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: Colors.black12, blurRadius: 4),
-                        ],
-                      ),
-                      child: Icon(
-                        isFavorited ? Icons.favorite : Icons.favorite_border,
-                        size: 18,
-                        color: isFavorited ? Colors.red : Colors.grey,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Color(0xFF0F172A),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.location_on, size: 12, color: Colors.grey),
-                    const SizedBox(width: 2),
-                    Text(
-                      product.location,
-                      style: const TextStyle(fontSize: 11, color: Colors.grey),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "₦${product.price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}",
-                  style: const TextStyle(
-                    color: Color(0xFFE85D22),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      size: 12,
-                      color: Colors.green,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        product.vendorName,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  // Fix: Use Positioned.fill to solve the squashed/tiny image issue
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(16),
+                      ),
+                      child: Image.network(
+                        product.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.image, color: Colors.grey),
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(Icons.star, size: 12, color: Colors.amber),
-                    Text(
-                      " ${product.rating}",
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                  ),
+                  if (isService)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade700,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          "Service",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildActionButton(
-                        "Call",
-                        Icons.call_outlined,
-                        false,
-                        onTap: () {
-                          // Implement Call logic (url_launcher)
-                        },
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: GestureDetector(
+                      onTap: () => _toggleFavorite(product),
+                      child: CircleAvatar(
+                        radius: 14,
+                        backgroundColor: Colors.white.withOpacity(0.9),
+                        child: Icon(
+                          isFavorited ? Icons.favorite : Icons.favorite_border,
+                          size: 16,
+                          color: isFavorited ? Colors.red : Colors.grey,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildActionButton(
-                        "Chat",
-                        Icons.chat_bubble_outline,
-                        true,
-                        onTap: () {
-                          // Functional Chat Navigation
-                          // Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatScreen()));
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Color(0xFF0F172A),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        size: 12,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          product.location,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "₦${product.price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}",
+                    style: const TextStyle(
+                      color: Color(0xFFE85D22),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildActionButton(
+                          "Call",
+                          Icons.call_outlined,
+                          false,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildActionButton(
+                          "Chat",
+                          Icons.chat_bubble_outline,
+                          true,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ChatScreen(
+                                  product: product,
+                                  userName: product.userName,
+                                  userInitial: product.userName.isNotEmpty
+                                      ? product.userName[0].toUpperCase()
+                                      : 'U',
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -557,7 +587,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -572,7 +601,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           flex: 4,
           child: PopupMenuButton<String>(
-            onSelected: (String value) {
+            onSelected: (value) {
               setState(() => selectedState = value);
               _fetchProducts();
             },
@@ -620,7 +649,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: TextField(
                     controller: _searchController,
-                    onSubmitted: (val) => _fetchProducts(),
+                    onSubmitted: (_) => _fetchProducts(),
                     style: const TextStyle(color: Colors.white, fontSize: 14),
                     decoration: const InputDecoration(
                       hintText: "I am looking for...",
@@ -630,20 +659,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                GestureDetector(
-                  onTap: _fetchProducts,
-                  child: Container(
-                    width: 44,
-                    height: 40,
-                    margin: const EdgeInsets.only(right: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE85D22),
+                IconButton(
+                  onPressed: _fetchProducts,
+                  icon: const Icon(Icons.search, color: Colors.white, size: 22),
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFFE85D22),
+                    shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(
-                      Icons.search,
-                      color: Colors.white,
-                      size: 22,
                     ),
                   ),
                 ),
@@ -665,6 +687,9 @@ class _HomeScreenState extends State<HomeScreen> {
     };
     return PopupMenuButton<String>(
       onSelected: (value) => setState(() => selectedLanguage = value),
+      itemBuilder: (context) => languageCodes.keys
+          .map((l) => PopupMenuItem(value: l, child: Text(l)))
+          .toList(),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -674,7 +699,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           children: [
             Text(
-              languageCodes[selectedLanguage] ?? "NG",
+              languageCodes[selectedLanguage] ?? "EN",
               style: const TextStyle(
                 color: Colors.black,
                 fontSize: 12,
@@ -689,9 +714,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-      itemBuilder: (context) => languageCodes.keys
-          .map((l) => PopupMenuItem(value: l, child: Text(l)))
-          .toList(),
     );
   }
 

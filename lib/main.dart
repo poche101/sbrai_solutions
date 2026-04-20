@@ -10,15 +10,14 @@ import 'package:sbrai_solutions/buyer/screens/settings/buyers_terms_page.dart';
 import 'package:sbrai_solutions/vendor/screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 
-// Import the generated file from your Firebase configuration
-// If you haven't run 'flutterfire configure' yet, you may need to comment this out temporarily.
+// 1. Import your generated firebase_options file
+// Run 'flutterfire configure' in your terminal to generate this file
 import 'firebase_options.dart';
 
-// --- Background Message Handler ---
-// This function must be at the top level (outside any class)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  // Ensure Firebase is initialized in the background process
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   print("Handling a background message: ${message.messageId}");
 }
 
@@ -26,17 +25,18 @@ void main() async {
   // Ensure Flutter is ready for async calls before runApp
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Initialize Firebase for the CELZ5 project
+  // 2. Initialize Firebase with platform-specific options
+  // This is the line that fixes the [core/no-app] error
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // 2. Set up Background Notification Listener
+  // 3. Set up Background Notification Listener
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // 3. Request Permissions for Push Notifications (Crucial for iOS/Android)
+  // 4. Request Permissions for Push Notifications
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   await messaging.requestPermission(alert: true, badge: true, sound: true);
 
-  // 4. SSL Bypass for local Laravel development
+  // 5. SSL Bypass for local Laravel development
   HttpOverrides.global = MyHttpOverrides();
 
   runApp(const SbraiSolutionsApp());
@@ -71,11 +71,7 @@ class SbraiSolutionsApp extends StatelessWidget {
           iconTheme: IconThemeData(color: Colors.black),
         ),
       ),
-
-      // Starting point: User chooses between Buyer or Vendor
       home: const AccountSelectionScreen(),
-
-      // Centralized route management
       routes: {
         '/account-selection': (context) => const AccountSelectionScreen(),
         '/favorites': (context) => const FavoriteScreen(),
@@ -87,7 +83,6 @@ class SbraiSolutionsApp extends StatelessWidget {
   }
 }
 
-// --- Custom SSL Bypass Class ---
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {

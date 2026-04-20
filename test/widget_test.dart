@@ -8,14 +8,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+// Ensure this matches your project name in pubspec.yaml
 import 'package:sbrai_solutions/main.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    // FIXED: Changed MyApp() to SbraiSolutionsApp()
+    await tester.pumpWidget(const SbraiSolutionsApp());
 
     // Verify that our counter starts at 0.
+    // Note: If your AccountSelectionScreen does not have a '0' string,
+    // this test will fail, but the "class not found" error will be gone.
     expect(find.text('0'), findsOneWidget);
     expect(find.text('1'), findsNothing);
 

@@ -25,8 +25,6 @@ class _PostAdScreenState extends State<PostAdScreen> {
   String _propertyStatus = 'For Rent';
   String? _selectedCategory;
   List<XFile> _selectedImages = [];
-
-  // This variable is now being used in _handlePublish
   int? _selectedCategoryId;
 
   // --- CONTROLLERS ---
@@ -176,19 +174,18 @@ class _PostAdScreenState extends State<PostAdScreen> {
     setState(() => _isPublishing = true);
 
     try {
-      final price = double.tryParse(_priceController.text.trim());
-      if (price == null) throw 'Invalid price format';
-
-      // UTILIZING THE FIELD HERE TO FIX THE WARNING
-      if (_selectedCategoryId == null) {
-        throw 'Please select a valid category';
-      }
-
       final token = await _getVendorToken();
       if (token == null) throw 'Authentication required. Please login again.';
+      if (_selectedCategoryId == null) throw 'Please select a valid category';
+
+      // 1. DYNAMIC ROUTING
+      String endpoint = _selectedType == 'Service' ? 'services' : 'products';
+      String categoryKey = _selectedType == 'Service'
+          ? 'service_category_id'
+          : 'category_id';
 
       final url = Uri.parse(
-        'https://sbraisolutions.com/api/v1/vendor/products',
+        'https://sbraisolutions.com/api/v1/vendor/$endpoint',
       );
       final request = http.MultipartRequest('POST', url);
 
@@ -197,10 +194,11 @@ class _PostAdScreenState extends State<PostAdScreen> {
         'Authorization': 'Bearer $token',
       });
 
-      request.fields['category_id'] = _selectedCategoryId.toString();
+      // 2. COMMON FIELDS
+      request.fields[categoryKey] = _selectedCategoryId.toString();
       request.fields['title'] = _titleController.text.trim();
       request.fields['description'] = _descriptionController.text.trim();
-      request.fields['price'] = price.toString();
+      request.fields['price'] = _priceController.text.trim();
       request.fields['price_unit'] = _priceUnitController.text.trim();
       request.fields['location'] = _locationController.text.trim();
 
@@ -210,38 +208,68 @@ class _PostAdScreenState extends State<PostAdScreen> {
         request.fields['sqft'] = _sqftController.text.trim();
       }
 
-      for (var image in _selectedImages) {
-        final file = File(image.path);
-        final extension = path.extension(file.path).replaceAll('.', '');
+      // 3. IMAGE HANDLING
+      for (int i = 0; i < _selectedImages.length; i++) {
+        final image = _selectedImages[i];
+        if (_selectedType == 'Service') {
+          // If the server says images.0 must be a string, it wants Base64
+          // We use explicit index keys: images.0, images.1 etc.
+          final bytes = await File(image.path).readAsBytes();
+          final String extension = path
+              .extension(image.path)
+              .replaceAll('.', '');
+          final String base64Image =
+              "data:image/${extension.isEmpty ? 'jpeg' : extension};base64,${base64Encode(bytes)}";
 
-        request.files.add(
-          await http.MultipartFile.fromPath(
-            'photos[]',
-            file.path,
-            contentType: MediaType(
-              'image',
-              extension.isEmpty ? 'jpeg' : extension,
+          request.fields['images[$i]'] = base64Image;
+        } else {
+          // Products/Properties use standard Multipart Files
+          final file = File(image.path);
+          final extension = path.extension(file.path).replaceAll('.', '');
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'photos[]',
+              file.path,
+              contentType: MediaType(
+                'image',
+                extension.isEmpty ? 'jpeg' : extension,
+              ),
             ),
-          ),
-        );
+          );
+        }
       }
 
+      // 4. EXECUTE
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
+      // --- CRITICAL DEBUGGING ---
+      debugPrint("--- SBRAI API DEBUG ---");
+      debugPrint("Endpoint: $url");
+      debugPrint("Status Code: ${response.statusCode}");
+      debugPrint("Response Body: ${response.body}");
+      debugPrint("--- END DEBUG ---");
+
       if (!mounted) return;
 
+      final responseData = jsonDecode(response.body);
+
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
         _showCustomToast(
           message: responseData['message'] ?? 'Ad Published Successfully!',
         );
         Navigator.of(context).pop();
       } else {
-        final errorData = jsonDecode(response.body);
-        throw errorData['message'] ?? 'Error: ${response.statusCode}';
+        String errorMsg =
+            responseData['message'] ?? 'Server Error: ${response.statusCode}';
+        if (responseData['errors'] != null) {
+          // Print nested validation errors if they exist
+          errorMsg = responseData['errors'].toString();
+        }
+        throw errorMsg;
       }
     } catch (e) {
+      debugPrint("Catch Error: $e");
       _showCustomToast(message: e.toString(), isError: true);
     } finally {
       if (mounted) setState(() => _isPublishing = false);
@@ -387,8 +415,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
               .toList(),
           onChanged: (v) => setState(() {
             _selectedCategory = v;
-            _selectedCategoryId =
-                _categoryIdMap[v]; // This updates the used variable
+            _selectedCategoryId = _categoryIdMap[v];
           }),
         ),
         const SizedBox(height: 30),
@@ -643,7 +670,10 @@ class _PostAdScreenState extends State<PostAdScreen> {
         onTap: () => setState(() {
           _selectedType = label;
           _selectedCategory = null;
-          _selectedCategoryId = null; // Resetting ID when type changes
+          _selectedCategoryId = null;
+          if (label == 'Product') _priceUnitController.text = 'per item';
+          if (label == 'Service') _priceUnitController.text = 'per job';
+          if (label == 'Property') _priceUnitController.text = 'per year';
         }),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
