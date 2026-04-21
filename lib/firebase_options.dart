@@ -17,27 +17,15 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for android - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
         return windows;
       case TargetPlatform.linux:
@@ -53,12 +41,47 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAA418hNWi25D2U8R_rl00NCDGy1ZL1mA0',
-    appId: '1:589863864058:web:34e67e0787b4e69f2feb43',
-    messagingSenderId: '589863864058',
-    projectId: 'sbrai-solutions',
-    authDomain: 'sbrai-solutions.firebaseapp.com',
-    storageBucket: 'sbrai-solutions.firebasestorage.app',
-    measurementId: 'G-87MHYCCYTH',
+    apiKey: 'AIzaSyDvsBJ5WJzjJkZlzCh-4cgKArKhnBvYbfM',
+    appId: '1:801889454576:web:e22b9dd912d03ab271f535',
+    messagingSenderId: '801889454576',
+    projectId: 'sbrai-solutions-2d455',
+    authDomain: 'sbrai-solutions-2d455.firebaseapp.com',
+    storageBucket: 'sbrai-solutions-2d455.firebasestorage.app',
   );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyDvsBJ5WJzjJkZlzCh-4cgKArKhnBvYbfM',
+    appId: '1:801889454576:web:59bcc71cf73acad071f535',
+    messagingSenderId: '801889454576',
+    projectId: 'sbrai-solutions-2d455',
+    authDomain: 'sbrai-solutions-2d455.firebaseapp.com',
+    storageBucket: 'sbrai-solutions-2d455.firebasestorage.app',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyCrjgwMzgbiL7xyqWOQrWXhh6Z1bwBJsGI',
+    appId: '1:801889454576:ios:856784173fc9662b71f535',
+    messagingSenderId: '801889454576',
+    projectId: 'sbrai-solutions-2d455',
+    storageBucket: 'sbrai-solutions-2d455.firebasestorage.app',
+    iosBundleId: 'com.example.sbraiSolutions',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyCrjgwMzgbiL7xyqWOQrWXhh6Z1bwBJsGI',
+    appId: '1:801889454576:ios:856784173fc9662b71f535',
+    messagingSenderId: '801889454576',
+    projectId: 'sbrai-solutions-2d455',
+    storageBucket: 'sbrai-solutions-2d455.firebasestorage.app',
+    iosBundleId: 'com.example.sbraiSolutions',
+  );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyANVuUWS9Bjjdd_kZL8JKGSsw2K0lk9r9s',
+    appId: '1:801889454576:android:ccdb7f257d97a14f71f535',
+    messagingSenderId: '801889454576',
+    projectId: 'sbrai-solutions-2d455',
+    storageBucket: 'sbrai-solutions-2d455.firebasestorage.app',
+  );
+
 }

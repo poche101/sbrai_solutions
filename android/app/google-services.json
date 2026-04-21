@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "811602722366",
-    "project_id": "celz5-6bb71",
-    "storage_bucket": "celz5-6bb71.firebasestorage.app"
+    "project_number": "801889454576",
+    "project_id": "sbrai-solutions-2d455",
+    "storage_bucket": "sbrai-solutions-2d455.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:811602722366:android:2a8094fcaa908ffee7db6f",
+        "mobilesdk_app_id": "1:801889454576:android:ccdb7f257d97a14f71f535",
         "android_client_info": {
           "package_name": "com.example.sbrai_solutions"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyC_1Xl8jx53c3WMUEoDG9zf-80OaxNzgjE"
+          "current_key": "AIzaSyANVuUWS9Bjjdd_kZL8JKGSsw2K0lk9r9s"
         }
       ],
       "services": {

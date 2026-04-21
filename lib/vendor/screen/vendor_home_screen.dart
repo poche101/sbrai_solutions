@@ -172,12 +172,13 @@ class _HomeScreenState extends State<HomeScreen> {
         _favoriteProductIds.remove(product.id);
       } else {
         _favoriteProductIds.add(product.id!);
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("${product.name} added to favorites"),
+            content: Text("${product.name} ${l10n.addedToFavorites}"),
             duration: const Duration(seconds: 2),
             action: SnackBarAction(
-              label: "View",
+              label: l10n.view,
               textColor: Colors.white,
               onPressed: () {},
             ),
@@ -190,6 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final languageProvider = Provider.of<LanguageProvider>(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -211,10 +213,10 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildLanguageDropdown(context),
           const SizedBox(width: 8),
           const Icon(Icons.person_outline, color: Colors.black87),
-          const Center(
+          Center(
             child: Text(
-              "  Vendor      ",
-              style: TextStyle(color: Colors.black87, fontSize: 13),
+              "  ${l10n.vendor}      ",
+              style: const TextStyle(color: Colors.black87, fontSize: 13),
             ),
           ),
         ],
@@ -252,11 +254,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _buildFunctionalSearchBar(),
+                    _buildFunctionalSearchBar(l10n),
                     const SizedBox(height: 25),
-                    _buildDynamicCategoryGrid(),
+                    _buildDynamicCategoryGrid(l10n),
                     const SizedBox(height: 15),
-                    _buildTrendingSection(),
+                    _buildTrendingSection(l10n),
                   ],
                 ),
               ),
@@ -269,15 +271,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Text(
                       selectedCategory == null
-                          ? "Recommended for You"
-                          : "Results for $selectedCategory",
+                          ? l10n.recommendedForYou
+                          : "${l10n.resultsFor} $selectedCategory",
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
-                      "${displayedProducts.length} items",
+                      "${displayedProducts.length} ${l10n.items}",
                       style: TextStyle(
                         color: Colors.grey.shade600,
                         fontSize: 12,
@@ -299,11 +301,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             )
                 : displayedProducts.isEmpty
-                ? const SliverToBoxAdapter(
+                ? SliverToBoxAdapter(
               child: Center(
                 child: Padding(
-                  padding: EdgeInsets.only(top: 50.0),
-                  child: Text("No items found."),
+                  padding: const EdgeInsets.only(top: 50.0),
+                  child: Text(l10n.noItemsFound),
                 ),
               ),
             )
@@ -319,7 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 delegate: SliverChildBuilderDelegate(
                       (context, index) =>
-                      _buildDynamicProductCard(displayedProducts[index]),
+                      _buildDynamicProductCard(displayedProducts[index], l10n),
                   childCount: displayedProducts.length,
                 ),
               ),
@@ -331,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildDynamicProductCard(Product product) {
+  Widget _buildDynamicProductCard(Product product, AppLocalizations l10n) {
     final bool isFavorited = _favoriteProductIds.contains(product.id);
     final List<String> serviceCategories = [
       'logistics',
@@ -399,9 +401,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.blue.shade700,
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
-                          "Service",
-                          style: TextStyle(
+                        child: Text(
+                          l10n.service,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
@@ -419,8 +421,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.9),
                           shape: BoxShape.circle,
-                          boxShadow: [
-                            const BoxShadow(color: Colors.black12, blurRadius: 4),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black12, blurRadius: 4),
                           ],
                         ),
                         child: Icon(
@@ -485,7 +487,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Expanded(
                         child: _buildActionButton(
-                          "Call",
+                          l10n.call,
                           Icons.call_outlined,
                           false,
                           onTap: () {},
@@ -494,7 +496,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: _buildActionButton(
-                          "Chat",
+                          l10n.chat,
                           Icons.chat_bubble_outline,
                           true,
                           onTap: () {
@@ -565,7 +567,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildDynamicCategoryGrid() {
+  Widget _buildDynamicCategoryGrid(AppLocalizations l10n) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -614,7 +616,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFunctionalSearchBar() {
+  Widget _buildFunctionalSearchBar(AppLocalizations l10n) {
     return Row(
       children: [
         Expanded(
@@ -670,11 +672,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     controller: _searchController,
                     onSubmitted: (_) => _fetchProducts(),
                     style: const TextStyle(color: Colors.white, fontSize: 14),
-                    decoration: const InputDecoration(
-                      hintText: "I am looking for...",
-                      hintStyle: TextStyle(color: Colors.white54, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: l10n.iAmLookingFor,
+                      hintStyle: const TextStyle(color: Colors.white54, fontSize: 13),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 15),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 15),
                     ),
                   ),
                 ),
@@ -698,11 +700,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildLanguageDropdown(BuildContext context) {
     final languageProvider = Provider.of<LanguageProvider>(context);
+    final l10n = AppLocalizations.of(context)!;
 
     final Map<String, String> languages = {
-      "English": "en",
-      "Spanish": "es",
-      "French": "fr",
+      l10n.english: "en",
+      l10n.spanish: "es",
+      l10n.french: "fr",
     };
 
     String currentLangName = languages.entries
@@ -744,12 +747,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTrendingSection() {
+  Widget _buildTrendingSection(AppLocalizations l10n) {
     return Row(
       children: [
-        const Text(
-          "Trending",
-          style: TextStyle(
+        Text(
+          l10n.trending,
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.bold,
