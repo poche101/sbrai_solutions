@@ -15,17 +15,11 @@ import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 import 'package:sbrai_solutions/providers/language_provider.dart';
 import 'package:sbrai_solutions/screens/language_selection_screen.dart';
 
-<<<<<<< HEAD
-// 1. Import your generated firebase_options file
-// Run 'flutterfire configure' in your terminal to generate this file
-import 'firebase_options.dart';
 
-=======
 // Import the generated file from your Firebase configuration
 import 'firebase_options.dart';
 
 // --- Background Message Handler ---
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Ensure Firebase is initialized in the background process
@@ -36,30 +30,17 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-<<<<<<< HEAD
-  // 2. Initialize Firebase with platform-specific options
-  // This is the line that fixes the [core/no-app] error
-=======
   // 1. Initialize Firebase
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // 3. Set up Background Notification Listener
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-<<<<<<< HEAD
-  // 4. Request Permissions for Push Notifications
-  FirebaseMessaging messaging = FirebaseMessaging.instance;
-  await messaging.requestPermission(alert: true, badge: true, sound: true);
-
-  // 5. SSL Bypass for local Laravel development
-=======
   // 3. Request Permissions
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   await messaging.requestPermission(alert: true, badge: true, sound: true);
 
   // 4. SSL Bypass
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
   HttpOverrides.global = MyHttpOverrides();
 
   runApp(
@@ -103,18 +84,6 @@ class SbraiSolutionsApp extends StatelessWidget {
               iconTheme: IconThemeData(color: Colors.black),
             ),
           ),
-<<<<<<< HEAD
-          iconTheme: IconThemeData(color: Colors.black),
-        ),
-      ),
-      home: const AccountSelectionScreen(),
-      routes: {
-        '/account-selection': (context) => const AccountSelectionScreen(),
-        '/favorites': (context) => const FavoriteScreen(),
-        '/terms': (context) => const BuyersTermsPage(),
-        '/vendor-dashboard': (context) => const VendorDashboardScreen(),
-        '/post-ad': (context) => const PostAdScreen(),
-=======
 
           // Localization setup
           locale: languageProvider.locale,
@@ -143,7 +112,6 @@ class SbraiSolutionsApp extends StatelessWidget {
             '/language-selection': (context) => const LanguageSelectionScreen(),
           },
         );
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
       },
     );
   }

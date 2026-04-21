@@ -4,14 +4,11 @@ import 'package:sbrai_solutions/models/buyer/product_model.dart';
 import 'package:sbrai_solutions/services/vendor/product_service.dart';
 import 'package:sbrai_solutions/vendor/vendor_menu.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
-<<<<<<< HEAD
 import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/product_details_screen.dart';
 import 'package:sbrai_solutions/services/vendor/services.dart';
-=======
 import 'package:sbrai_solutions/providers/language_provider.dart';
 import 'package:sbrai_solutions/l10n/app_localizations.dart';
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,10 +28,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Product> displayedProducts = [];
   bool isLoading = true;
 
-<<<<<<< HEAD
-  final String userFullName = "Demo User";
-=======
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
   final Set<int> _favoriteProductIds = {};
 
   final List<String> nigeriaStates = [
@@ -119,16 +112,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
         setState(() {
           displayedProducts = services.map((s) {
-            // Fix: Safe URL resolution using firstOrNull to avoid dead code warnings
             String resolvedImageUrl =
                 s.photos.firstOrNull?.fullUrl ??
-                "https://via.placeholder.com/150";
+                    "https://via.placeholder.com/150";
 
             return Product(
               id: s.id,
               name: s.title,
               price: s.price ?? 0.0,
-              // Wrap the single URL in a list to match the new model requirement
               imageUrls: [resolvedImageUrl],
               location: s.location ?? "Nigeria",
               category: selectedCategory ?? "General",
@@ -166,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _filterByCategory(String categoryName) {
     setState(
-      () => selectedCategory = (selectedCategory == categoryName)
+          () => selectedCategory = (selectedCategory == categoryName)
           ? null
           : categoryName,
     );
@@ -175,17 +166,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _toggleFavorite(Product product) {
     if (product.id == null) return;
-<<<<<<< HEAD
-=======
 
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
     setState(() {
       if (_favoriteProductIds.contains(product.id)) {
         _favoriteProductIds.remove(product.id);
       } else {
         _favoriteProductIds.add(product.id!);
-<<<<<<< HEAD
-=======
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("${product.name} added to favorites"),
@@ -197,7 +183,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         );
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
       }
     });
   }
@@ -205,7 +190,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    
+
     return Scaffold(
       backgroundColor: Colors.white,
       drawer: const VendorMenu(
@@ -259,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   children: [
                     Text(
-                      l10n.appTitle, // Using translation
+                      l10n.appTitle,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -304,41 +289,41 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             isLoading
                 ? const SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.only(top: 50.0),
-                        child: CircularProgressIndicator(
-                          color: Color(0xFFE85D22),
-                        ),
-                      ),
-                    ),
-                  )
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 50.0),
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFE85D22),
+                  ),
+                ),
+              ),
+            )
                 : displayedProducts.isEmpty
                 ? const SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.only(top: 50.0),
-                        child: Text("No items found."),
-                      ),
-                    ),
-                  )
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 50.0),
+                  child: Text("No items found."),
+                ),
+              ),
+            )
                 : SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    sliver: SliverGrid(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.62,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                          ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) =>
-                            _buildDynamicProductCard(displayedProducts[index]),
-                        childCount: displayedProducts.length,
-                      ),
-                    ),
-                  ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              sliver: SliverGrid(
+                gridDelegate:
+                const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.62,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                      (context, index) =>
+                      _buildDynamicProductCard(displayedProducts[index]),
+                  childCount: displayedProducts.length,
+                ),
+              ),
+            ),
             const SliverToBoxAdapter(child: SizedBox(height: 80)),
           ],
         ),
@@ -362,11 +347,12 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) =>
-              ProductDetailsScreen(product: product, userName: userFullName),
+          builder: (context) => ProductDetailsScreen(
+            product: product,
+            userName: product.userName,
+          ),
         ),
       ),
-<<<<<<< HEAD
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -376,52 +362,6 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.black.withOpacity(0.05),
               blurRadius: 10,
               offset: const Offset(0, 5),
-=======
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                  child: Image.network(
-                    product.imageUrl,
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey.shade200,
-                      child: const Icon(Icons.image, color: Colors.grey),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: () => _toggleFavorite(product),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          const BoxShadow(color: Colors.black12, blurRadius: 4),
-                        ],
-                      ),
-                      child: Icon(
-                        isFavorited ? Icons.favorite : Icons.favorite_border,
-                        size: 18,
-                        color: isFavorited ? Colors.red : Colors.grey,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
             ),
           ],
         ),
@@ -431,19 +371,18 @@ class _HomeScreenState extends State<HomeScreen> {
             Expanded(
               child: Stack(
                 children: [
-                  // Fix: Use Positioned.fill to solve the squashed/tiny image issue
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(16),
-                      ),
-                      child: Image.network(
-                        product.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: Colors.grey.shade200,
-                          child: const Icon(Icons.image, color: Colors.grey),
-                        ),
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    child: Image.network(
+                      product.imageUrl,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.image, color: Colors.grey),
                       ),
                     ),
                   ),
@@ -470,18 +409,23 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-<<<<<<< HEAD
                   Positioned(
                     top: 8,
                     right: 8,
                     child: GestureDetector(
                       onTap: () => _toggleFavorite(product),
-                      child: CircleAvatar(
-                        radius: 14,
-                        backgroundColor: Colors.white.withOpacity(0.9),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            const BoxShadow(color: Colors.black12, blurRadius: 4),
+                          ],
+                        ),
                         child: Icon(
                           isFavorited ? Icons.favorite : Icons.favorite_border,
-                          size: 16,
+                          size: 18,
                           color: isFavorited ? Colors.red : Colors.grey,
                         ),
                       ),
@@ -489,33 +433,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-=======
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildActionButton(
-                        "Call",
-                        Icons.call_outlined,
-                        false,
-                        onTap: () {},
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildActionButton(
-                        "Chat",
-                        Icons.chat_bubble_outline,
-                        true,
-                        onTap: () {},
-                      ),
-                    ),
-                  ],
-                ),
-              ],
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
             ),
             Padding(
               padding: const EdgeInsets.all(10),
@@ -571,6 +488,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           "Call",
                           Icons.call_outlined,
                           false,
+                          onTap: () {},
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -607,11 +525,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildActionButton(
-    String label,
-    IconData icon,
-    bool isPrimary, {
-    VoidCallback? onTap,
-  }) {
+      String label,
+      IconData icon,
+      bool isPrimary, {
+        VoidCallback? onTap,
+      }) {
     return SizedBox(
       height: 36,
       child: OutlinedButton(
@@ -780,7 +698,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildLanguageDropdown(BuildContext context) {
     final languageProvider = Provider.of<LanguageProvider>(context);
-    
+
     final Map<String, String> languages = {
       "English": "en",
       "Spanish": "es",
@@ -788,21 +706,14 @@ class _HomeScreenState extends State<HomeScreen> {
     };
 
     String currentLangName = languages.entries
-        .firstWhere((e) => e.value == languageProvider.locale.languageCode, 
-            orElse: () => languages.entries.first)
+        .firstWhere((e) => e.value == languageProvider.locale.languageCode,
+        orElse: () => languages.entries.first)
         .key;
 
     return PopupMenuButton<String>(
-<<<<<<< HEAD
-      onSelected: (value) => setState(() => selectedLanguage = value),
-      itemBuilder: (context) => languageCodes.keys
-          .map((l) => PopupMenuItem(value: l, child: Text(l)))
-          .toList(),
-=======
       onSelected: (value) {
         languageProvider.setLanguage(Locale(languages[value]!));
       },
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -812,11 +723,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           children: [
             Text(
-<<<<<<< HEAD
-              languageCodes[selectedLanguage] ?? "EN",
-=======
               currentLangName.substring(0, 2).toUpperCase(),
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
               style: const TextStyle(
                 color: Colors.black,
                 fontSize: 12,
@@ -831,12 +738,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-<<<<<<< HEAD
-=======
       itemBuilder: (context) => languages.keys
           .map((l) => PopupMenuItem(value: l, child: Text(l)))
           .toList(),
->>>>>>> d31130d9eb82421616f5a6d72b8f40ba45790ed3
     );
   }
 
