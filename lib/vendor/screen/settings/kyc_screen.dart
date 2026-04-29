@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:sbrai_solutions/l10n/app_localizations.dart';
+// import '../../../l10n/app_localizations.dart';
 // Ensure these paths match your actual project structure
 import 'package:sbrai_solutions/vendor/widgets/email_verification.dart';
 import 'package:sbrai_solutions/vendor/widgets/phone_verification.dart';
 import 'package:sbrai_solutions/vendor/widgets/identity_verification.dart';
-import 'package:sbrai_solutions/vendor/widgets/business_verification.dart';
+// BUSINESS VERIFICATION COMMENTED OUT - Will be re-enabled later
+// import 'package:sbrai_solutions/vendor/widgets/business_verification.dart';
 
 class KYCScreen extends StatefulWidget {
   const KYCScreen({super.key});
@@ -17,16 +20,17 @@ class _KYCScreenState extends State<KYCScreen> {
   bool isEmailVerified = false;
   bool isPhoneVerified = false;
   bool isIdentityVerified = false;
-  bool isBusinessVerified = false;
+  // BUSINESS VERIFICATION COMMENTED OUT
+  // bool isBusinessVerified = false;
 
-  // Logic to calculate progress percentage
+  // Logic to calculate progress percentage (updated for 3 items instead of 4)
   double get _calculationProgress {
     int completed = 0;
     if (isEmailVerified) completed++;
     if (isPhoneVerified) completed++;
     if (isIdentityVerified) completed++;
-    if (isBusinessVerified) completed++;
-    return completed / 4;
+    // if (isBusinessVerified) completed++; // COMMENTED OUT
+    return completed / 3; // Changed from 4 to 3
   }
 
   /// Helper method to navigate and update state on return
@@ -49,9 +53,10 @@ class _KYCScreenState extends State<KYCScreen> {
           case 'identity':
             isIdentityVerified = true;
             break;
-          case 'business':
-            isBusinessVerified = true;
-            break;
+        // BUSINESS VERIFICATION COMMENTED OUT
+        // case 'business':
+        //   isBusinessVerified = true;
+        //   break;
         }
       });
     }
@@ -59,6 +64,7 @@ class _KYCScreenState extends State<KYCScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     double progress = _calculationProgress;
 
     return Scaffold(
@@ -73,16 +79,16 @@ class _KYCScreenState extends State<KYCScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'KYC Verification',
-              style: TextStyle(
+            Text(
+              l10n.kyc,
+              style: const TextStyle(
                 color: Colors.black,
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
               ),
             ),
             Text(
-              'Secure your account',
+              l10n.secureAccount,
               style: TextStyle(color: Colors.grey[600], fontSize: 13),
             ),
           ],
@@ -99,9 +105,9 @@ class _KYCScreenState extends State<KYCScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Verification Progress',
-                      style: TextStyle(fontWeight: FontWeight.w500),
+                    Text(
+                      l10n.verificationProgress,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                     Text(
                       '${(progress * 100).toInt()}%',
@@ -130,39 +136,41 @@ class _KYCScreenState extends State<KYCScreen> {
           // Verification Items
           _buildVerificationTile(
             icon: Icons.mail_outline,
-            title: 'Email Verification',
+            title: l10n.emailVerification,
             subtitle: 'vendor@demo.com',
             isCompleted: isEmailVerified,
             onTap: () => _navigateAndVerify(const EmailVerification(), 'email'),
           ),
           _buildVerificationTile(
             icon: Icons.phone_outlined,
-            title: 'Phone Verification',
+            title: l10n.phoneVerification,
             subtitle: '08087654321',
             isCompleted: isPhoneVerified,
             onTap: () => _navigateAndVerify(const PhoneVerification(), 'phone'),
           ),
           _buildVerificationTile(
             icon: Icons.badge_outlined,
-            title: 'Identity Verification',
-            subtitle: 'NIN or BVN required',
+            title: l10n.identityVerification,
+            subtitle: l10n.ninRequired, // Changed from "NIN or BVN required" to "NIN required"
             isCompleted: isIdentityVerified,
             onTap: () =>
                 _navigateAndVerify(const IdentityVerification(), 'identity'),
           ),
-          _buildVerificationTile(
-            icon: Icons.apartment_outlined,
-            title: 'Business Verification',
-            subtitle: 'Required for verified badge',
-            isCompleted: isBusinessVerified,
-            onTap: () =>
-                _navigateAndVerify(const BusinessVerification(), 'business'),
-          ),
+
+          // BUSINESS VERIFICATION COMMENTED OUT
+          // _buildVerificationTile(
+          //   icon: Icons.apartment_outlined,
+          //   title: l10n.businessVerification,
+          //   subtitle: l10n.businessVerificationRequired,
+          //   isCompleted: isBusinessVerified,
+          //   onTap: () =>
+          //       _navigateAndVerify(const BusinessVerification(), 'business'),
+          // ),
 
           const SizedBox(height: 8),
 
           // Info Box
-          _buildInfoBox(),
+          _buildInfoBox(l10n),
         ],
       ),
     );
@@ -178,7 +186,7 @@ class _KYCScreenState extends State<KYCScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: InkWell(
-        onTap: isCompleted ? null : onTap, // Disable tap if already completed
+        onTap: isCompleted ? null : onTap,
         borderRadius: BorderRadius.circular(16),
         child: _buildCard(
           child: Row(
@@ -218,9 +226,9 @@ class _KYCScreenState extends State<KYCScreen> {
                 ),
               ),
               Icon(
-                isCompleted ? Icons.check_circle : Icons.error_outline,
-                color: isCompleted ? Colors.green : Colors.orange,
-                size: 24,
+                isCompleted ? Icons.check_circle : Icons.arrow_forward_ios,
+                color: isCompleted ? Colors.green : Colors.grey[400],
+                size: 20,
               ),
             ],
           ),
@@ -248,7 +256,7 @@ class _KYCScreenState extends State<KYCScreen> {
     );
   }
 
-  Widget _buildInfoBox() {
+  Widget _buildInfoBox(AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -259,13 +267,13 @@ class _KYCScreenState extends State<KYCScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.info_outline, color: Color(0xFF2563EB), size: 20),
-              SizedBox(width: 8),
+              const Icon(Icons.info_outline, color: Color(0xFF2563EB), size: 20),
+              const SizedBox(width: 8),
               Text(
-                'Why verify your account?',
-                style: TextStyle(
+                l10n.whyVerify,
+                style: const TextStyle(
                   color: Color(0xFF1E40AF),
                   fontWeight: FontWeight.w600,
                 ),
@@ -273,10 +281,10 @@ class _KYCScreenState extends State<KYCScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          _buildBullet('Build trust with buyers and sellers'),
-          _buildBullet('Access premium features'),
-          _buildBullet('Get the verified badge'),
-          _buildBullet('Secure your transactions'),
+          _buildBullet(l10n.buildTrust),
+          _buildBullet(l10n.accessPremium),
+          _buildBullet(l10n.verifiedBadge),
+          _buildBullet(l10n.secureTransactions),
         ],
       ),
     );

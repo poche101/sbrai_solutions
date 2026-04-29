@@ -99,5 +99,11 @@
   "categoryCommercial": "Commercial",
   "categoryLand": "Terrain",
   "login": "Connexion",
-  "register": "Inscription"
+  "register": "Inscription",
+  "emailVerification": "Vérification par E-mail",
+  "phoneVerification": "Vérification Téléphonique",
+  "identityVerification": "Vérification d'Identité",
+  "businessVerification": "Vérification d'Entreprise",
+  "ninRequired": "NIN requis",
+  "businessVerificationRequired": "Requis pour le badge vérifié"
 }

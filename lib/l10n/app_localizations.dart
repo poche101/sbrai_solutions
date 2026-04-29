@@ -681,6 +681,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Land'**
   String get categoryLand;
+
+  /// No description provided for @emailVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Email Verification'**
+  String get emailVerification;
+
+  /// No description provided for @phoneVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone Verification'**
+  String get phoneVerification;
+
+  /// No description provided for @identityVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity Verification'**
+  String get identityVerification;
+
+  /// No description provided for @businessVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Business Verification'**
+  String get businessVerification;
+
+  /// No description provided for @ninRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'NIN required'**
+  String get ninRequired;
+
+  /// No description provided for @businessVerificationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Required for verified badge'**
+  String get businessVerificationRequired;
 }
 
 class _AppLocalizationsDelegate

@@ -81,7 +81,6 @@
   "trending": "Tendencias",
   "addedToFavorites": "agregado a favoritos",
   "allNigeria": "Todo Nigeria",
-
   "categorySharpSand": "Arena Fina",
   "categoryGranite": "Granito",
   "categoryBlocks": "Bloques",
@@ -99,5 +98,11 @@
   "categoryCommercial": "Comercial",
   "categoryLand": "Terreno",
   "login": "Iniciar Sesión",
-  "register": "Registrarse"
+  "register": "Registrarse",
+  "emailVerification": "Verificación de Correo",
+  "phoneVerification": "Verificación de Teléfono",
+  "identityVerification": "Verificación de Identidad",
+  "businessVerification": "Verificación de Negocio",
+  "ninRequired": "NIN requerido",
+  "businessVerificationRequired": "Requerido para la insignia verificada"
 }

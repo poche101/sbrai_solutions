@@ -81,7 +81,6 @@
   "trending": "Trending",
   "addedToFavorites": "added to favorites",
   "allNigeria": "All Nigeria",
-
   "categorySharpSand": "Sharp Sand",
   "categoryGranite": "Granite",
   "categoryBlocks": "Blocks",
@@ -97,5 +96,11 @@
   "categoryApartments": "Apartments",
   "categoryHouses": "Houses",
   "categoryCommercial": "Commercial",
-  "categoryLand": "Land"
+  "categoryLand": "Land",
+  "emailVerification": "Email Verification",
+  "phoneVerification": "Phone Verification",
+  "identityVerification": "Identity Verification",
+  "businessVerification": "Business Verification",
+  "ninRequired": "NIN required",
+  "businessVerificationRequired": "Required for verified badge"
 }

@@ -298,4 +298,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get categoryLand => 'Land';
+
+  @override
+  String get emailVerification => 'Email Verification';
+
+  @override
+  String get phoneVerification => 'Phone Verification';
+
+  @override
+  String get identityVerification => 'Identity Verification';
+
+  @override
+  String get businessVerification => 'Business Verification';
+
+  @override
+  String get ninRequired => 'NIN required';
+
+  @override
+  String get businessVerificationRequired => 'Required for verified badge';
 }
