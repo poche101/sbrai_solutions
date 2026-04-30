@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PostAdScreen extends StatefulWidget {
@@ -23,9 +23,14 @@ class _PostAdScreenState extends State<PostAdScreen> {
   // --- FORM STATE ---
   String _selectedType = 'Property';
   String _propertyStatus = 'For Rent';
-  String? _selectedCategory;
-  List<XFile> _selectedImages = [];
+  String? _selectedCategoryName;
   int? _selectedCategoryId;
+  List<XFile> _selectedImages = [];
+
+  // --- CATEGORY DATA (fetched from API) ---
+  List<Map<String, dynamic>> _categories = [];
+  bool _loadingCategories = false;
+  String? _categoriesError;
 
   // --- CONTROLLERS ---
   final TextEditingController _titleController = TextEditingController();
@@ -38,48 +43,6 @@ class _PostAdScreenState extends State<PostAdScreen> {
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
-  final List<String> _propertyCategories = [
-    'Apartment',
-    'House',
-    'Commercial',
-    'Land',
-  ];
-  final List<String> _productCategories = [
-    'Sharp Sand',
-    'Granite',
-    'Blocks',
-    'Cement',
-    'Iron Rods',
-    'Paints',
-    'Furniture',
-    'Scaffolding',
-  ];
-  final List<String> _serviceCategories = [
-    'Logistics',
-    'Borehole',
-    'Cleaning',
-    'Fumigation',
-  ];
-
-  final Map<String, int> _categoryIdMap = {
-    'Sharp Sand': 1,
-    'Granite': 2,
-    'Blocks': 3,
-    'Cement': 4,
-    'Iron Rods': 5,
-    'Paints': 6,
-    'Furniture': 7,
-    'Scaffolding': 8,
-    'Logistics': 9,
-    'Borehole': 10,
-    'Cleaning': 11,
-    'Fumigation': 12,
-    'Apartment': 13,
-    'House': 14,
-    'Commercial': 15,
-    'Land': 16,
-  };
-
   @override
   void initState() {
     super.initState();
@@ -89,6 +52,9 @@ class _PostAdScreenState extends State<PostAdScreen> {
     _bedroomController.addListener(_updateState);
     _sqftController.addListener(_updateState);
     _descriptionController.addListener(_updateState);
+
+    // Fetch initial categories for the default type (Property)
+    _fetchCategories();
   }
 
   void _updateState() {
@@ -109,14 +75,14 @@ class _PostAdScreenState extends State<PostAdScreen> {
   }
 
   bool _isStepValid() {
-    if (_currentStep == 1) return _selectedCategory != null;
+    if (_currentStep == 1) return _selectedCategoryId != null;
     if (_currentStep == 2) return _selectedImages.isNotEmpty;
 
     bool commonFields =
         _titleController.text.trim().isNotEmpty &&
-        _priceController.text.trim().isNotEmpty &&
-        _locationController.text.trim().isNotEmpty &&
-        _descriptionController.text.trim().isNotEmpty;
+            _priceController.text.trim().isNotEmpty &&
+            _locationController.text.trim().isNotEmpty &&
+            _descriptionController.text.trim().isNotEmpty;
 
     if (_selectedType == 'Property') {
       return commonFields &&
@@ -126,6 +92,51 @@ class _PostAdScreenState extends State<PostAdScreen> {
     return commonFields;
   }
 
+  // ── FETCH CATEGORIES FROM API ──────────────────────────────────────────────
+  Future<void> _fetchCategories() async {
+    setState(() {
+      _loadingCategories = true;
+      _categoriesError = null;
+      _selectedCategoryName = null;
+      _selectedCategoryId = null;
+      _categories = [];
+    });
+
+    try {
+      final token = await _getVendorToken();
+      if (token == null) throw 'Not authenticated';
+
+      final type = _backendType(); // returns 'product', 'service', 'property'
+      final url = Uri.parse('https://sbraisolutions.com/api/v1/categories/$type');
+      final response = await http.get(
+        url,
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        // Expected JSON: { "success": true, "data": [ { "id": 1, "name": "Apartment" }, ... ] }
+        if (data['success'] == true && data['data'] is List) {
+          _categories = List<Map<String, dynamic>>.from(data['data']);
+        } else {
+          throw 'Invalid response format';
+        }
+      } else {
+        final error = jsonDecode(response.body);
+        throw error['message'] ?? 'Failed to load categories (${response.statusCode})';
+      }
+    } catch (e) {
+      _categoriesError = e.toString();
+      debugPrint('Category fetch error: $e');
+    } finally {
+      if (mounted) setState(() => _loadingCategories = false);
+    }
+  }
+
+  // ── IMAGE PICKER ───────────────────────────────────────────────────────────
   Future<void> _pickImages() async {
     try {
       final List<XFile> images = await _picker.pickMultiImage();
@@ -155,10 +166,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
           ),
           child: Text(
             message,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
         ),
       ),
@@ -170,6 +178,21 @@ class _PostAdScreenState extends State<PostAdScreen> {
     return prefs.getString('vendor_auth_token');
   }
 
+  // ── BACKEND TYPE HELPER ────────────────────────────────────────────────────
+  String _backendType() {
+    switch (_selectedType) {
+      case 'Product':
+        return 'product';
+      case 'Service':
+        return 'service';
+      case 'Property':
+        return 'property';
+      default:
+        return 'product';
+    }
+  }
+
+  // ── PUBLISH AD ─────────────────────────────────────────────────────────────
   Future<void> _handlePublish() async {
     setState(() => _isPublishing = true);
 
@@ -178,24 +201,17 @@ class _PostAdScreenState extends State<PostAdScreen> {
       if (token == null) throw 'Authentication required. Please login again.';
       if (_selectedCategoryId == null) throw 'Please select a valid category';
 
-      // 1. DYNAMIC ROUTING
-      String endpoint = _selectedType == 'Service' ? 'services' : 'products';
-      String categoryKey = _selectedType == 'Service'
-          ? 'service_category_id'
-          : 'category_id';
-
-      final url = Uri.parse(
-        'https://sbraisolutions.com/api/v1/vendor/$endpoint',
-      );
-      final request = http.MultipartRequest('POST', url);
+      const url = 'https://sbraisolutions.com/api/v1/vendor/ads';
+      final uri = Uri.parse(url);
+      final request = http.MultipartRequest('POST', uri);
 
       request.headers.addAll({
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
       });
 
-      // 2. COMMON FIELDS
-      request.fields[categoryKey] = _selectedCategoryId.toString();
+      request.fields['type'] = _backendType();
+      request.fields['category_id'] = _selectedCategoryId.toString();
       request.fields['title'] = _titleController.text.trim();
       request.fields['description'] = _descriptionController.text.trim();
       request.fields['price'] = _priceController.text.trim();
@@ -203,47 +219,29 @@ class _PostAdScreenState extends State<PostAdScreen> {
       request.fields['location'] = _locationController.text.trim();
 
       if (_selectedType == 'Property') {
-        request.fields['property_status'] = _propertyStatus;
+        final backendStatus = _propertyStatus == 'For Rent' ? 'for_rent' : 'for_sale';
+        request.fields['property_status'] = backendStatus;
         request.fields['bedrooms'] = _bedroomController.text.trim();
         request.fields['sqft'] = _sqftController.text.trim();
       }
 
-      // 3. IMAGE HANDLING
+      // Attach images with key 'images[]'
       for (int i = 0; i < _selectedImages.length; i++) {
         final image = _selectedImages[i];
-        if (_selectedType == 'Service') {
-          // If the server says images.0 must be a string, it wants Base64
-          // We use explicit index keys: images.0, images.1 etc.
-          final bytes = await File(image.path).readAsBytes();
-          final String extension = path
-              .extension(image.path)
-              .replaceAll('.', '');
-          final String base64Image =
-              "data:image/${extension.isEmpty ? 'jpeg' : extension};base64,${base64Encode(bytes)}";
-
-          request.fields['images[$i]'] = base64Image;
-        } else {
-          // Products/Properties use standard Multipart Files
-          final file = File(image.path);
-          final extension = path.extension(file.path).replaceAll('.', '');
-          request.files.add(
-            await http.MultipartFile.fromPath(
-              'photos[]',
-              file.path,
-              contentType: MediaType(
-                'image',
-                extension.isEmpty ? 'jpeg' : extension,
-              ),
-            ),
-          );
-        }
+        final file = File(image.path);
+        final ext = path.extension(file.path).replaceAll('.', '');
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'images[]',
+            file.path,
+            contentType: MediaType('image', ext.isEmpty ? 'jpeg' : ext),
+          ),
+        );
       }
 
-      // 4. EXECUTE
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      // --- CRITICAL DEBUGGING ---
       debugPrint("--- SBRAI API DEBUG ---");
       debugPrint("Endpoint: $url");
       debugPrint("Status Code: ${response.statusCode}");
@@ -260,10 +258,8 @@ class _PostAdScreenState extends State<PostAdScreen> {
         );
         Navigator.of(context).pop();
       } else {
-        String errorMsg =
-            responseData['message'] ?? 'Server Error: ${response.statusCode}';
+        String errorMsg = responseData['message'] ?? 'Server Error: ${response.statusCode}';
         if (responseData['errors'] != null) {
-          // Print nested validation errors if they exist
           errorMsg = responseData['errors'].toString();
         }
         throw errorMsg;
@@ -276,6 +272,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
     }
   }
 
+  // ──────────────────────── UI ───────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -292,11 +289,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
           children: [
             const Text(
               'Post an Ad',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: Colors.black, fontSize: 17, fontWeight: FontWeight.bold),
             ),
             Text(
               'Step $_currentStep of 3',
@@ -306,24 +299,21 @@ class _PostAdScreenState extends State<PostAdScreen> {
         ),
       ),
       body: _isPublishing
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFF7D54)),
-            )
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF7D54)))
           : Column(
-              children: [
-                const SizedBox(height: 20),
-                _buildStepIndicator(),
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    onPageChanged: (index) =>
-                        setState(() => _currentStep = index + 1),
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [_buildStep1(), _buildStep2(), _buildStep3()],
-                  ),
-                ),
-              ],
+        children: [
+          const SizedBox(height: 20),
+          _buildStepIndicator(),
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              onPageChanged: (index) => setState(() => _currentStep = index + 1),
+              physics: const NeverScrollableScrollPhysics(),
+              children: [_buildStep1(), _buildStep2(), _buildStep3()],
             ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -339,9 +329,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: active
-                    ? const Color(0xFFFF7D54)
-                    : const Color(0xFFE5E7EB),
+                color: active ? const Color(0xFFFF7D54) : const Color(0xFFE5E7EB),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -370,11 +358,6 @@ class _PostAdScreenState extends State<PostAdScreen> {
   }
 
   Widget _buildStep1() {
-    List<String> currentList = _selectedType == 'Property'
-        ? _propertyCategories
-        : (_selectedType == 'Product'
-              ? _productCategories
-              : _serviceCategories);
     return _stepWrapper(
       title: 'Select Category',
       children: [
@@ -401,23 +384,39 @@ class _PostAdScreenState extends State<PostAdScreen> {
         ],
         const SizedBox(height: 15),
         _label('Category'),
-        DropdownButtonFormField<String>(
-          value: _selectedCategory,
-          isExpanded: true,
-          decoration: _inputStyle('Choose a category'),
-          items: currentList
-              .map(
-                (c) => DropdownMenuItem(
-                  value: c,
-                  child: Text(c, style: const TextStyle(fontSize: 14)),
-                ),
-              )
-              .toList(),
-          onChanged: (v) => setState(() {
-            _selectedCategory = v;
-            _selectedCategoryId = _categoryIdMap[v];
-          }),
-        ),
+        // ── Dynamic category dropdown ───────────────────────────────────
+        if (_loadingCategories)
+          const Center(child: Padding(
+            padding: EdgeInsets.all(12),
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ))
+        else if (_categoriesError != null)
+          _errorCategoryWidget()
+        else
+          DropdownButtonFormField<String>(
+            value: _selectedCategoryName,
+            isExpanded: true,
+            decoration: _inputStyle('Choose a category'),
+            hint: const Text('Choose a category', style: TextStyle(fontSize: 14, color: Colors.black26)),
+            items: _categories.map((cat) {
+              final String name = cat['name'] ?? '';
+              return DropdownMenuItem<String>(
+                value: name,
+                child: Text(name, style: const TextStyle(fontSize: 14)),
+              );
+            }).toList(),
+            onChanged: (v) {
+              if (v == null) return;
+              final selected = _categories.firstWhere(
+                    (c) => c['name'] == v,
+                orElse: () => <String, dynamic>{},
+              );
+              setState(() {
+                _selectedCategoryName = v;
+                _selectedCategoryId = selected['id'] as int?;
+              });
+            },
+          ),
         const SizedBox(height: 30),
         _cta('Next: Upload Media', () {
           _pageController.nextPage(
@@ -429,14 +428,23 @@ class _PostAdScreenState extends State<PostAdScreen> {
     );
   }
 
+  Widget _errorCategoryWidget() {
+    return Column(
+      children: [
+        Text('Error: $_categoriesError', style: const TextStyle(color: Colors.red)),
+        TextButton(
+          onPressed: _fetchCategories,
+          child: const Text('Retry'),
+        ),
+      ],
+    );
+  }
+
   Widget _buildStep2() {
     return _stepWrapper(
       title: 'Upload Photos',
       children: [
-        const Text(
-          'Add up to 5 photos',
-          style: TextStyle(color: Colors.black54, fontSize: 12),
-        ),
+        const Text('Add up to 5 photos', style: TextStyle(color: Colors.black54, fontSize: 12)),
         const SizedBox(height: 15),
         GridView.builder(
           shrinkWrap: true,
@@ -446,9 +454,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
           ),
-          itemCount: _selectedImages.length < 5
-              ? _selectedImages.length + 1
-              : 5,
+          itemCount: _selectedImages.length < 5 ? _selectedImages.length + 1 : 5,
           itemBuilder: (context, index) {
             if (index == _selectedImages.length && _selectedImages.length < 5) {
               return GestureDetector(
@@ -463,10 +469,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.add_a_photo_outlined, color: Colors.black26),
-                      Text(
-                        'Add',
-                        style: TextStyle(color: Colors.black26, fontSize: 11),
-                      ),
+                      Text('Add', style: TextStyle(color: Colors.black26, fontSize: 11)),
                     ],
                   ),
                 ),
@@ -487,8 +490,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
                   top: 4,
                   right: 4,
                   child: GestureDetector(
-                    onTap: () =>
-                        setState(() => _selectedImages.removeAt(index)),
+                    onTap: () => setState(() => _selectedImages.removeAt(index)),
                     child: const CircleAvatar(
                       radius: 10,
                       backgroundColor: Colors.red,
@@ -618,6 +620,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
     );
   }
 
+  // ---------- Reusable UI Widgets ----------
   Widget _stepWrapper({required String title, required List<Widget> children}) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -631,10 +634,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 15),
             ...children,
           ],
@@ -645,10 +645,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
 
   Widget _label(String text) => Padding(
     padding: const EdgeInsets.only(bottom: 5, top: 5),
-    child: Text(
-      text,
-      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-    ),
+    child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
   );
 
   InputDecoration _inputStyle(String hint) => InputDecoration(
@@ -667,14 +664,19 @@ class _PostAdScreenState extends State<PostAdScreen> {
     bool isSelected = _selectedType == label;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() {
-          _selectedType = label;
-          _selectedCategory = null;
-          _selectedCategoryId = null;
-          if (label == 'Product') _priceUnitController.text = 'per item';
-          if (label == 'Service') _priceUnitController.text = 'per job';
-          if (label == 'Property') _priceUnitController.text = 'per year';
-        }),
+        onTap: () {
+          if (_selectedType == label) return; // no need to re-fetch if same
+          setState(() {
+            _selectedType = label;
+            _selectedCategoryName = null;
+            _selectedCategoryId = null;
+            // update price unit presets
+            if (label == 'Product') _priceUnitController.text = 'per item';
+            if (label == 'Service') _priceUnitController.text = 'per job';
+            if (label == 'Property') _priceUnitController.text = 'per year';
+          });
+          _fetchCategories(); // 🔥 Fetch categories for the new type
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
@@ -688,11 +690,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (icon != null)
-                Icon(
-                  icon,
-                  size: 14,
-                  color: isSelected ? Colors.white : Colors.black87,
-                ),
+                Icon(icon, size: 14, color: isSelected ? Colors.white : Colors.black87),
               if (icon != null) const SizedBox(width: 4),
               Text(
                 label,
@@ -743,9 +741,7 @@ class _PostAdScreenState extends State<PostAdScreen> {
     return ElevatedButton(
       onPressed: isValid ? onTap : null,
       style: ElevatedButton.styleFrom(
-        backgroundColor: isValid
-            ? const Color(0xFFFF7D54)
-            : const Color(0xFFE5E7EB),
+        backgroundColor: isValid ? const Color(0xFFFF7D54) : const Color(0xFFE5E7EB),
         disabledBackgroundColor: const Color(0xFFE5E7EB),
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -773,9 +769,6 @@ class _PostAdScreenState extends State<PostAdScreen> {
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
-    child: const Text(
-      'Back',
-      style: TextStyle(color: Colors.black, fontSize: 14),
-    ),
+    child: const Text('Back', style: TextStyle(color: Colors.black, fontSize: 14)),
   );
 }

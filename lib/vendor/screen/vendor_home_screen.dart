@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:sbrai_solutions/models/buyer/product_model.dart';
 import 'package:sbrai_solutions/services/vendor/product_service.dart';
@@ -6,7 +9,6 @@ import 'package:sbrai_solutions/vendor/vendor_menu.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/product_details_screen.dart';
-import 'package:sbrai_solutions/services/vendor/services.dart';
 import 'package:sbrai_solutions/providers/language_provider.dart';
 import 'package:sbrai_solutions/l10n/app_localizations.dart';
 
@@ -19,7 +21,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ProductService _productService = ProductService();
-  final ServiceProvider _serviceProvider = ServiceProvider();
 
   String selectedState = "All Nigeria";
   String? selectedCategory;
@@ -29,6 +30,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool isLoading = true;
 
   final Set<int> _favoriteProductIds = {};
+
+  // Maps category name (as shown in UI) to its database ID
+  Map<String, int> _categoryNameToId = {};
+  bool _categoriesLoaded = false;
 
   final List<String> nigeriaStates = [
     "All Nigeria",
@@ -93,74 +98,103 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _fetchCategories();
     _fetchProducts();
   }
 
-  Future<void> _fetchProducts() async {
-    setState(() => isLoading = true);
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // ── FETCH CATEGORIES FROM API ──────────────────────────────────────────────
+  Future<void> _fetchCategories() async {
     try {
-      final List<String> serviceCategoryNames = [
-        'Logistics',
-        'Borehole',
-        'Cleaning',
-        'Fumigation',
-      ];
-
-      if (selectedCategory != null &&
-          serviceCategoryNames.contains(selectedCategory)) {
-        final services = await _serviceProvider.getServices();
-
-        setState(() {
-          displayedProducts = services.map((s) {
-            String resolvedImageUrl =
-                s.photos.firstOrNull?.fullUrl ??
-                    "https://via.placeholder.com/150";
-
-            return Product(
-              id: s.id,
-              name: s.title,
-              price: s.price ?? 0.0,
-              imageUrls: [resolvedImageUrl],
-              location: s.location ?? "Nigeria",
-              category: selectedCategory ?? "General",
-              userName: "Service Provider",
-              vendorName: "Professional Artisan",
-              rating: 0.0,
-            );
-          }).toList();
-          isLoading = false;
-        });
-      } else {
-        final response = await _productService.getProducts(
-          page: 1,
-          perPage: 40,
-          state: selectedState == "All Nigeria" ? null : selectedState,
-          search: _searchController.text.isNotEmpty
-              ? _searchController.text
-              : null,
-          category: selectedCategory,
-        );
-
-        final List<dynamic> data = response['data'] ?? [];
-        setState(() {
-          displayedProducts = data
-              .map((json) => Product.fromJson(json))
-              .toList();
-          isLoading = false;
-        });
+      final response = await http.get(
+        Uri.parse('https://sbraisolutions.com/api/v1/categories'),
+        headers: {'Accept': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        // Response: { success: true, data: { product: [...], service: [...], property: [...] } }
+        if (data['success'] == true && data['data'] is Map) {
+          final allCats = data['data'] as Map<String, dynamic>;
+          final map = <String, int>{};
+          allCats.forEach((type, list) {
+            for (final cat in list) {
+              map[cat['name']] = cat['id'];
+            }
+          });
+          setState(() {
+            _categoryNameToId = map;
+            _categoriesLoaded = true;
+          });
+        }
       }
     } catch (e) {
-      debugPrint("❌ Error loading products: $e");
+      debugPrint('Category fetch error: $e');
+    }
+  }
+
+  // ── FETCH ADS FROM UNIFIED ENDPOINT ────────────────────────────────────────
+  Future<void> _fetchProducts() async {
+    setState(() => isLoading = true);
+
+    try {
+      // Build search query (unchanged)
+      String? search;
+      final searchText = _searchController.text.trim();
+      final state = selectedState;
+      if (searchText.isNotEmpty && state != "All Nigeria") {
+        search = '$searchText $state';
+      } else if (searchText.isNotEmpty) {
+        search = searchText;
+      } else if (state != "All Nigeria") {
+        search = state;
+      }
+
+      int? categoryId;
+      if (selectedCategory != null && _categoryNameToId.containsKey(selectedCategory)) {
+        categoryId = _categoryNameToId[selectedCategory];
+      }
+
+      final response = await _productService.getProducts(
+        page: 1,
+        perPage: 40,
+        search: search,
+        categoryId: categoryId,
+      );
+
+      // ── SAFELY EXTRACT THE ADS LIST ──────────────────────────
+      final dynamic responseData = response['data'];
+      List<dynamic> adsList = [];
+
+      if (responseData is Map && responseData.containsKey('data')) {
+        // Standard paginated response
+        adsList = (responseData['data'] as List<dynamic>?) ?? [];
+      } else if (responseData is List) {
+        // Fallback for non‑paginated (unlikely)
+        adsList = responseData;
+      }
+
+      setState(() {
+        displayedProducts = adsList
+            .map((json) => Product.fromJson(json as Map<String, dynamic>))
+            .toList();
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint("❌ Error loading ads: $e");
       setState(() => isLoading = false);
     }
   }
 
   void _filterByCategory(String categoryName) {
-    setState(
-          () => selectedCategory = (selectedCategory == categoryName)
-          ? null
-          : categoryName,
-    );
+    setState(() {
+      selectedCategory =
+      (selectedCategory == categoryName) ? null : categoryName;
+    });
     _fetchProducts();
   }
 
@@ -320,8 +354,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisSpacing: 12,
                 ),
                 delegate: SliverChildBuilderDelegate(
-                      (context, index) =>
-                      _buildDynamicProductCard(displayedProducts[index], l10n),
+                      (context, index) => _buildDynamicProductCard(
+                      displayedProducts[index], l10n),
                   childCount: displayedProducts.length,
                 ),
               ),
@@ -341,9 +375,8 @@ class _HomeScreenState extends State<HomeScreen> {
       'cleaning',
       'fumigation',
     ];
-    final bool isService = serviceCategories.contains(
-      product.category.toLowerCase(),
-    );
+    final bool isService =
+    serviceCategories.contains(product.category.toLowerCase());
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -384,7 +417,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         color: Colors.grey.shade200,
-                        child: const Icon(Icons.image, color: Colors.grey),
+                        child:
+                        const Icon(Icons.image, color: Colors.grey),
                       ),
                     ),
                   ),
@@ -422,11 +456,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.white.withOpacity(0.9),
                           shape: BoxShape.circle,
                           boxShadow: const [
-                            BoxShadow(color: Colors.black12, blurRadius: 4),
+                            BoxShadow(
+                                color: Colors.black12, blurRadius: 4),
                           ],
                         ),
                         child: Icon(
-                          isFavorited ? Icons.favorite : Icons.favorite_border,
+                          isFavorited
+                              ? Icons.favorite
+                              : Icons.favorite_border,
                           size: 18,
                           color: isFavorited ? Colors.red : Colors.grey,
                         ),
@@ -536,11 +573,14 @@ class _HomeScreenState extends State<HomeScreen> {
       height: 36,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          backgroundColor: isPrimary ? const Color(0xFFE85D22) : Colors.transparent,
+          backgroundColor:
+          isPrimary ? const Color(0xFFE85D22) : Colors.transparent,
           side: BorderSide(
-            color: isPrimary ? const Color(0xFFE85D22) : Colors.grey.shade300,
+            color:
+            isPrimary ? const Color(0xFFE85D22) : Colors.grey.shade300,
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: EdgeInsets.zero,
         ),
         onPressed: onTap,
@@ -604,7 +644,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  fontWeight:
+                  isSelected ? FontWeight.bold : FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -642,7 +683,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: Text(
                       selectedState,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 12),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -671,18 +713,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: TextField(
                     controller: _searchController,
                     onSubmitted: (_) => _fetchProducts(),
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: l10n.iAmLookingFor,
-                      hintStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                      hintStyle: const TextStyle(
+                          color: Colors.white54, fontSize: 13),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 15),
                     ),
                   ),
                 ),
                 IconButton(
                   onPressed: _fetchProducts,
-                  icon: const Icon(Icons.search, color: Colors.white, size: 22),
+                  icon: const Icon(Icons.search,
+                      color: Colors.white, size: 22),
                   style: IconButton.styleFrom(
                     backgroundColor: const Color(0xFFE85D22),
                     shape: RoundedRectangleBorder(
@@ -709,7 +755,8 @@ class _HomeScreenState extends State<HomeScreen> {
     };
 
     String currentLangName = languages.entries
-        .firstWhere((e) => e.value == languageProvider.locale.languageCode,
+        .firstWhere(
+            (e) => e.value == languageProvider.locale.languageCode,
         orElse: () => languages.entries.first)
         .key;
 
@@ -718,7 +765,8 @@ class _HomeScreenState extends State<HomeScreen> {
         languageProvider.setLanguage(Locale(languages[value]!));
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding:
+        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey.shade300),
           borderRadius: BorderRadius.circular(4),

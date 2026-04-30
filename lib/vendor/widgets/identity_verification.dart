@@ -154,8 +154,8 @@ class _IdentityVerificationState extends State<IdentityVerification> {
 
       debugPrint("📦 Verification Response: $response");
 
-      // FIXED: Check for boolean 'status' or 'success' field
-      if (response['status'] == true || response['status'] == 'success' || response['success'] == true) {
+
+      if (response['status'] == 'success') {
         final responseData = response['data'];
 
         setState(() {
