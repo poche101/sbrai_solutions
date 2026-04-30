@@ -11,7 +11,7 @@ class NINVerificationService {
       debugPrint("🔐 Verifying NIN: $nin");
 
       final response = await _apiService.post(
-        '/vendor/nin/verify',
+        '/kyc/identity/verify',
         {'nin': nin},
         isProtected: true,
       );

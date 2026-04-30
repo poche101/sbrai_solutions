@@ -20,10 +20,10 @@ class VendorAuthService {
     try {
       debugPrint("🔐 Attempting vendor registration for: $email");
 
-      final response = await _apiService.post('/vendor/register', {
-        'full_name': name,
+      final response = await _apiService.post('auth/register/vendor', {
+        'name': name,
         'email': email,
-        'phone_number': phone,
+        'phone': phone,
         'business_name': businessName,
         'business_address': address,
         'password': password,
@@ -69,7 +69,7 @@ class VendorAuthService {
     try {
       debugPrint("🔐 Attempting vendor login for: $email");
 
-      final response = await _apiService.post('/vendor/login', {
+      final response = await _apiService.post('auth/login/vendor', {
         'email': email,
         'password': password,
       }, isProtected: false);
@@ -103,7 +103,7 @@ class VendorAuthService {
   /// ---------------- LOGOUT ----------------
   Future<void> logout() async {
     try {
-      await _apiService.post('/vendor/logout', {}, isProtected: true);
+      await _apiService.post('auth/logout', {}, isProtected: true);
       debugPrint("✅ Vendor logged out successfully");
     } catch (e) {
       debugPrint("❌ Logout API error: $e");
@@ -174,7 +174,7 @@ class VendorAuthService {
         throw Exception('Invalid NIN format. NIN must be 11 digits.');
       }
 
-      final response = await _apiService.post('/vendor/nin/verify', {
+      final response = await _apiService.post('/kyc/identity/verify', {
         'nin': nin,
       }, isProtected: true);
 

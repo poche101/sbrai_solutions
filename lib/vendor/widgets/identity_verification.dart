@@ -12,9 +12,9 @@ class IdentityVerification extends StatefulWidget {
 
 class _IdentityVerificationState extends State<IdentityVerification> {
   final TextEditingController _ninController = TextEditingController();
-  final TextEditingController _bvnController = TextEditingController();
-  String? _fileName;
-  File? _selectedFile;
+  // final TextEditingController _bvnController = TextEditingController(); // COMMENTED OUT
+  // String? _fileName; // COMMENTED OUT
+  // File? _selectedFile; // COMMENTED OUT
   bool _isButtonEnabled = false;
   bool _isLoading = false;
   String? _ninError;
@@ -29,7 +29,7 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   void initState() {
     super.initState();
     _ninController.addListener(_validateFields);
-    _bvnController.addListener(_validateFields);
+    // _bvnController.addListener(_validateFields); // COMMENTED OUT
   }
 
   void _validateFields() {
@@ -53,10 +53,10 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   }
 
   void _showCustomToast(
-    BuildContext context,
-    String message, {
-    bool isError = false,
-  }) {
+      BuildContext context,
+      String message, {
+        bool isError = false,
+      }) {
     final overlay = Overlay.of(context);
     late OverlayEntry overlayEntry;
 
@@ -120,21 +120,22 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     });
   }
 
-  Future<void> _pickDocument() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
-    );
+  // COMMENTED OUT - Document picker
+  // Future<void> _pickDocument() async {
+  //   FilePickerResult? result = await FilePicker.platform.pickFiles(
+  //     type: FileType.custom,
+  //     allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
+  //   );
+  //
+  //   if (result != null) {
+  //     setState(() {
+  //       _fileName = result.files.single.name;
+  //       _selectedFile = File(result.files.single.path!);
+  //     });
+  //   }
+  // }
 
-    if (result != null) {
-      setState(() {
-        _fileName = result.files.single.name;
-        _selectedFile = File(result.files.single.path!);
-      });
-    }
-  }
-
-  /// ✅ UPDATED: Handles File upload and response mapping accurately
+  /// Handles NIN verification only
   Future<void> _handleSubmit() async {
     if (!_isButtonEnabled) return;
 
@@ -146,27 +147,30 @@ class _IdentityVerificationState extends State<IdentityVerification> {
 
       debugPrint("🆔 Submitting NIN: $nin");
 
-      // Pass the File object directly to the 'document' parameter
+      // Pass only nin (document is optional, so passing null)
       final response = await _authService.verifyIdentity(
         nin: nin,
-        document: _selectedFile,
       );
 
       debugPrint("📦 Verification Response: $response");
 
-      // Check for success status from backend
-      if (response['status'] == 'success' || response['success'] == true) {
+      // FIXED: Check for boolean 'status' or 'success' field
+      if (response['status'] == true || response['status'] == 'success' || response['success'] == true) {
         final responseData = response['data'];
 
         setState(() {
           // Update verification state based on backend response
-          _ninVerified = responseData?['nin_verified'] ?? true;
-          _ninVerificationData = responseData?['nin_data'] ?? responseData;
+          _ninVerified = true; // Since we got a successful response
+          // Store the response data if available
+          if (responseData != null) {
+            _ninVerificationData = responseData;
+          }
         });
 
         _showCustomToast(
           context,
           response['message'] ?? 'Identity verification successful!',
+          isError: false, // This is success, not error
         );
 
         // Optional: Navigate back or proceed after success
@@ -195,7 +199,7 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   @override
   void dispose() {
     _ninController.dispose();
-    _bvnController.dispose();
+    // _bvnController.dispose(); // COMMENTED OUT
     super.dispose();
   }
 
@@ -340,66 +344,67 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                     ),
                   ],
 
-                  const SizedBox(height: 20),
-                  _buildDividerWithText('BVN Verification Coming Soon'),
-                  const SizedBox(height: 20),
-
-                  _buildLabel('Bank Verification Number (BVN)'),
-                  _buildDisabledBvnField(),
-                  _buildSubLabel('BVN verification will be available soon'),
-
-                  const SizedBox(height: 24),
-
-                  _buildLabel('Upload ID Document (Optional)'),
-                  InkWell(
-                    onTap: _pickDocument,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _fileName != null
-                            ? const Color(0xFFF0FDF4)
-                            : Colors.transparent,
-                        border: Border.all(
-                          color: _fileName != null
-                              ? Colors.green.withOpacity(0.5)
-                              : Colors.grey.withOpacity(0.3),
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _fileName != null
-                                ? Icons.check_circle_outline
-                                : Icons.upload_outlined,
-                            color: _fileName != null
-                                ? Colors.green
-                                : Colors.black54,
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              _fileName ?? 'Upload Document',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w500,
-                                color: _fileName != null
-                                    ? Colors.green
-                                    : Colors.black,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  _buildSubLabel('Supported formats: PDF, JPG, PNG (Max 5MB)'),
+                  // COMMENTED OUT - BVN Section
+                  // const SizedBox(height: 20),
+                  // _buildDividerWithText('BVN Verification Coming Soon'),
+                  // const SizedBox(height: 20),
+                  //
+                  // _buildLabel('Bank Verification Number (BVN)'),
+                  // _buildDisabledBvnField(),
+                  // _buildSubLabel('BVN verification will be available soon'),
+                  //
+                  // const SizedBox(height: 24),
+                  //
+                  // _buildLabel('Upload ID Document (Optional)'),
+                  // InkWell(
+                  //   onTap: _pickDocument,
+                  //   borderRadius: BorderRadius.circular(12),
+                  //   child: Container(
+                  //     width: double.infinity,
+                  //     padding: const EdgeInsets.symmetric(
+                  //       vertical: 16,
+                  //       horizontal: 12,
+                  //     ),
+                  //     decoration: BoxDecoration(
+                  //       color: _fileName != null
+                  //           ? const Color(0xFFF0FDF4)
+                  //           : Colors.transparent,
+                  //       border: Border.all(
+                  //         color: _fileName != null
+                  //             ? Colors.green.withOpacity(0.5)
+                  //             : Colors.grey.withOpacity(0.3),
+                  //       ),
+                  //       borderRadius: BorderRadius.circular(12),
+                  //     ),
+                  //     child: Row(
+                  //       mainAxisAlignment: MainAxisAlignment.center,
+                  //       children: [
+                  //         Icon(
+                  //           _fileName != null
+                  //               ? Icons.check_circle_outline
+                  //               : Icons.upload_outlined,
+                  //           color: _fileName != null
+                  //               ? Colors.green
+                  //               : Colors.black54,
+                  //         ),
+                  //         const SizedBox(width: 8),
+                  //         Flexible(
+                  //           child: Text(
+                  //             _fileName ?? 'Upload Document',
+                  //             overflow: TextOverflow.ellipsis,
+                  //             style: TextStyle(
+                  //               fontWeight: FontWeight.w500,
+                  //               color: _fileName != null
+                  //                   ? Colors.green
+                  //                   : Colors.black,
+                  //             ),
+                  //           ),
+                  //         ),
+                  //       ],
+                  //     ),
+                  //   ),
+                  // ),
+                  // _buildSubLabel('Supported formats: PDF, JPG, PNG (Max 5MB)'),
 
                   const SizedBox(height: 30),
 
@@ -423,20 +428,20 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                       ),
                       child: _isLoading
                           ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                           : const Text(
-                              'Verify Identity',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                        'Verify Identity',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -452,38 +457,39 @@ class _IdentityVerificationState extends State<IdentityVerification> {
 
   // --- UI HELPERS ---
 
-  Widget _buildDisabledBvnField() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TextField(
-        controller: _bvnController,
-        enabled: false,
-        style: TextStyle(color: Colors.grey.shade400),
-        decoration: InputDecoration(
-          hintText: '22334455667',
-          hintStyle: TextStyle(color: Colors.grey.shade300),
-          filled: true,
-          fillColor: Colors.grey.shade50,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
-          ),
-          suffixIcon: const Icon(
-            Icons.lock_outline,
-            size: 20,
-            color: Colors.grey,
-          ),
-        ),
-      ),
-    );
-  }
+  // COMMENTED OUT - Disabled BVN field
+  // Widget _buildDisabledBvnField() {
+  //   return Container(
+  //     decoration: BoxDecoration(
+  //       color: Colors.grey.shade50,
+  //       borderRadius: BorderRadius.circular(12),
+  //     ),
+  //     child: TextField(
+  //       controller: _bvnController,
+  //       enabled: false,
+  //       style: TextStyle(color: Colors.grey.shade400),
+  //       decoration: InputDecoration(
+  //         hintText: '22334455667',
+  //         hintStyle: TextStyle(color: Colors.grey.shade300),
+  //         filled: true,
+  //         fillColor: Colors.grey.shade50,
+  //         border: OutlineInputBorder(
+  //           borderRadius: BorderRadius.circular(12),
+  //           borderSide: BorderSide.none,
+  //         ),
+  //         contentPadding: const EdgeInsets.symmetric(
+  //           horizontal: 16,
+  //           vertical: 16,
+  //         ),
+  //         suffixIcon: const Icon(
+  //           Icons.lock_outline,
+  //           size: 20,
+  //           color: Colors.grey,
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildInfoBox() {
     return Container(
@@ -586,10 +592,10 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   );
 
   Widget _buildTextField(
-    TextEditingController controller,
-    String hint, {
-    String? errorText,
-  }) {
+      TextEditingController controller,
+      String hint, {
+        String? errorText,
+      }) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
@@ -619,19 +625,20 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     );
   }
 
-  Widget _buildDividerWithText(String text) {
-    return Row(
-      children: [
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text(
-            text,
-            style: const TextStyle(color: Colors.grey, fontSize: 12),
-          ),
-        ),
-        const Expanded(child: Divider()),
-      ],
-    );
-  }
+// COMMENTED OUT - Divider with text
+// Widget _buildDividerWithText(String text) {
+//   return Row(
+//     children: [
+//       const Expanded(child: Divider()),
+//       Padding(
+//         padding: const EdgeInsets.symmetric(horizontal: 8),
+//         child: Text(
+//           text,
+//           style: const TextStyle(color: Colors.grey, fontSize: 12),
+//         ),
+//       ),
+//       const Expanded(child: Divider()),
+//     ],
+//   );
+// }
 }
