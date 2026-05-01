@@ -243,6 +243,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get french => 'Francés';
 
   @override
+  String get selectLanguage => 'Select Language';
+
+  @override
   String get trending => 'Tendencias';
 
   @override

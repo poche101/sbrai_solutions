@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-// Ensure these paths match your actual project structure
 import 'package:sbrai_solutions/buyer/widgets/email_verification.dart';
 import 'package:sbrai_solutions/buyer/widgets/phone_verification.dart';
 import 'package:sbrai_solutions/buyer/widgets/identity_verification.dart';
+import 'package:sbrai_solutions/buyer_service/kyc_service.dart';
+import 'package:sbrai_solutions/models/buyer/kyc_status_model.dart';
 
 class KYCScreen extends StatefulWidget {
   const KYCScreen({super.key});
@@ -12,143 +13,231 @@ class KYCScreen extends StatefulWidget {
 }
 
 class _KYCScreenState extends State<KYCScreen> {
-  // Dynamic State: Tracking which steps are verified
-  bool isEmailVerified = false;
-  bool isPhoneVerified = false;
-  bool isIdentityVerified = false;
+  final KycService _kycService = KycService();
 
-  // Logic to calculate progress percentage (Now out of 3 steps)
-  double get _calculationProgress {
-    int completed = 0;
-    if (isEmailVerified) completed++;
-    if (isPhoneVerified) completed++;
-    if (isIdentityVerified) completed++;
-    return completed / 3;
+  // Null while loading, populated after getStatus() resolves
+  KycStatus? _status;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
   }
 
-  /// Helper method to navigate and update state on return
-  /// Expects the verification screens to return 'true' upon success
-  Future<void> _navigateAndVerify(Widget screen, String type) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => screen),
-    );
+  // ── Data ───────────────────────────────────────────────────────────────────
 
-    if (result == true) {
-      setState(() {
-        switch (type) {
-          case 'email':
-            isEmailVerified = true;
-            break;
-          case 'phone':
-            isPhoneVerified = true;
-            break;
-          case 'identity':
-            isIdentityVerified = true;
-            break;
-        }
-      });
+  Future<void> _loadStatus() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final status = await _kycService.getStatus();
+      if (mounted) setState(() => _status = status);
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  /// Navigates to a verification sub-screen and refreshes status on return.
+  /// The sub-screens no longer need to return `true` — the service re-fetches
+  /// the authoritative status from the server either way.
+  Future<void> _navigateAndRefresh(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    // Always refresh after returning — even a back-navigation might reflect
+    // a step the user completed before closing the screen.
+    await _loadStatus();
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    double progress = _calculationProgress;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'KYC Verification',
-              style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
+      appBar: _buildAppBar(),
+      body: _buildBody(),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.black),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'KYC Verification',
+            style: TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
             ),
+          ),
+          Text(
+            'Secure your account',
+            style: TextStyle(color: Colors.grey[600], fontSize: 13),
+          ),
+        ],
+      ),
+      // Refresh button — useful when SMS OTP was logged server-side during testing
+      actions: [
+        if (!_isLoading)
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.black54),
+            tooltip: 'Refresh status',
+            onPressed: _loadStatus,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBody() {
+    // ── Loading state ──────────────────────────────────────────────────────
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: Color(0xFFF97316)),
+            SizedBox(height: 16),
             Text(
-              'Secure your account',
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              'Loading verification status…',
+              style: TextStyle(color: Colors.grey),
             ),
           ],
         ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          // Dynamic Progress Card
-          _buildCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Verification Progress',
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    Text(
-                      '${(progress * 100).toInt()}%',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: LinearProgressIndicator(
-                    value: progress == 0 ? 0.05 : progress,
-                    backgroundColor: const Color(0xFFFFE4E1),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      progress == 1.0 ? Colors.green : const Color(0xFFFCA5A5),
-                    ),
-                    minHeight: 8,
+      );
+    }
+
+    // ── Error state ────────────────────────────────────────────────────────
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _loadStatus,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Try again'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF97316),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-              ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ── Loaded state ───────────────────────────────────────────────────────
+    final status = _status!;
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildProgressCard(status),
+        const SizedBox(height: 16),
+        _buildVerificationTile(
+          icon: Icons.mail_outline,
+          title: 'Email Verification',
+          subtitle: 'Verify your email address',
+          isCompleted: status.emailVerified,
+          onTap: () => _navigateAndRefresh(const EmailVerification()),
+        ),
+        _buildVerificationTile(
+          icon: Icons.phone_outlined,
+          title: 'Phone Verification',
+          subtitle: 'Verify your phone number',
+          isCompleted: status.phoneVerified,
+          onTap: () => _navigateAndRefresh(const PhoneVerification()),
+        ),
+        _buildVerificationTile(
+          icon: Icons.badge_outlined,
+          title: 'Identity Verification',
+          subtitle: 'NIN required',
+          isCompleted: status.identityVerified,
+          onTap: () => _navigateAndRefresh(const IdentityVerification()),
+        ),
+        const SizedBox(height: 8),
+        if (status.isVerified) _buildVerifiedBanner(),
+        const SizedBox(height: 8),
+        _buildInfoBox(),
+      ],
+    );
+  }
+
+  // ── Widgets ────────────────────────────────────────────────────────────────
+
+  Widget _buildProgressCard(KycStatus status) {
+    final progress = status.progress;
+    final percent = (progress * 100).toInt();
+    final isComplete = status.isVerified;
+
+    return _buildCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Verification Progress',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              Text(
+                '$percent%',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isComplete ? Colors.green : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Step label from model: "2 / 3 steps complete"
+          Text(
+            status.progressLabel,
+            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              // Never show fully-empty bar — use 0.05 as minimum visual fill
+              value: progress == 0 ? 0.05 : progress,
+              backgroundColor: const Color(0xFFFFE4E1),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isComplete ? Colors.green : const Color(0xFFF97316),
+              ),
+              minHeight: 8,
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          // Verification Items
-          _buildVerificationTile(
-            icon: Icons.mail_outline,
-            title: 'Email Verification',
-            subtitle: 'vendor@demo.com',
-            isCompleted: isEmailVerified,
-            onTap: () => _navigateAndVerify(const EmailVerification(), 'email'),
-          ),
-          _buildVerificationTile(
-            icon: Icons.phone_outlined,
-            title: 'Phone Verification',
-            subtitle: '08087654321',
-            isCompleted: isPhoneVerified,
-            onTap: () => _navigateAndVerify(const PhoneVerification(), 'phone'),
-          ),
-          _buildVerificationTile(
-            icon: Icons.badge_outlined,
-            title: 'Identity Verification',
-            subtitle: 'NIN or BVN required',
-            isCompleted: isIdentityVerified,
-            onTap: () =>
-                _navigateAndVerify(const IdentityVerification(), 'identity'),
-          ),
-
-          const SizedBox(height: 8),
-
-          // Info Box
-          _buildInfoBox(),
         ],
       ),
     );
@@ -164,11 +253,13 @@ class _KYCScreenState extends State<KYCScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: InkWell(
-        onTap: isCompleted ? null : onTap, // Disable tap if already completed
+        // Completed steps are still tappable so users can re-verify if needed
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: _buildCard(
           child: Row(
             children: [
+              // Step icon
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -184,6 +275,7 @@ class _KYCScreenState extends State<KYCScreen> {
                 ),
               ),
               const SizedBox(width: 16),
+              // Title + subtitle
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,20 +289,63 @@ class _KYCScreenState extends State<KYCScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
-                      style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                      isCompleted ? 'Verified ✓' : subtitle,
+                      style: TextStyle(
+                        color: isCompleted ? Colors.green : Colors.grey[500],
+                        fontSize: 14,
+                      ),
                     ),
                   ],
                 ),
               ),
+              // Status icon
               Icon(
-                isCompleted ? Icons.check_circle : Icons.error_outline,
-                color: isCompleted ? Colors.green : Colors.orange,
+                isCompleted ? Icons.check_circle : Icons.chevron_right,
+                color: isCompleted ? Colors.green : Colors.grey[400],
                 size: 24,
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Shown when all three steps are complete and is_verified is true.
+  Widget _buildVerifiedBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.green[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.verified, color: Colors.green, size: 24),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Account fully verified',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'You now have access to all features.',
+                  style: TextStyle(color: Colors.green, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -568,6 +568,12 @@ abstract class AppLocalizations {
   /// **'French'**
   String get french;
 
+  /// No description provided for @selectLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Language'**
+  String get selectLanguage;
+
   /// No description provided for @trending.
   ///
   /// In en, this message translates to:

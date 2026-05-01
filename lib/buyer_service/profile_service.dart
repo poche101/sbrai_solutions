@@ -1,110 +1,110 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:sbrai_solutions/models/buyer/user_profile_model.dart';
 
+/// Service layer for all buyer-profile API calls.
+/// Every method returns a [UserProfile] so callers never touch raw JSON.
 class ProfileService {
-  final ApiService _api = ApiService();
+  final ApiService _api;
 
-  /// GET: buyers/profile
+  ProfileService({ApiService? api}) : _api = api ?? ApiService();
+
+  // ── GET /api/v1/buyers/profile ─────────────────────────────────────────────
+  /// Fetches the current buyer's profile, caches it locally, and returns a
+  /// typed [UserProfile]. Throws a [String] message on failure.
   Future<UserProfile> fetchProfile() async {
     try {
-      final response = await _api.get(
-        'buyers/profile',
-        isProtected: true,
-        userType: 'buyer',
-      );
+      final response = await _api.getBuyerProfile();
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
 
-      final decoded = jsonDecode(response.body);
-      final profileData = (decoded is Map && decoded.containsKey('data'))
-          ? decoded['data']
-          : decoded;
+      if (body['success'] == true && body['data'] != null) {
+        final data = body['data'] as Map<String, dynamic>;
+        await _api.saveUserData(data); // keep SharedPreferences in sync
+        return UserProfile.fromJson(data);
+      }
 
-      return UserProfile.fromJson(profileData);
+      throw body['message'] ?? 'Failed to load profile.';
     } catch (e) {
-      debugPrint("❌ ProfileService Fetch Error: $e");
+      debugPrint("❌ ProfileService.fetchProfile: $e");
       rethrow;
     }
   }
 
-  /// UPLOAD: buyers/profile/upload-photo
-  /// Note: Laravel usually handles file uploads via POST.
-  /// If your backend specifically requires PUT for files,
-  /// we keep the '_method': 'PUT' spoofing here because multipart is not JSON.
-  Future<UserProfile> uploadAvatar(File imageFile) async {
-    try {
-      final http.Response response = await _api.upload(
-        'buyers/profile/upload-photo',
-        {'_method': 'PUT'}, // Keep spoofing for Multipart specifically
-        filePath: imageFile.path,
-        fileField: 'profile_photo',
-        isProtected: true,
-        userType: 'buyer',
-      );
-
-      final decoded = jsonDecode(response.body);
-      final profileData = (decoded is Map && decoded.containsKey('data'))
-          ? decoded['data']
-          : decoded;
-
-      return UserProfile.fromJson(profileData);
-    } catch (e) {
-      debugPrint("❌ ProfileService Upload Error: $e");
-      rethrow;
-    }
-  }
-
-  /// PUT: buyers/profile/update
-  /// Switched from .post to .put to satisfy backend route requirements
+  // ── PUT /api/v1/buyers/profile/update ─────────────────────────────────────
+  /// Sends only the provided (non-null) fields. At least one must be given.
   Future<UserProfile> updateProfile({
     String? name,
     String? phone,
     String? address,
   }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name;
+    if (phone != null) payload['phone'] = phone;
+    if (address != null) payload['address'] = address;
+
+    if (payload.isEmpty) throw 'Provide at least one field to update.';
+
     try {
-      // Build the body dynamically
-      final Map<String, dynamic> body = {};
+      final response = await _api.updateBuyerProfile(payload);
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
 
-      if (name != null && name.isNotEmpty) body['name'] = name;
-      if (phone != null && phone.isNotEmpty) body['phone'] = phone;
-      if (address != null && address.isNotEmpty) body['address'] = address;
+      if (body['success'] == true && body['data'] != null) {
+        final data = body['data'] as Map<String, dynamic>;
+        await _api.saveUserData(data);
+        return UserProfile.fromJson(data);
+      }
 
-      // Check if we actually have data to send (excluding the old _method field)
-      if (body.isEmpty) throw "No changes detected to update.";
-
-      // CRITICAL CHANGE: Using _api.put instead of _api.post
-      // This sends a real PUT request with application/json
-      final response = await _api.put(
-        'buyers/profile/update',
-        body,
-        isProtected: true,
-        userType: 'buyer',
-      );
-
-      debugPrint("✅ PROFILE UPDATE SUCCESS: ${response.body}");
-
-      final decoded = jsonDecode(response.body);
-      final profileData = (decoded is Map && decoded.containsKey('data'))
-          ? decoded['data']
-          : decoded;
-
-      return UserProfile.fromJson(profileData);
+      throw body['message'] ?? 'Profile update failed.';
     } catch (e) {
-      debugPrint("❌ ProfileService Update Error: $e");
+      debugPrint("❌ ProfileService.updateProfile: $e");
       rethrow;
     }
   }
 
-  /// DELETE: buyers/profile
-  Future<bool> deleteProfile() async {
+  // ── POST /api/v1/buyers/profile/upload-photo ──────────────────────────────
+  /// Uploads [imageFile] as the new profile photo and returns the updated
+  /// [UserProfile]. Accepted: jpeg, jpg, png, webp — max 5 MB.
+  Future<UserProfile> uploadPhoto(File imageFile) async {
     try {
-      await _api.delete('buyers/profile', isProtected: true, userType: 'buyer');
-      return true;
+      final response = await _api.uploadBuyerPhoto(imageFile);
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (body['success'] == true && body['data'] != null) {
+        final data = body['data'] as Map<String, dynamic>;
+        await _api.saveUserData(data);
+        return UserProfile.fromJson(data);
+      }
+
+      throw body['message'] ?? 'Photo upload failed.';
     } catch (e) {
-      debugPrint("❌ ProfileService Delete Error: $e");
-      return false;
+      debugPrint("❌ ProfileService.uploadPhoto: $e");
+      rethrow;
     }
+  }
+
+  /// Alias used by [BuyersMenu] — delegates to [uploadPhoto].
+  Future<UserProfile> uploadAvatar(File imageFile) => uploadPhoto(imageFile);
+
+  // ── Local cache ────────────────────────────────────────────────────────────
+  /// Returns a [UserProfile] built from the locally cached
+  /// [SharedPreferences] values — no network call. Returns null if the
+  /// cache is empty (first launch, cleared session, etc.).
+  Future<UserProfile?> getCachedProfile() async {
+    final data = await _api.getUserData();
+    final name = data['name'] ?? '';
+    final email = data['email'] ?? '';
+    if (name.isEmpty && email.isEmpty) return null;
+    return UserProfile(
+      id: 0,
+      fullName: name,
+      email: email,
+      phone: data['phone'] ?? '',
+      address: data['address'] ?? '',
+      photoUrl: data['photo'],
+      role: 'buyer',
+    );
   }
 }

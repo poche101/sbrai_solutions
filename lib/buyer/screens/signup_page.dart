@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'signin_screen.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
@@ -76,6 +77,7 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   Future<void> _handleSignup() async {
+    // Basic Client-side validation
     if (_nameController.text.isEmpty ||
         _emailController.text.isEmpty ||
         _passwordController.text.isEmpty) {
@@ -91,8 +93,8 @@ class _SignupPageState extends State<SignupPage> {
     setState(() => _isLoading = true);
 
     try {
-      // The ApiService now handles the 422/401 logic and throws specific strings
-      await _apiService.post('buyers/register', {
+      // API call to register
+      final response = await _apiService.post('buyers/register', {
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -101,18 +103,34 @@ class _SignupPageState extends State<SignupPage> {
         'password_confirmation': _confirmPasswordController.text,
       }, userType: 'buyer');
 
-      _showCustomToast("Account created successfully!");
+      final responseData = jsonDecode(response.body);
 
-      if (mounted) {
-        Future.delayed(const Duration(milliseconds: 800), () {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const SigninScreen()),
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        _showCustomToast("Account created successfully!");
+
+        // Optionally save the token immediately if your register API returns one
+        if (responseData['data'] != null &&
+            responseData['data']['access_token'] != null) {
+          await _apiService.saveToken(
+            responseData['data']['access_token'],
+            userType: 'buyer',
           );
-        });
+          if (responseData['data']['user'] != null) {
+            await _apiService.saveUserData(responseData['data']['user']);
+          }
+        }
+
+        if (mounted) {
+          Future.delayed(const Duration(milliseconds: 800), () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const SigninScreen()),
+            );
+          });
+        }
       }
     } catch (e) {
-      // e will now contain specific Laravel validation errors or security messages
+      // This will catch the formatted error string from ApiService (e.g., validation errors)
       _showCustomToast(e.toString(), isSuccess: false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -122,8 +140,12 @@ class _SignupPageState extends State<SignupPage> {
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isLoading = true);
     try {
-      await _apiService.signInWithGoogle();
-      _showCustomToast("Signed in with Google!");
+      final response = await _apiService.signInWithGoogle();
+      if (response != null) {
+        _showCustomToast("Signed in with Google successfully!");
+        // Navigate to Home/Dashboard after successful social login
+        // Navigator.pushReplacementNamed(context, '/home');
+      }
     } catch (e) {
       _showCustomToast(e.toString(), isSuccess: false);
     } finally {
@@ -220,7 +242,12 @@ class _SignupPageState extends State<SignupPage> {
         _buildSocialButton(
           "Continue with Facebook",
           'assets/icons/facebook.png',
-          () {},
+          () {
+            _showCustomToast(
+              "Facebook login not yet implemented",
+              isSuccess: false,
+            );
+          },
           isGoogle: false,
         ),
       ],
@@ -252,27 +279,27 @@ class _SignupPageState extends State<SignupPage> {
       children: [
         _buildField(
           "Full Name",
-          "Full Name",
+          "Enter your name",
           Icons.person_outline,
           controller: _nameController,
         ),
         _buildField(
           "Email Address",
-          "Email",
+          "Enter your email",
           Icons.email_outlined,
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
         ),
         _buildField(
           "Phone Number",
-          "Phone",
+          "e.g. +123456789",
           Icons.phone_android_outlined,
           controller: _phoneController,
           keyboardType: TextInputType.phone,
         ),
         _buildField(
           "Address (Optional)",
-          "Address",
+          "Enter your shipping address",
           Icons.location_on_outlined,
           controller: _addressController,
         ),
@@ -285,7 +312,7 @@ class _SignupPageState extends State<SignupPage> {
         ),
         _buildField(
           "Confirm Password",
-          "Confirm Password",
+          "Repeat your password",
           Icons.lock_outline,
           isPassword: true,
           controller: _confirmPasswordController,
@@ -373,7 +400,6 @@ class _SignupPageState extends State<SignupPage> {
               assetPath,
               height: 24,
               width: 24,
-              // If image isn't found, show a colored icon as fallback
               errorBuilder: (c, e, s) => Icon(
                 isGoogle ? Icons.g_mobiledata : Icons.facebook,
                 color: isGoogle ? Colors.red : Colors.blue,

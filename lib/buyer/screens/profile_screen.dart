@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 
-// --- Updated Data Model ---
+// --- Data Model ---
 class UserProfile {
   String fullName;
   String email;
@@ -25,70 +25,50 @@ class UserProfile {
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
-    // 1. Dig into the response. Laravel usually nests data in 'user' or 'data'.
-    final userData = json['data'] ?? json['user'] ?? json;
+    final userData = json['user'] ?? json;
 
-    // 2. Handle Date Formatting safely
     String formattedDate = "Joined recently";
-    dynamic rawDate = userData['created_at'] ?? json['created_at'];
-    if (rawDate != null) {
+    String? dateStr = json['created_at'] ?? userData['created_at'];
+    if (dateStr != null) {
       try {
-        DateTime dt = DateTime.parse(rawDate.toString());
+        DateTime dt = DateTime.parse(dateStr);
         formattedDate = DateFormat('MMM yyyy').format(dt);
       } catch (e) {
         formattedDate = "N/A";
       }
     }
 
-    // 3. Handle Display Name
     String displayName =
-        userData['full_name'] ??
+        json['full_name'] ??
+        json['fullName'] ??
         userData['name'] ??
         userData['email']?.split('@')[0] ??
         'User';
 
-    // 4. THE FIX: Smart Photo URL Construction
-    // We check both 'photo' and 'profile_photo' keys
-    String? rawPhoto = userData['photo'] ?? userData['profile_photo'];
+    String? rawPhoto = json['profile_photo'] ?? json['photo'];
     String? finalPhotoUrl;
-
     if (rawPhoto != null && rawPhoto.isNotEmpty) {
-      if (rawPhoto.startsWith('http')) {
-        // If the API already gave us a full URL, use it as is
-        finalPhotoUrl = rawPhoto;
-      } else {
-        // If it's just a path, clean it up
-        // Remove leading slashes so we don't get sbraisolutions.com//storage
-        String path = rawPhoto.startsWith('/')
-            ? rawPhoto.substring(1)
-            : rawPhoto;
-
-        // Prevent "storage/storage" duplicates
-        if (path.startsWith('storage/')) {
-          path = path.replaceFirst('storage/', '');
-        }
-
-        finalPhotoUrl = "https://sbraisolutions.com/storage/$path";
-      }
+      finalPhotoUrl = rawPhoto.startsWith('http')
+          ? rawPhoto
+          : "https://sbraisolutions.com/storage/$rawPhoto";
     }
 
     return UserProfile(
       fullName: displayName,
       email: userData['email'] ?? 'Not provided',
-      phone:
-          userData['phone']?.toString() ??
-          '', // Convert to string to avoid int crashes
-      address: userData['address']?.toString() ?? '',
+      phone: json['phone'] ?? userData['phone'] ?? '',
+      address: json['address'] ?? userData['address'] ?? '',
       joinDate: formattedDate,
       photoUrl: finalPhotoUrl,
     );
   }
 }
 
-// --- Updated Service Section ---
+// --- Service ---
 class ProfileService {
   final ApiService _api = ApiService();
 
+  /// GET: buyers/profile
   Future<UserProfile> fetchProfile() async {
     try {
       final response = await _api.get(
@@ -102,35 +82,36 @@ class ProfileService {
           : decoded;
       return UserProfile.fromJson(profileData);
     } catch (e) {
-      rethrow;
+      throw Exception("Failed to load profile data: $e");
     }
   }
 
+  /// POST: buyers/profile/update
   Future<UserProfile> updateProfile(Map<String, dynamic> data) async {
     try {
-      final response = await _api.put(
+      final response = await _api.post(
         'buyers/profile/update',
         data,
         isProtected: true,
         userType: 'buyer',
       );
-
       final decoded = jsonDecode(response.body);
       final profileData = (decoded is Map && decoded.containsKey('data'))
           ? decoded['data']
           : decoded;
-
       return UserProfile.fromJson(profileData);
     } catch (e) {
-      rethrow;
+      throw Exception("Update failed: $e");
     }
   }
 
+  /// POST (Multipart): buyers/profile/upload-photo
   Future<UserProfile> uploadAvatar(File imageFile) async {
     try {
-      final response = await _api.upload(
+      // FIXED: _api.upload() replaces the non-existent _api.postMultipart()
+      final response = await _api.postMultipart(
         'buyers/profile/upload-photo',
-        {'_method': 'PUT'},
+        {'_method': 'PUT'}, // Laravel method spoofing
         filePath: imageFile.path,
         fileField: 'profile_photo',
         isProtected: true,
@@ -138,13 +119,17 @@ class ProfileService {
       );
 
       final decoded = jsonDecode(response.body);
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception(decoded['message'] ?? "Server rejected the image");
+      }
+
       final profileData = (decoded is Map && decoded.containsKey('data'))
           ? decoded['data']
           : decoded;
-
       return UserProfile.fromJson(profileData);
     } catch (e) {
-      rethrow;
+      throw Exception("Upload failed: $e");
     }
   }
 }
@@ -205,7 +190,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showError(e.toString());
+        _showError("Connection error: Could not fetch profile.");
       }
     }
   }
@@ -221,6 +206,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (pickedFile == null) return;
 
       setState(() => _isLoading = true);
+
       final updatedUser = await _service.uploadAvatar(File(pickedFile.path));
 
       if (mounted) {
@@ -228,26 +214,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _user = updatedUser;
           _isLoading = false;
         });
-        _showToast("Profile picture updated!", isError: false);
+        _showSuccess("Profile picture updated!");
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showToast(e.toString(), isError: true);
+        _showError(e.toString().replaceAll("Exception:", ""));
       }
     }
   }
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _saveProfile() async {
     if (_nameController.text.trim().isEmpty) {
-      _showToast("Name cannot be empty", isError: true);
+      _showError("Name cannot be empty");
       return;
     }
 
     setState(() => _isLoading = true);
 
     final updateData = {
-      'name': _nameController.text.trim(),
+      'fullName': _nameController.text.trim(),
       'phone': _phoneController.text.trim(),
       'address': _addressController.text.trim(),
     };
@@ -261,86 +281,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isEditing = false;
           _isLoading = false;
         });
-        _showToast("Profile updated successfully", isError: false);
+        _showSuccess("Profile updated successfully");
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showToast(e.toString(), isError: true);
+        _showError("Save failed. Please check your internet.");
       }
     }
-  }
-
-  /// Custom Toast with White BG and Black Circle Checkmark
-  void _showToast(String message, {bool isError = false}) {
-    final overlay = Overlay.of(context);
-    final overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: 50,
-        left: 20,
-        right: 20,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isError ? Icons.close : Icons.check,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    message.replaceFirst('Exception: ', ''),
-                    style: const TextStyle(
-                      color: Colors.black87,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    overlay.insert(overlayEntry);
-    Future.delayed(const Duration(seconds: 3), () {
-      overlayEntry.remove();
-    });
-  }
-
-  // Delete these two lines entirely:
-  void _showError(String message) => _showToast(message, isError: true);
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
-    super.dispose();
   }
 
   @override
@@ -436,7 +384,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   radius: 55,
                   backgroundColor: const Color(0xFFFFF5F2),
                   backgroundImage:
-                      _user.photoUrl != null && _user.photoUrl!.isNotEmpty
+                      (_user.photoUrl != null && _user.photoUrl!.isNotEmpty)
                       ? NetworkImage(_user.photoUrl!)
                       : null,
                   child: (_user.photoUrl == null || _user.photoUrl!.isEmpty)

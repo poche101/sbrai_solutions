@@ -104,5 +104,13 @@
   "identityVerification": "Verificación de Identidad",
   "businessVerification": "Verificación de Negocio",
   "ninRequired": "NIN requerido",
-  "businessVerificationRequired": "Requerido para la insignia verificada"
+  "businessVerificationRequired": "Requerido para la insignia verificada",
+  "signupTitle": "Registrarse como Comprador",
+  "signupSubtitle": "Crea tu cuenta para empezar a comprar",
+  "continueWithGoogle": "Continuar con Google",
+  "continueWithFacebook": "Continuar con Facebook",
+  "orSignUpWithEmail": "O REGÍSTRATE CON CORREO",
+  "confirmPassword": "Confirmar Contraseña",
+  "alreadyHaveAccount": "¿Ya tienes una cuenta?",
+  "addressOptional": "Dirección (Opcional)"
 }

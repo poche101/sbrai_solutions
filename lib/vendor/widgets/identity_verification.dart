@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'dart:io';
 import 'package:sbrai_solutions/services/vendor/vendor_auth_service.dart';
 
 class IdentityVerification extends StatefulWidget {
@@ -53,10 +51,10 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   }
 
   void _showCustomToast(
-      BuildContext context,
-      String message, {
-        bool isError = false,
-      }) {
+    BuildContext context,
+    String message, {
+    bool isError = false,
+  }) {
     final overlay = Overlay.of(context);
     late OverlayEntry overlayEntry;
 
@@ -148,14 +146,19 @@ class _IdentityVerificationState extends State<IdentityVerification> {
       debugPrint("🆔 Submitting NIN: $nin");
 
       // Pass only nin (document is optional, so passing null)
-      final response = await _authService.verifyIdentity(
-        nin: nin,
-      );
+      final response = await _authService.verifyIdentity(nin: nin);
 
       debugPrint("📦 Verification Response: $response");
 
+<<<<<<< HEAD
 
       if (response['status'] == 'success') {
+=======
+      // FIXED: Check for boolean 'status' or 'success' field
+      if (response['status'] == true ||
+          response['status'] == 'success' ||
+          response['success'] == true) {
+>>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
         final responseData = response['data'];
 
         setState(() {
@@ -405,7 +408,6 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                   //   ),
                   // ),
                   // _buildSubLabel('Supported formats: PDF, JPG, PNG (Max 5MB)'),
-
                   const SizedBox(height: 30),
 
                   SizedBox(
@@ -428,20 +430,20 @@ class _IdentityVerificationState extends State<IdentityVerification> {
                       ),
                       child: _isLoading
                           ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
                           : const Text(
-                        'Verify Identity',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                              'Verify Identity',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
                 ],
@@ -592,10 +594,10 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   );
 
   Widget _buildTextField(
-      TextEditingController controller,
-      String hint, {
-        String? errorText,
-      }) {
+    TextEditingController controller,
+    String hint, {
+    String? errorText,
+  }) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
@@ -625,20 +627,20 @@ class _IdentityVerificationState extends State<IdentityVerification> {
     );
   }
 
-// COMMENTED OUT - Divider with text
-// Widget _buildDividerWithText(String text) {
-//   return Row(
-//     children: [
-//       const Expanded(child: Divider()),
-//       Padding(
-//         padding: const EdgeInsets.symmetric(horizontal: 8),
-//         child: Text(
-//           text,
-//           style: const TextStyle(color: Colors.grey, fontSize: 12),
-//         ),
-//       ),
-//       const Expanded(child: Divider()),
-//     ],
-//   );
-// }
+  // COMMENTED OUT - Divider with text
+  // Widget _buildDividerWithText(String text) {
+  //   return Row(
+  //     children: [
+  //       const Expanded(child: Divider()),
+  //       Padding(
+  //         padding: const EdgeInsets.symmetric(horizontal: 8),
+  //         child: Text(
+  //           text,
+  //           style: const TextStyle(color: Colors.grey, fontSize: 12),
+  //         ),
+  //       ),
+  //       const Expanded(child: Divider()),
+  //     ],
+  //   );
+  // }
 }

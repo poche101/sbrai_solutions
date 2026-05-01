@@ -23,7 +23,9 @@ import 'firebase_options.dart';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Only initialize Firebase if it hasn't been initialized yet
   if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   }
   print("Handling a background message: ${message.messageId}");
 }
@@ -33,7 +35,9 @@ void main() async {
 
   // 1. Initialize Firebase only if not already initialized
   if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   }
 
   // 2. Set up Background Notification Listener
@@ -48,9 +52,7 @@ void main() async {
 
   runApp(
     MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => LanguageProvider()),
-      ],
+      providers: [ChangeNotifierProvider(create: (_) => LanguageProvider())],
       child: const SbraiSolutionsApp(),
     ),
   );
@@ -96,11 +98,7 @@ class SbraiSolutionsApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          supportedLocales: const [
-            Locale('en'),
-            Locale('es'),
-            Locale('fr'),
-          ],
+          supportedLocales: const [Locale('en'), Locale('es'), Locale('fr')],
 
           // Change back to AccountSelectionScreen as home
           home: const AccountSelectionScreen(),

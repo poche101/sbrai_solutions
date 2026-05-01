@@ -276,7 +276,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        "${widget.product.rating ?? '4.8'} rating",
+                                        "${widget.product.rating} rating",
                                         style: const TextStyle(
                                           color: Colors.grey,
                                           fontSize: 12,

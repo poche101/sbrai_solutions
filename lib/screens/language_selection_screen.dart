@@ -9,9 +9,12 @@ class LanguageSelectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
-    
-    // Check if AppLocalizations is available
+    final languageProvider = Provider.of<LanguageProvider>(
+      context,
+      listen: false,
+    );
+
+    // 1. Initialize the localization variable
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
@@ -29,15 +32,12 @@ class LanguageSelectionScreen extends StatelessWidget {
           child: Column(
             children: [
               const SizedBox(height: 100),
-              const Icon(
-                Icons.language,
-                size: 80,
-                color: Colors.white,
-              ),
+              const Icon(Icons.language, size: 80, color: Colors.white),
               const SizedBox(height: 20),
-              const Text(
-                'Select Language',
-                style: TextStyle(
+              // 2. Use the variable here to fix the "unused" warning
+              Text(
+                l10n?.selectLanguage ?? 'Select Language',
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
@@ -53,7 +53,9 @@ class LanguageSelectionScreen extends StatelessWidget {
                   languageProvider.setLanguage(const Locale('en'));
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (context) => const AccountSelectionScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const AccountSelectionScreen(),
+                    ),
                   );
                 },
               ),
@@ -67,7 +69,9 @@ class LanguageSelectionScreen extends StatelessWidget {
                   languageProvider.setLanguage(const Locale('es'));
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (context) => const AccountSelectionScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const AccountSelectionScreen(),
+                    ),
                   );
                 },
               ),
@@ -81,7 +85,9 @@ class LanguageSelectionScreen extends StatelessWidget {
                   languageProvider.setLanguage(const Locale('fr'));
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (context) => const AccountSelectionScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const AccountSelectionScreen(),
+                    ),
                   );
                 },
               ),
