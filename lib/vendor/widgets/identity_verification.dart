@@ -150,15 +150,10 @@ class _IdentityVerificationState extends State<IdentityVerification> {
 
       debugPrint("📦 Verification Response: $response");
 
-<<<<<<< HEAD
+
 
       if (response['status'] == 'success') {
-=======
-      // FIXED: Check for boolean 'status' or 'success' field
-      if (response['status'] == true ||
-          response['status'] == 'success' ||
-          response['success'] == true) {
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
+
         final responseData = response['data'];
 
         setState(() {

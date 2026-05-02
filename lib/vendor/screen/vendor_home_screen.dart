@@ -111,7 +111,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── FETCH CATEGORIES FROM API ──────────────────────────────────────────────
   Future<void> _fetchCategories() async {
     try {
-<<<<<<< HEAD
       final response = await http.get(
         Uri.parse('https://sbraisolutions.com/api/v1/categories'),
         headers: {'Accept': 'application/json'},
@@ -132,57 +131,6 @@ class _HomeScreenState extends State<HomeScreen> {
             _categoriesLoaded = true;
           });
         }
-=======
-      final List<String> serviceCategoryNames = [
-        'Logistics',
-        'Borehole',
-        'Cleaning',
-        'Fumigation',
-      ];
-
-      if (selectedCategory != null &&
-          serviceCategoryNames.contains(selectedCategory)) {
-        final services = await _serviceProvider.getServices();
-
-        setState(() {
-          displayedProducts = services.map((s) {
-            String resolvedImageUrl =
-                s.photos.firstOrNull?.fullUrl ??
-                "https://via.placeholder.com/150";
-
-            return Product(
-              id: s.id,
-              name: s.title,
-              price: s.price ?? 0.0,
-              imageUrls: [resolvedImageUrl],
-              location: s.location ?? "Nigeria",
-              category: selectedCategory ?? "General",
-              userName: "Service Provider",
-              vendorName: "Professional Artisan",
-              rating: 0.0,
-            );
-          }).toList();
-          isLoading = false;
-        });
-      } else {
-        final response = await _productService.getProducts(
-          page: 1,
-          perPage: 40,
-          state: selectedState == "All Nigeria" ? null : selectedState,
-          search: _searchController.text.isNotEmpty
-              ? _searchController.text
-              : null,
-          category: selectedCategory,
-        );
-
-        final List<dynamic> data = response['data'] ?? [];
-        setState(() {
-          displayedProducts = data
-              .map((json) => Product.fromJson(json))
-              .toList();
-          isLoading = false;
-        });
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
       }
     } catch (e) {
       debugPrint('Category fetch error: $e');
@@ -243,18 +191,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _filterByCategory(String categoryName) {
-<<<<<<< HEAD
     setState(() {
       selectedCategory =
       (selectedCategory == categoryName) ? null : categoryName;
     });
-=======
-    setState(
-      () => selectedCategory = (selectedCategory == categoryName)
-          ? null
-          : categoryName,
-    );
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
     _fetchProducts();
   }
 
@@ -385,26 +325,25 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             isLoading
                 ? const SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.only(top: 50.0),
-                        child: CircularProgressIndicator(
-                          color: Color(0xFFE85D22),
-                        ),
-                      ),
-                    ),
-                  )
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 50.0),
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFE85D22),
+                  ),
+                ),
+              ),
+            )
                 : displayedProducts.isEmpty
                 ? SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 50.0),
-                        child: Text(l10n.noItemsFound),
-                      ),
-                    ),
-                  )
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 50.0),
+                  child: Text(l10n.noItemsFound),
+                ),
+              ),
+            )
                 : SliverPadding(
-<<<<<<< HEAD
               padding: const EdgeInsets.symmetric(horizontal: 12),
               sliver: SliverGrid(
                 gridDelegate:
@@ -421,26 +360,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-=======
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    sliver: SliverGrid(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.62,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                          ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => _buildDynamicProductCard(
-                          displayedProducts[index],
-                          l10n,
-                        ),
-                        childCount: displayedProducts.length,
-                      ),
-                    ),
-                  ),
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
             const SliverToBoxAdapter(child: SizedBox(height: 80)),
           ],
         ),
@@ -645,23 +564,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildActionButton(
-    String label,
-    IconData icon,
-    bool isPrimary, {
-    VoidCallback? onTap,
-  }) {
+      String label,
+      IconData icon,
+      bool isPrimary, {
+        VoidCallback? onTap,
+      }) {
     return SizedBox(
       height: 36,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-<<<<<<< HEAD
           backgroundColor:
           isPrimary ? const Color(0xFFE85D22) : Colors.transparent,
-=======
-          backgroundColor: isPrimary
-              ? const Color(0xFFE85D22)
-              : Colors.transparent,
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
           side: BorderSide(
             color:
             isPrimary ? const Color(0xFFE85D22) : Colors.grey.shade300,
@@ -805,20 +718,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     decoration: InputDecoration(
                       hintText: l10n.iAmLookingFor,
                       hintStyle: const TextStyle(
-<<<<<<< HEAD
                           color: Colors.white54, fontSize: 13),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 15),
-=======
-                        color: Colors.white54,
-                        fontSize: 13,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 15,
-                      ),
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
                     ),
                   ),
                 ),
@@ -853,14 +756,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     String currentLangName = languages.entries
         .firstWhere(
-<<<<<<< HEAD
             (e) => e.value == languageProvider.locale.languageCode,
         orElse: () => languages.entries.first)
-=======
-          (e) => e.value == languageProvider.locale.languageCode,
-          orElse: () => languages.entries.first,
-        )
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
         .key;
 
     return PopupMenuButton<String>(

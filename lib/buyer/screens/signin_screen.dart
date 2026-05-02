@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'signup_page.dart';
 import 'home_screen.dart';
-import 'package:sbrai_solutions/account_selection_screen.dart'; // Added this import
+import 'package:sbrai_solutions/account_selection_screen.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 
 class SigninScreen extends StatefulWidget {
@@ -81,7 +81,7 @@ class _SigninScreenState extends State<SigninScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
-          (route) => false,
+              (route) => false,
         );
       }
     });
@@ -100,23 +100,34 @@ class _SigninScreenState extends State<SigninScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _apiService.post('/buyers/login', {
+      // Use the dedicated loginBuyer method from ApiService
+      final response = await _apiService.loginBuyer({
         'email': email,
         'password': password,
-      }, userType: 'buyer');
+      });
 
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && responseData['status'] == 'success') {
-        await _apiService.saveToken(
-          responseData['data']['access_token'],
-          userType: 'buyer',
-        );
+      // Check for success flag (consistent with ApiService.socialLogin)
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        // Save the authentication token
+        final token = responseData['data']['access_token'];
+        if (token != null) {
+          await _apiService.saveToken(token, userType: 'buyer');
+        }
+
+        // Save user data if returned
+        if (responseData['data']['user'] != null) {
+          await _apiService.saveUserData(responseData['data']['user']);
+        }
+
         if (!mounted) return;
 
-        _showCustomToast(responseData['message'] ?? "Signed in successfully");
+        final successMsg = responseData['message'] ?? "Signed in successfully";
+        _showCustomToast(successMsg);
         _navigateToHome();
       } else {
+        // Use the error message from the API if available
         throw responseData['message'] ?? "Login failed";
       }
     } catch (e) {
@@ -131,34 +142,43 @@ class _SigninScreenState extends State<SigninScreen> {
     setState(() => _isLoading = true);
 
     try {
-      String? token;
+      // In a real app, you would obtain the actual access token from the respective SDK.
+      // For demonstration, we're using dummy tokens – replace with real implementation.
+      String? accessToken;
 
       if (provider == 'google') {
-        token = "SOCIAL_TOKEN_FROM_SDK";
+        // Replace with actual Google Sign-In token retrieval
+        // e.g., final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+        // accessToken = (await googleUser?.authentication)?.accessToken;
+        accessToken = "DUMMY_GOOGLE_TOKEN";
       } else if (provider == 'facebook') {
-        token = "FB_TOKEN_FROM_SDK";
+        // Replace with actual Facebook Login token
+        accessToken = "DUMMY_FACEBOOK_TOKEN";
       }
 
-      if (token == null) {
+      if (accessToken == null) {
+        _showErrorSnackBar("Could not retrieve $provider token.");
         setState(() => _isLoading = false);
         return;
       }
 
-      final response = await _apiService.socialLogin(provider, token);
+      final response = await _apiService.socialLogin(provider, accessToken);
       final responseData = jsonDecode(response.body);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 && responseData['success'] == true) {
         if (!mounted) return;
 
         final successMsg =
             responseData['message'] ??
-            "Signed in with ${provider[0].toUpperCase()}${provider.substring(1)}";
+                "Signed in with ${provider[0].toUpperCase()}${provider.substring(1)}";
 
         _showCustomToast(successMsg);
         _navigateToHome();
+      } else {
+        throw responseData['message'] ?? "Social login failed";
       }
     } catch (e) {
-      _showErrorSnackBar("Social login failed: ${e.toString()}");
+      _showErrorSnackBar("Social login error: ${e.toString()}");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -185,7 +205,6 @@ class _SigninScreenState extends State<SigninScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () {
-            // Updated to lead to account selection screen
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -296,17 +315,17 @@ class _SigninScreenState extends State<SigninScreen> {
                     ),
                     child: _isLoading
                         ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
                         : const Text(
-                            "Sign In",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                      "Sign In",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -346,10 +365,10 @@ class _SigninScreenState extends State<SigninScreen> {
   }
 
   Widget _buildSocialButton(
-    String text,
-    String assetPath, {
-    required VoidCallback onTap,
-  }) {
+      String text,
+      String assetPath, {
+        required VoidCallback onTap,
+      }) {
     final bool isGoogle = text.contains("Google");
     final Color brandColor = isGoogle
         ? const Color.fromARGB(255, 154, 5, 45)

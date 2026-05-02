@@ -12,6 +12,7 @@ class Product {
   final List<String> imageUrls; // Successfully updated to List
   final String category;
   final String? createdAt;
+  bool isFavorite;
 
   Product({
     this.id,
@@ -27,6 +28,7 @@ class Product {
     required this.imageUrls,
     required this.category,
     this.createdAt,
+    this.isFavorite = false,
   });
 
   /// --- BACKWARD COMPATIBILITY GETTER ---
@@ -100,6 +102,8 @@ class Product {
           : 'General',
 
       createdAt: json['created_at']?.toString(),
+
+      isFavorite: json['is_favorite'] == true || json['is_favorite'] == 1,
     );
   }
 }

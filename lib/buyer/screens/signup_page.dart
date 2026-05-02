@@ -94,14 +94,14 @@ class _SignupPageState extends State<SignupPage> {
 
     try {
       // API call to register
-      final response = await _apiService.post('buyers/register', {
+      final response = await _apiService.registerBuyer({
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'address': _addressController.text.trim(),
         'password': _passwordController.text,
         'password_confirmation': _confirmPasswordController.text,
-      }, userType: 'buyer');
+      });
 
       final responseData = jsonDecode(response.body);
 
