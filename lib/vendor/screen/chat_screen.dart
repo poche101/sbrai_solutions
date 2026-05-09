@@ -1,19 +1,37 @@
+// ─────────────────────────────────────────────────────────────
+//  screens/chat_screen.dart
+//  Real-time chat screen connected to the Laravel API
+// ─────────────────────────────────────────────────────────────
+
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:sbrai_solutions/models/chat_model.dart';
-import 'package:sbrai_solutions/models/buyer/product_model.dart';
+import '../models/chat_models.dart';
+import '../services/chat_service.dart';
+import '../widgets/message_bubble.dart';
+import '../widgets/chat_input_bar.dart';
+import 'call_screen.dart';
 
 class ChatScreen extends StatefulWidget {
-  final Product product;
-  final String userName; // This receives product.userName (e.g., "Poche Tech")
-  final String? userInitial;
+  final int chatId;
+  final String authToken;
+  final int currentUserId;
+  final String otherPartyName;
+  final String otherPartyInitial;
+  final String adTitle;
+  final int otherPartyId;
+  final ChatService service;
 
   const ChatScreen({
     super.key,
-    required this.product,
-    required this.userName,
-    this.userInitial,
+    required this.chatId,
+    required this.authToken,
+    required this.currentUserId,
+    required this.otherPartyName,
+    required this.otherPartyInitial,
+    required this.adTitle,
+    required this.otherPartyId,
+    required this.service,
   });
 
   @override
@@ -21,59 +39,214 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final List<ChatMessage> _messages = [];
-  final TextEditingController _messageController = TextEditingController();
+  static const _orange = Color(0xFFE85D22);
+
+  final List<ChatMessageModel> _messages = [];
+  final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
 
-  // Function to handle phone calls using the vendor's phone from the model
-  Future<void> _makePhoneCall(String? phoneNumber) async {
-    if (phoneNumber == null || phoneNumber.isEmpty) {
-      debugPrint('No phone number available for this vendor');
-      return;
-    }
-    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
-    if (await canLaunchUrl(launchUri)) {
-      await launchUrl(launchUri);
-    } else {
-      debugPrint('Could not launch $launchUri');
+  bool _isLoading = true;
+  bool _isSending = false;
+  bool _isLoadingMore = false;
+  String? _error;
+  int _currentPage = 1;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMessages();
+    _markRead();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    // Load older messages when scrolled near the top
+    if (_scrollController.position.pixels <=
+            _scrollController.position.minScrollExtent + 100 &&
+        !_isLoadingMore &&
+        _hasMore) {
+      _loadMore();
     }
   }
 
-  Future<void> _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
+  Future<void> _markRead() async {
+    try {
+      await widget.service.markRead(widget.chatId);
+    } catch (_) {}
+  }
+
+  Future<void> _loadMessages() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final result = await widget.service.getMessages(widget.chatId, page: 1);
       setState(() {
-        _messages.add(
-          ChatMessage(
-            text: "Sent an image: ${image.name}",
-            timestamp: DateTime.now(),
-            isMe: true,
-          ),
-        );
+        // API returns latest-first, so reverse for chronological display
+        _messages
+          ..clear()
+          ..addAll(result.data.reversed);
+        _currentPage = 1;
+        _hasMore = result.hasMore;
+        _isLoading = false;
       });
       _scrollToBottom();
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
     }
   }
 
-  void _sendMessage() {
-    if (_messageController.text.trim().isEmpty) return;
+  Future<void> _loadMore() async {
+    setState(() => _isLoadingMore = true);
+    try {
+      final result = await widget.service.getMessages(
+        widget.chatId,
+        page: _currentPage + 1,
+      );
+      setState(() {
+        // Prepend older messages at the top
+        _messages.insertAll(0, result.data.reversed);
+        _currentPage++;
+        _hasMore = result.hasMore;
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      setState(() => _isLoadingMore = false);
+    }
+  }
 
-    setState(() {
-      _messages.add(
-        ChatMessage(
-          text: _messageController.text.trim(),
-          timestamp: DateTime.now(),
-          isMe: true,
+  Future<void> _sendText() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _isSending) return;
+
+    _controller.clear();
+    setState(() => _isSending = true);
+
+    // Optimistic UI: add a temporary message
+    final tempMsg = ChatMessageModel(
+      id: -DateTime.now().millisecondsSinceEpoch,
+      chatId: widget.chatId,
+      senderId: widget.currentUserId,
+      body: text,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+    setState(() => _messages.add(tempMsg));
+    _scrollToBottom();
+
+    try {
+      final sent = await widget.service.sendMessage(
+        widget.chatId,
+        message: text,
+      );
+      // Replace temp with real message
+      final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
+      if (idx != -1) {
+        setState(() => _messages[idx] = sent);
+      }
+    } catch (e) {
+      // Remove failed temp message
+      setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
+      _showError('Failed to send message');
+      _controller.text = text; // Restore text
+    } finally {
+      setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _sendImage() async {
+    final XFile? picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+
+    setState(() => _isSending = true);
+
+    // Optimistic image placeholder
+    final tempMsg = ChatMessageModel(
+      id: -DateTime.now().millisecondsSinceEpoch,
+      chatId: widget.chatId,
+      senderId: widget.currentUserId,
+      imagePath: picked.path, // local path for preview
+      createdAt: DateTime.now().toIso8601String(),
+    );
+    setState(() => _messages.add(tempMsg));
+    _scrollToBottom();
+
+    try {
+      final sent = await widget.service.sendMessage(
+        widget.chatId,
+        image: File(picked.path),
+      );
+      final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
+      if (idx != -1) setState(() => _messages[idx] = sent);
+    } catch (e) {
+      setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
+      _showError('Failed to send image');
+    } finally {
+      setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _startCall(CallType callType) async {
+    final channelName =
+        'chat_${widget.chatId}_${DateTime.now().millisecondsSinceEpoch}';
+    const uid = 1; // Use actual user ID in production
+
+    try {
+      // 1. Get Agora token
+      final tokenResp = await widget.service.getCallToken(
+        channelName: channelName,
+        uid: uid,
+      );
+
+      // 2. Notify receiver via API
+      await widget.service.initiateCall(
+        receiverId: widget.otherPartyId,
+        channelName: channelName,
+        callerName: 'Me', // Replace with actual user name
+        callType: callType,
+      );
+
+      if (!mounted) return;
+
+      // 3. Navigate to call screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            session: CallSession(
+              channelName: tokenResp.channelName,
+              token: tokenResp.token,
+              uid: uid,
+              callType: callType,
+              callerName: widget.otherPartyName,
+              receiverId: widget.otherPartyId,
+            ),
+            service: widget.service,
+          ),
         ),
       );
-    });
-    _messageController.clear();
-    _scrollToBottom();
+    } catch (e) {
+      _showError('Could not start call. Please try again.');
+    }
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
+    Future.delayed(const Duration(milliseconds: 150), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
@@ -84,217 +257,168 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Determine the display name and initial dynamically
-    final String displayName = widget.userName.isNotEmpty
-        ? widget.userName
-        : "Sbrai User";
-    final String displayInitial =
-        widget.userInitial ??
-        (displayName.isNotEmpty ? displayName[0].toUpperCase() : "S");
-
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        titleSpacing: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: const Color(0xFFF5F5F5),
-              child: Text(
-                displayInitial,
-                style: const TextStyle(
-                  color: Color(0xFFE85D22), // Matching your brand orange
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    displayName,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Text(
-                    "Online",
-                    style: TextStyle(
-                      color: Colors.green,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.phone_outlined, color: Colors.black),
-            onPressed: () => _makePhoneCall(widget.product.vendorPhone),
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.black),
-            onPressed: () {},
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            color: Colors.grey.shade50,
-            width: double.infinity,
-            child: Row(
+      appBar: _buildAppBar(),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: _orange))
+          : _error != null
+          ? _buildError()
+          : Column(
               children: [
-                const Icon(
-                  Icons.shopping_bag_outlined,
-                  size: 14,
-                  color: Colors.grey,
+                // Ad context bar
+                if (widget.adTitle.isNotEmpty) _buildAdBar(),
+                // Load more indicator
+                if (_isLoadingMore)
+                  const LinearProgressIndicator(color: _orange, minHeight: 2),
+                // Message list
+                Expanded(child: _buildMessageList()),
+                // Input bar
+                ChatInputBar(
+                  controller: _controller,
+                  onSendText: _sendText,
+                  onPickImage: _sendImage,
+                  isSending: _isSending,
                 ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    "Product: ${widget.product.name}",
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                    overflow: TextOverflow.ellipsis,
+              ],
+            ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 0.5,
+      titleSpacing: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.black),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: const Color(0xFFF5F5F5),
+            child: Text(
+              widget.otherPartyInitial,
+              style: const TextStyle(
+                color: _orange,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  widget.otherPartyName,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
+        ],
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.phone_outlined, color: Colors.black),
+          onPressed: () => _startCall(CallType.audio),
+        ),
+        IconButton(
+          icon: const Icon(Icons.videocam_outlined, color: Colors.black),
+          onPressed: () => _startCall(CallType.video),
+        ),
+        IconButton(
+          icon: const Icon(Icons.more_vert, color: Colors.black),
+          onPressed: () {},
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAdBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      color: Colors.grey.shade50,
+      width: double.infinity,
+      child: Row(
+        children: [
+          const Icon(Icons.shopping_bag_outlined, size: 14, color: Colors.grey),
+          const SizedBox(width: 6),
           Expanded(
-            child: _messages.isEmpty
-                ? const Center(
-                    child: Text(
-                      "No messages yet",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final msg = _messages[index];
-                      return _buildMessageBubble(msg);
-                    },
-                  ),
+            child: Text(
+              'Product: ${widget.adTitle}',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          _buildInputArea(),
         ],
       ),
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage msg) {
-    return Align(
-      alignment: msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        decoration: BoxDecoration(
-          color: msg.isMe ? const Color(0xFFE85D22) : Colors.grey.shade200,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(msg.isMe ? 16 : 0),
-            bottomRight: Radius.circular(msg.isMe ? 0 : 16),
-          ),
-        ),
+  Widget _buildMessageList() {
+    if (_messages.isEmpty) {
+      return const Center(
         child: Text(
-          msg.text,
-          style: TextStyle(
-            color: msg.isMe ? Colors.white : Colors.black87,
-            fontSize: 14,
+          'No messages yet',
+          style: TextStyle(color: Colors.grey, fontSize: 14),
+        ),
+      );
+    }
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: _messages.length,
+      itemBuilder: (context, index) {
+        final msg = _messages[index];
+        final isMe = msg.senderId == widget.currentUserId;
+        return MessageBubble(message: msg, isMe: isMe);
+      },
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+          const SizedBox(height: 12),
+          Text(
+            _error ?? 'Failed to load messages',
+            style: const TextStyle(color: Colors.grey),
           ),
-        ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadMessages,
+            style: ElevatedButton.styleFrom(backgroundColor: _orange),
+            child: const Text('Retry', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
-  }
-
-  Widget _buildInputArea() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.image_outlined, color: Colors.black54),
-                onPressed: _pickImage,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: TextField(
-                  controller: _messageController,
-                  decoration: const InputDecoration(
-                    hintText: 'Type a message...',
-                    hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                    border: InputBorder.none,
-                  ),
-                  onSubmitted: (_) => _sendMessage(),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _sendMessage,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE85D22),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.send, color: Colors.white, size: 20),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
   }
 }

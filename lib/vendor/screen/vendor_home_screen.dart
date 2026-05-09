@@ -20,6 +20,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _categoriesLoaded = false;
+
   final ProductService _productService = ProductService();
 
   String selectedState = "All Nigeria";
@@ -33,7 +35,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Maps category name (as shown in UI) to its database ID
   Map<String, int> _categoryNameToId = {};
-  bool _categoriesLoaded = false;
 
   final List<String> nigeriaStates = [
     "All Nigeria",
@@ -111,7 +112,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── FETCH CATEGORIES FROM API ──────────────────────────────────────────────
   Future<void> _fetchCategories() async {
     try {
-<<<<<<< HEAD
       final response = await http.get(
         Uri.parse('https://sbraisolutions.com/api/v1/categories'),
         headers: {'Accept': 'application/json'},
@@ -127,62 +127,13 @@ class _HomeScreenState extends State<HomeScreen> {
               map[cat['name']] = cat['id'];
             }
           });
-          setState(() {
-            _categoryNameToId = map;
-            _categoriesLoaded = true;
-          });
+          if (mounted) {
+            setState(() {
+              _categoryNameToId = map;
+              _categoriesLoaded = true;
+            });
+          }
         }
-=======
-      final List<String> serviceCategoryNames = [
-        'Logistics',
-        'Borehole',
-        'Cleaning',
-        'Fumigation',
-      ];
-
-      if (selectedCategory != null &&
-          serviceCategoryNames.contains(selectedCategory)) {
-        final services = await _serviceProvider.getServices();
-
-        setState(() {
-          displayedProducts = services.map((s) {
-            String resolvedImageUrl =
-                s.photos.firstOrNull?.fullUrl ??
-                "https://via.placeholder.com/150";
-
-            return Product(
-              id: s.id,
-              name: s.title,
-              price: s.price ?? 0.0,
-              imageUrls: [resolvedImageUrl],
-              location: s.location ?? "Nigeria",
-              category: selectedCategory ?? "General",
-              userName: "Service Provider",
-              vendorName: "Professional Artisan",
-              rating: 0.0,
-            );
-          }).toList();
-          isLoading = false;
-        });
-      } else {
-        final response = await _productService.getProducts(
-          page: 1,
-          perPage: 40,
-          state: selectedState == "All Nigeria" ? null : selectedState,
-          search: _searchController.text.isNotEmpty
-              ? _searchController.text
-              : null,
-          category: selectedCategory,
-        );
-
-        final List<dynamic> data = response['data'] ?? [];
-        setState(() {
-          displayedProducts = data
-              .map((json) => Product.fromJson(json))
-              .toList();
-          isLoading = false;
-        });
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
       }
     } catch (e) {
       debugPrint('Category fetch error: $e');
@@ -194,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => isLoading = true);
 
     try {
-      // Build search query (unchanged)
+      // Build search query
       String? search;
       final searchText = _searchController.text.trim();
       final state = selectedState;
@@ -207,7 +158,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       int? categoryId;
-      if (selectedCategory != null && _categoryNameToId.containsKey(selectedCategory)) {
+      if (selectedCategory != null &&
+          _categoryNameToId.containsKey(selectedCategory)) {
         categoryId = _categoryNameToId[selectedCategory];
       }
 
@@ -218,49 +170,41 @@ class _HomeScreenState extends State<HomeScreen> {
         categoryId: categoryId,
       );
 
-      // ── SAFELY EXTRACT THE ADS LIST ──────────────────────────
+      // Safely extract the ads list from either paginated or flat response
       final dynamic responseData = response['data'];
       List<dynamic> adsList = [];
 
       if (responseData is Map && responseData.containsKey('data')) {
-        // Standard paginated response
         adsList = (responseData['data'] as List<dynamic>?) ?? [];
       } else if (responseData is List) {
-        // Fallback for non‑paginated (unlikely)
         adsList = responseData;
       }
 
-      setState(() {
-        displayedProducts = adsList
-            .map((json) => Product.fromJson(json as Map<String, dynamic>))
-            .toList();
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          displayedProducts = adsList
+              .map((json) => Product.fromJson(json as Map<String, dynamic>))
+              .toList();
+          isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint("❌ Error loading ads: $e");
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
   void _filterByCategory(String categoryName) {
-<<<<<<< HEAD
     setState(() {
-      selectedCategory =
-      (selectedCategory == categoryName) ? null : categoryName;
-    });
-=======
-    setState(
-      () => selectedCategory = (selectedCategory == categoryName)
+      selectedCategory = (selectedCategory == categoryName)
           ? null
-          : categoryName,
-    );
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
+          : categoryName;
+    });
     _fetchProducts();
   }
 
   void _toggleFavorite(Product product) {
     if (product.id == null) return;
-
     setState(() {
       if (_favoriteProductIds.contains(product.id)) {
         _favoriteProductIds.remove(product.id);
@@ -282,10 +226,11 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // ── BUILD ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    // final languageProvider = Provider.of<LanguageProvider>(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -318,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const PostAdScreen()),
+          MaterialPageRoute(builder: (_) => const PostAdScreen()),
         ),
         backgroundColor: const Color(0xFFE85D22),
         shape: const CircleBorder(),
@@ -383,70 +328,51 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            isLoading
-                ? const SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.only(top: 50.0),
-                        child: CircularProgressIndicator(
-                          color: Color(0xFFE85D22),
-                        ),
-                      ),
-                    ),
-                  )
-                : displayedProducts.isEmpty
-                ? SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 50.0),
-                        child: Text(l10n.noItemsFound),
-                      ),
-                    ),
-                  )
-                : SliverPadding(
-<<<<<<< HEAD
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              sliver: SliverGrid(
-                gridDelegate:
-                const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.62,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
+            if (isLoading)
+              const SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 50.0),
+                    child: CircularProgressIndicator(color: Color(0xFFE85D22)),
+                  ),
                 ),
-                delegate: SliverChildBuilderDelegate(
-                      (context, index) => _buildDynamicProductCard(
-                      displayedProducts[index], l10n),
-                  childCount: displayedProducts.length,
+              )
+            else if (displayedProducts.isEmpty)
+              SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 50.0),
+                    child: Text(l10n.noItemsFound),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.62,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => _buildDynamicProductCard(
+                      displayedProducts[index],
+                      l10n,
+                    ),
+                    childCount: displayedProducts.length,
+                  ),
                 ),
               ),
-            ),
-=======
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    sliver: SliverGrid(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.62,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                          ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => _buildDynamicProductCard(
-                          displayedProducts[index],
-                          l10n,
-                        ),
-                        childCount: displayedProducts.length,
-                      ),
-                    ),
-                  ),
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
             const SliverToBoxAdapter(child: SizedBox(height: 80)),
           ],
         ),
       ),
     );
   }
+
+  // ── WIDGETS ────────────────────────────────────────────────────────────────
 
   Widget _buildDynamicProductCard(Product product, AppLocalizations l10n) {
     final bool isFavorited = _favoriteProductIds.contains(product.id);
@@ -456,14 +382,15 @@ class _HomeScreenState extends State<HomeScreen> {
       'cleaning',
       'fumigation',
     ];
-    final bool isService =
-    serviceCategories.contains(product.category.toLowerCase());
+    final bool isService = serviceCategories.contains(
+      product.category.toLowerCase(),
+    );
 
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ProductDetailsScreen(
+          builder: (_) => ProductDetailsScreen(
             product: product,
             userName: product.userName,
           ),
@@ -498,8 +425,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         color: Colors.grey.shade200,
-                        child:
-                        const Icon(Icons.image, color: Colors.grey),
+                        child: const Icon(Icons.image, color: Colors.grey),
                       ),
                     ),
                   ),
@@ -537,14 +463,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.white.withOpacity(0.9),
                           shape: BoxShape.circle,
                           boxShadow: const [
-                            BoxShadow(
-                                color: Colors.black12, blurRadius: 4),
+                            BoxShadow(color: Colors.black12, blurRadius: 4),
                           ],
                         ),
                         child: Icon(
-                          isFavorited
-                              ? Icons.favorite
-                              : Icons.favorite_border,
+                          isFavorited ? Icons.favorite : Icons.favorite_border,
                           size: 18,
                           color: isFavorited ? Colors.red : Colors.grey,
                         ),
@@ -617,20 +540,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           l10n.chat,
                           Icons.chat_bubble_outline,
                           true,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ChatScreen(
-                                  product: product,
-                                  userName: product.userName,
-                                  userInitial: product.userName.isNotEmpty
-                                      ? product.userName[0].toUpperCase()
-                                      : 'U',
-                                ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatScreen(
+                                product: product,
+                                userName: product.userName,
+                                userInitial: product.userName.isNotEmpty
+                                    ? product.userName[0].toUpperCase()
+                                    : 'U',
                               ),
-                            );
-                          },
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -654,20 +575,13 @@ class _HomeScreenState extends State<HomeScreen> {
       height: 36,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-<<<<<<< HEAD
-          backgroundColor:
-          isPrimary ? const Color(0xFFE85D22) : Colors.transparent,
-=======
           backgroundColor: isPrimary
               ? const Color(0xFFE85D22)
               : Colors.transparent,
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
           side: BorderSide(
-            color:
-            isPrimary ? const Color(0xFFE85D22) : Colors.grey.shade300,
+            color: isPrimary ? const Color(0xFFE85D22) : Colors.grey.shade300,
           ),
-          shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: EdgeInsets.zero,
         ),
         onPressed: onTap,
@@ -731,8 +645,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 11,
-                  fontWeight:
-                  isSelected ? FontWeight.bold : FontWeight.w600,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -770,8 +683,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: Text(
                       selectedState,
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 12),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -800,32 +712,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: TextField(
                     controller: _searchController,
                     onSubmitted: (_) => _fetchProducts(),
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: l10n.iAmLookingFor,
-                      hintStyle: const TextStyle(
-<<<<<<< HEAD
-                          color: Colors.white54, fontSize: 13),
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'Search...',
+                      hintStyle: TextStyle(color: Colors.white54, fontSize: 13),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 15),
-=======
-                        color: Colors.white54,
-                        fontSize: 13,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 15,
-                      ),
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
+                      contentPadding: EdgeInsets.symmetric(horizontal: 15),
                     ),
                   ),
                 ),
                 IconButton(
                   onPressed: _fetchProducts,
-                  icon: const Icon(Icons.search,
-                      color: Colors.white, size: 22),
+                  icon: const Icon(Icons.search, color: Colors.white, size: 22),
                   style: IconButton.styleFrom(
                     backgroundColor: const Color(0xFFE85D22),
                     shape: RoundedRectangleBorder(
@@ -851,16 +749,11 @@ class _HomeScreenState extends State<HomeScreen> {
       l10n.french: "fr",
     };
 
-    String currentLangName = languages.entries
+    final String currentLangName = languages.entries
         .firstWhere(
-<<<<<<< HEAD
-            (e) => e.value == languageProvider.locale.languageCode,
-        orElse: () => languages.entries.first)
-=======
           (e) => e.value == languageProvider.locale.languageCode,
           orElse: () => languages.entries.first,
         )
->>>>>>> 1d0cf1d (feat(kyc): wire KYC screen to live API via KycService)
         .key;
 
     return PopupMenuButton<String>(
@@ -868,8 +761,7 @@ class _HomeScreenState extends State<HomeScreen> {
         languageProvider.setLanguage(Locale(languages[value]!));
       },
       child: Container(
-        padding:
-        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey.shade300),
           borderRadius: BorderRadius.circular(4),

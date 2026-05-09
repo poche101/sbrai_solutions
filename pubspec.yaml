@@ -26,6 +26,8 @@ dependencies:
   provider: ^6.1.1
   firebase_database: 12.3.0
   firebase_storage: ^13.3.0  # Updated from ^12.0.0 to fix the conflict
+  agora_rtc_engine: ^6.3.2   # ← add this line
+
   
 
 dev_dependencies:
