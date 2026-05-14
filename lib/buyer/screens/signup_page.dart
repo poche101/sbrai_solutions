@@ -93,20 +93,24 @@ class _SignupPageState extends State<SignupPage> {
     setState(() => _isLoading = true);
 
     try {
-      // API call to register
-      final response = await _apiService.post('buyers/register', {
+      // ✅ Updated to use the specific helper method instead of manual post()
+      final response = await _apiService.registerBuyer({
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'address': _addressController.text.trim(),
         'password': _passwordController.text,
         'password_confirmation': _confirmPasswordController.text,
-      }, userType: 'buyer');
+      });
 
       final responseData = jsonDecode(response.body);
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        _showCustomToast("Account created successfully!");
+      // ✅ Check for both status code and the success boolean from your API
+      if ((response.statusCode == 201 || response.statusCode == 200) &&
+          responseData['success'] == true) {
+        _showCustomToast(
+          responseData['message'] ?? "Account created successfully!",
+        );
 
         // Optionally save the token immediately if your register API returns one
         if (responseData['data'] != null &&
@@ -128,9 +132,13 @@ class _SignupPageState extends State<SignupPage> {
             );
           });
         }
+      } else {
+        // Handle cases where status is 200 but 'success' is false, or validation errors
+        throw responseData['message'] ??
+            "Registration failed. Please try again.";
       }
     } catch (e) {
-      // This will catch the formatted error string from ApiService (e.g., validation errors)
+      // This catches network errors or the thrown error messages above
       _showCustomToast(e.toString(), isSuccess: false);
     } finally {
       if (mounted) setState(() => _isLoading = false);

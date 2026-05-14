@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/models/message_model.dart';
-import 'package:sbrai_solutions/buyer/screens/settings/chat_screen.dart';
+import 'package:sbrai_solutions/models/chat_model.dart';
+import 'package:sbrai_solutions/screens/chat_screen.dart';
+import 'package:sbrai_solutions/services/chat_service.dart'; // ← Add this import
 
 class MessageScreen extends StatefulWidget {
-  // Pass the list of messages into the screen to make it fully dynamic
-  final List<MessageModel> initialMessages;
+  final List<ChatThread> threads;
+  final String authToken;
+  final int currentUserId;
+  final bool isVendor;
 
-  const MessageScreen({super.key, this.initialMessages = const []});
+  const MessageScreen({
+    super.key,
+    required this.threads,
+    required this.authToken,
+    required this.currentUserId,
+    required this.isVendor,
+  });
 
   @override
   State<MessageScreen> createState() => _MessageScreenState();
@@ -20,8 +30,17 @@ class _MessageScreenState extends State<MessageScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize with data passed from the parent or an API
-    _allMessages = widget.initialMessages;
+
+    _allMessages = widget.threads
+        .map(
+          (thread) => MessageModel.fromChatThread(
+            thread,
+            currentUserId: widget.currentUserId,
+            isVendor: widget.isVendor,
+          ),
+        )
+        .toList();
+
     _filteredMessages = _allMessages;
   }
 
@@ -121,14 +140,21 @@ class _MessageScreenState extends State<MessageScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(15),
         onTap: () {
+          // Fixed: Match the ChatScreen constructor you're using
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => ChatScreen(
-                userName: message.senderName,
-                userInitial: message.senderName.isNotEmpty
-                    ? message.senderName[0]
+                chatId: message.thread.id,
+                authToken: widget.authToken,
+                currentUserId: widget.currentUserId,
+                otherPartyName: message.senderName,
+                otherPartyInitial: message.senderName.isNotEmpty
+                    ? message.senderName[0].toUpperCase()
                     : '?',
+                adTitle: message.subTitle ?? message.thread.adTitle ?? '',
+                otherPartyId: message.thread.otherParticipant?.id ?? 0,
+                service: ChatService(widget.authToken),
               ),
             ),
           );
@@ -173,14 +199,14 @@ class _MessageScreenState extends State<MessageScreen> {
             )
           : Center(
               child: message.isVendor
-                  ? Icon(Icons.image_outlined, color: Colors.grey.shade400)
+                  ? const Icon(Icons.image_outlined, color: Colors.grey)
                   : CircleAvatar(
                       backgroundColor: Colors.blueGrey.shade50,
                       child: Text(
                         message.senderName.isNotEmpty
                             ? message.senderName[0]
-                            : '',
-                        style: TextStyle(color: Colors.orange.shade300),
+                            : '?',
+                        style: const TextStyle(color: Colors.orange),
                       ),
                     ),
             ),

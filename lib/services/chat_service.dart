@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import '../models/chat_models.dart';
+import 'package:sbrai_solutions/models/chat_model.dart';
 
 class ChatService {
   // ── Configuration ─────────────────────────────────────────────

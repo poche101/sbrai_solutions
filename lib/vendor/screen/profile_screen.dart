@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../services/vendor/vendor_auth_service.dart';
 
@@ -11,9 +12,11 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final VendorAuthService _authService = VendorAuthService();
+  final ImagePicker _picker = ImagePicker();
 
   bool isEditing = false;
   bool isLoading = true;
+  bool isUploadingPhoto = false;
   bool isVerified = false;
   double rating = 0.0;
   String joinedDate = '';
@@ -25,6 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String businessName = '';
   String businessAddress = '';
   String nin = '';
+  String? profilePhotoUrl;
 
   // Statistics
   int activeListings = 0;
@@ -61,34 +65,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final response = await _authService.getProfile();
-
       if (!mounted) return;
 
-      if (response['status'] == 'success' && response['data'] != null) {
-        final vendor = response['data'];
+      // API returns { status: true, data: { ... } }
+      // or           { status: "success", data: { ... } }
+      final bool ok =
+          response['status'] == true || response['status'] == 'success';
+
+      if (ok && response['data'] != null) {
+        final vendor = response['data'] as Map<String, dynamic>;
 
         setState(() {
-          userName = vendor['full_name'] ?? 'Vendor Name';
-          email = vendor['email'] ?? '';
-          phone = vendor['phone_number'] ?? '';
-          businessName = vendor['business_name'] ?? 'My Business';
-          businessAddress = vendor['business_address'] ?? '';
-          nin = vendor['nin'] ?? '';
-          isVerified = (vendor['email_verified_at'] != null) ||
-              (vendor['nin_verified_at'] != null);
-          rating = (vendor['rating'] ?? 0.0).toDouble();
+          // ✅ Correct field names matching API response
+          userName = vendor['name']?.toString() ?? 'Vendor Name';
+          email = vendor['email']?.toString() ?? '';
+          phone = vendor['phone']?.toString() ?? '';
+          businessName = vendor['business_name']?.toString() ?? 'My Business';
+          businessAddress = vendor['business_address']?.toString() ?? '';
+          nin = vendor['nin']?.toString() ?? '';
+          profilePhotoUrl = vendor['profile_photo_url']?.toString();
 
-          // Format joined date
+          isVerified =
+              vendor['email_verified_at'] != null ||
+              vendor['nin_verified_at'] != null;
+          rating = (vendor['rating'] ?? 0.0) is num
+              ? (vendor['rating'] as num).toDouble()
+              : 0.0;
+
           if (vendor['created_at'] != null) {
             try {
-              final date = DateTime.parse(vendor['created_at']);
+              final date = DateTime.parse(vendor['created_at'].toString());
               joinedDate = DateFormat('MMM yyyy').format(date);
-            } catch (e) {
+            } catch (_) {
               joinedDate = 'Recently';
             }
           }
 
-          // Load statistics if available
           activeListings = vendor['active_listings'] ?? 0;
           totalViews = vendor['total_views'] ?? 0;
           totalChats = vendor['total_chats'] ?? 0;
@@ -101,17 +113,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _updateControllers();
         });
       } else {
-        _showToast(response['message'] ?? 'Failed to load profile', isError: true);
+        _showToast(
+          response['message']?.toString() ?? 'Failed to load profile',
+          isError: true,
+        );
       }
     } catch (e) {
       debugPrint('Error loading profile: $e');
-      if (mounted) {
-        _showToast('Error loading profile: $e', isError: true);
-      }
+      if (mounted) _showToast('Error loading profile: $e', isError: true);
     } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -136,7 +147,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (!mounted) return;
 
-      if (response['status'] == 'success') {
+      // API returns { status: true, message: "...", data: { ... } }
+      final bool ok =
+          response['status'] == true || response['status'] == 'success';
+
+      if (ok) {
         setState(() {
           currentName = nameController.text;
           currentPhone = phoneController.text;
@@ -148,20 +163,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
           businessAddress = currentBusinessAddress;
           isEditing = false;
         });
-
-        _showToast(response['message'] ?? 'Profile updated successfully!');
+        _showToast(
+          response['message']?.toString() ?? 'Profile updated successfully!',
+        );
       } else {
-        _showToast(response['message'] ?? 'Update failed', isError: true);
+        _showToast(
+          response['message']?.toString() ?? 'Update failed',
+          isError: true,
+        );
       }
     } catch (e) {
       debugPrint('Error updating profile: $e');
-      if (mounted) {
-        _showToast('Error updating profile: $e', isError: true);
-      }
+      if (mounted) _showToast('Error updating profile: $e', isError: true);
     } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Photo upload
+  // ---------------------------------------------------------------------------
+
+  Future<void> _pickAndUploadPhoto() async {
+    try {
+      final XFile? picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 800,
+      );
+      if (picked == null) return;
+
+      setState(() => isUploadingPhoto = true);
+
+      final response = await _authService.uploadPhoto(picked.path);
+      if (!mounted) return;
+
+      final bool ok =
+          response['status'] == true || response['status'] == 'success';
+
+      if (ok) {
+        final newUrl = response['data']?['profile_photo_url']?.toString();
+        setState(() => profilePhotoUrl = newUrl);
+        _showToast(response['message']?.toString() ?? 'Photo updated!');
+      } else {
+        _showToast(
+          response['message']?.toString() ?? 'Photo upload failed',
+          isError: true,
+        );
       }
+    } catch (e) {
+      debugPrint('Photo upload error: $e');
+      if (mounted) _showToast('Photo upload failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => isUploadingPhoto = false);
     }
   }
 
@@ -186,6 +240,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -201,9 +259,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             size: 20,
           ),
           onPressed: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            }
+            if (Navigator.canPop(context)) Navigator.pop(context);
           },
         ),
         title: const Text(
@@ -217,12 +273,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           if (!isEditing && !isLoading)
             IconButton(
-              onPressed: () {
-                setState(() {
-                  isEditing = true;
-                  _updateControllers();
-                });
-              },
+              onPressed: () => setState(() {
+                isEditing = true;
+                _updateControllers();
+              }),
               icon: const Icon(
                 Icons.edit_note_rounded,
                 color: Color(0xFFFF7043),
@@ -233,29 +287,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: isLoading
           ? const Center(
-        child: CircularProgressIndicator(
-          color: Color(0xFFFF7043),
-        ),
-      )
+              child: CircularProgressIndicator(color: Color(0xFFFF7043)),
+            )
           : SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            _buildHeaderSection(),
-            const SizedBox(height: 16),
-            _buildSectionCard(
-              title: 'Account Information',
-              child: isEditing ? _buildEditForm() : _buildInfoList(),
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  _buildHeaderSection(),
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    title: 'Account Information',
+                    child: isEditing ? _buildEditForm() : _buildInfoList(),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildStatisticsSection(),
+                  if (nin.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    _buildKycSection(),
+                  ],
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            _buildStatisticsSection(),
-            if (nin.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildKycSection(),
-            ],
-          ],
-        ),
-      ),
     );
   }
 
@@ -263,22 +315,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return _buildSectionCard(
       child: Column(
         children: [
-          const CircleAvatar(
-            radius: 50,
-            backgroundColor: Color(0xFFFFF3E0),
-            child: Icon(
-              Icons.storefront_rounded,
-              size: 50,
-              color: Color(0xFFFF7043),
-            ),
+          // ── Avatar with upload button ────────────────────────────────────
+          Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              CircleAvatar(
+                radius: 50,
+                backgroundColor: const Color(0xFFFFF3E0),
+                backgroundImage:
+                    (profilePhotoUrl != null && profilePhotoUrl!.isNotEmpty)
+                    ? NetworkImage(profilePhotoUrl!)
+                    : null,
+                child: (profilePhotoUrl == null || profilePhotoUrl!.isEmpty)
+                    ? const Icon(
+                        Icons.storefront_rounded,
+                        size: 50,
+                        color: Color(0xFFFF7043),
+                      )
+                    : null,
+              ),
+              if (isUploadingPhoto)
+                const Positioned.fill(
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundColor: Colors.black38,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                )
+              else
+                GestureDetector(
+                  onTap: _pickAndUploadPhoto,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF7043),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           Text(
             currentName,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Row(
@@ -288,9 +376,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: 8),
               _buildStatusBadge(
                 isVerified ? 'Verified' : 'Not Verified',
-                isVerified
-                    ? const Color(0xFF00C853)
-                    : Colors.grey.shade400,
+                isVerified ? const Color(0xFF00C853) : Colors.grey.shade400,
                 icon: isVerified
                     ? Icons.verified_rounded
                     : Icons.pending_rounded,
@@ -316,14 +402,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               if (rating > 0) ...[
                 const SizedBox(width: 12),
-                const Icon(
-                  Icons.star_rounded,
-                  size: 18,
-                  color: Colors.amber,
-                ),
+                const Icon(Icons.star_rounded, size: 18, color: Colors.amber),
                 const SizedBox(width: 4),
                 Text(
-                  rating.toString(),
+                  rating.toStringAsFixed(1),
                   style: const TextStyle(
                     color: Colors.black45,
                     fontWeight: FontWeight.w600,
@@ -350,7 +432,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _buildInfoTile(
           Icons.location_on_rounded,
           'Business Address',
-          currentBusinessAddress.isEmpty ? 'Not provided' : currentBusinessAddress,
+          currentBusinessAddress.isEmpty
+              ? 'Not provided'
+              : currentBusinessAddress,
         ),
       ],
     );
@@ -377,12 +461,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    isEditing = false;
-                    _updateControllers();
-                  });
-                },
+                onPressed: () => setState(() {
+                  isEditing = false;
+                  _updateControllers();
+                }),
                 icon: const Icon(Icons.close, size: 18),
                 label: const Text('Cancel'),
                 style: OutlinedButton.styleFrom(
@@ -401,18 +483,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: isLoading ? null : _updateProfile,
                 icon: isLoading
                     ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Icon(
-                  Icons.save_as_outlined,
-                  size: 18,
-                  color: Colors.white,
-                ),
+                        Icons.save_as_outlined,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                 label: const Text(
                   'Save Changes',
                   style: TextStyle(color: Colors.white),
@@ -438,18 +520,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       title: 'Your Statistics',
       child: Row(
         children: [
-          _buildStatItem(
-            activeListings.toString(),
-            'Active\nListings',
-          ),
-          _buildStatItem(
-            totalViews.toString(),
-            'Total Views',
-          ),
-          _buildStatItem(
-            totalChats.toString(),
-            'Chats',
-          ),
+          _buildStatItem(activeListings.toString(), 'Active\nListings'),
+          _buildStatItem(totalViews.toString(), 'Total Views'),
+          _buildStatItem(totalChats.toString(), 'Chats'),
         ],
       ),
     );
@@ -458,17 +531,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildKycSection() {
     return _buildSectionCard(
       title: 'KYC Information',
-      child: Column(
-        children: [
-          _buildInfoTile(
-            Icons.credit_card_rounded,
-            'NIN',
-            nin,
-          ),
-        ],
-      ),
+      child: _buildInfoTile(Icons.credit_card_rounded, 'NIN', nin),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Reusable widgets
+  // ---------------------------------------------------------------------------
 
   Widget _buildLabel(String text) => Padding(
     padding: const EdgeInsets.only(bottom: 6, top: 10),
@@ -478,8 +547,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ),
   );
 
-  Widget _buildEditField(TextEditingController controller, String hint,
-      {int maxLines = 1}) {
+  Widget _buildEditField(
+    TextEditingController controller,
+    String hint, {
+    int maxLines = 1,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
       child: TextField(

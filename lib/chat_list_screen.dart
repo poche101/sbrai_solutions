@@ -4,9 +4,9 @@
 // ─────────────────────────────────────────────────────────────
 
 import 'package:flutter/material.dart';
-import '../models/chat_models.dart';
+import 'package:sbrai_solutions/models/chat_model.dart';
 import '../services/chat_service.dart';
-import 'chat_screen.dart';
+import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
   /// Pass your auth token and current user ID here

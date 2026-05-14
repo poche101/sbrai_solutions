@@ -8,8 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sbrai_solutions/models/chat_model.dart';
 import 'package:sbrai_solutions/services/chat_service.dart';
-import '../widgets/message_bubble.dart';
-import '../widgets/chat_input_bar.dart';
+import 'package:sbrai_solutions/vendor/widgets/message_bubble.dart';
+import 'package:sbrai_solutions/vendor/widgets/chat_input_bar.dart';
 import 'package:sbrai_solutions/screens/call_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -69,7 +69,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onScroll() {
-    // Load older messages when scrolled near the top
     if (_scrollController.position.pixels <=
             _scrollController.position.minScrollExtent + 100 &&
         !_isLoadingMore &&
@@ -92,7 +91,6 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final result = await widget.service.getMessages(widget.chatId, page: 1);
       setState(() {
-        // API returns latest-first, so reverse for chronological display
         _messages
           ..clear()
           ..addAll(result.data.reversed);
@@ -117,7 +115,6 @@ class _ChatScreenState extends State<ChatScreen> {
         page: _currentPage + 1,
       );
       setState(() {
-        // Prepend older messages at the top
         _messages.insertAll(0, result.data.reversed);
         _currentPage++;
         _hasMore = result.hasMore;
@@ -135,7 +132,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _controller.clear();
     setState(() => _isSending = true);
 
-    // Optimistic UI: add a temporary message
     final tempMsg = ChatMessageModel(
       id: -DateTime.now().millisecondsSinceEpoch,
       chatId: widget.chatId,
@@ -151,16 +147,14 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.chatId,
         message: text,
       );
-      // Replace temp with real message
       final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
       if (idx != -1) {
         setState(() => _messages[idx] = sent);
       }
     } catch (e) {
-      // Remove failed temp message
       setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
       _showError('Failed to send message');
-      _controller.text = text; // Restore text
+      _controller.text = text;
     } finally {
       setState(() => _isSending = false);
     }
@@ -175,12 +169,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() => _isSending = true);
 
-    // Optimistic image placeholder
     final tempMsg = ChatMessageModel(
       id: -DateTime.now().millisecondsSinceEpoch,
       chatId: widget.chatId,
       senderId: widget.currentUserId,
-      imagePath: picked.path, // local path for preview
+      imagePath: picked.path,
       createdAt: DateTime.now().toIso8601String(),
     );
     setState(() => _messages.add(tempMsg));
@@ -204,26 +197,23 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _startCall(CallType callType) async {
     final channelName =
         'chat_${widget.chatId}_${DateTime.now().millisecondsSinceEpoch}';
-    const uid = 1; // Use actual user ID in production
+    const uid = 1;
 
     try {
-      // 1. Get Agora token
       final tokenResp = await widget.service.getCallToken(
         channelName: channelName,
         uid: uid,
       );
 
-      // 2. Notify receiver via API
       await widget.service.initiateCall(
         receiverId: widget.otherPartyId,
         channelName: channelName,
-        callerName: 'Me', // Replace with actual user name
+        callerName: widget.otherPartyName,
         callType: callType,
       );
 
       if (!mounted) return;
 
-      // 3. Navigate to call screen
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -279,14 +269,10 @@ class _ChatScreenState extends State<ChatScreen> {
           ? _buildError()
           : Column(
               children: [
-                // Ad context bar
                 if (widget.adTitle.isNotEmpty) _buildAdBar(),
-                // Load more indicator
                 if (_isLoadingMore)
                   const LinearProgressIndicator(color: _orange, minHeight: 2),
-                // Message list
                 Expanded(child: _buildMessageList()),
-                // Input bar
                 ChatInputBar(
                   controller: _controller,
                   onSendText: _sendText,

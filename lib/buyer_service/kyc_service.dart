@@ -15,11 +15,9 @@ import 'package:sbrai_solutions/models/buyer/kyc_status_model.dart';
 ///   POST /api/v1/kyc/phone/verify       body: { "code": "123456" }
 ///   POST /api/v1/kyc/identity/verify    body: { "nin": "12345678901", "document"?: file }
 ///
-/// All verify responses include an updated `progress` value:
-///   { "status": true, "data": { "progress": 0.67 } }
+/// Controller response envelope always uses:
+///   { "status": true/false, "message": "...", "data": { ... } }
 ///
-/// Error responses always have:
-///   { "status": false, "message": "..." }
 /// The service throws the message string so callers just catch a String.
 
 class KycService {
@@ -29,7 +27,19 @@ class KycService {
 
   // ── GET /api/v1/kyc/status ─────────────────────────────────────────────────
   /// Fetches the full KYC status. Call this on KYCScreen load to pre-fill
-  /// the progress bar. Returns a typed [KycStatus].
+  /// the progress bar.
+  ///
+  /// Controller returns:
+  /// {
+  ///   "status": true,
+  ///   "data": {
+  ///     "email_verified": bool,
+  ///     "phone_verified": bool,
+  ///     "identity_verified": bool,
+  ///     "is_verified": bool,
+  ///     "progress": 0.0–1.0
+  ///   }
+  /// }
   Future<KycStatus> getStatus() async {
     try {
       final response = await _api.getKycStatus();
@@ -50,49 +60,64 @@ class KycService {
 
   /// POST /api/v1/kyc/email/send
   /// Triggers a 6-digit OTP email to the user's registered address.
-  /// Returns the server confirmation message (e.g. "Verification code sent to …").
-  /// Throws if the email is already verified (422) or the send fails (500).
+  ///
+  /// Controller returns:
+  ///   { "status": true, "message": "Verification code sent to user@example.com" }
+  ///
+  /// Throws if already verified (422) or send fails (500).
   Future<String> sendEmailOtp() async {
     try {
       final response = await _api.sendEmailOtp();
       final body = jsonDecode(response.body) as Map<String, dynamic>;
 
+      print("📡 API Status Code: ${response.statusCode}");
+      print("📡 API Response Body: ${response.body}");
+
       if (body['status'] == true) {
         return body['message'] as String? ?? 'Verification code sent.';
       }
 
-      throw body['message'] ?? 'Failed to send email verification code.';
+      throw body['message'] ?? 'Failed to send code.';
     } catch (e) {
-      debugPrint("❌ KycService.sendEmailOtp: $e");
+      print("❌ KycService.sendEmailOtp Exception: $e");
       rethrow;
     }
   }
 
   /// POST /api/v1/kyc/email/verify
   /// Submits the 6-digit [code] the user received by email.
-  /// Returns the updated [KycStatus] (with new progress value) on success.
   ///
-  /// Controller validates: required|string|size:6
+  /// Controller validates: required|string|size:6  (field name: "code")
+  /// Controller returns:
+  ///   { "status": true, "message": "Email verified successfully.", "data": { "progress": 0.33 } }
+  ///
   /// Throws on invalid/expired code (422).
+  /// POST /api/v1/kyc/email/verify
   Future<KycStatus> verifyEmail(String code) async {
-    _assertOtpFormat(code);
+    _assertOtpFormat(code); // ← This stays here
+
     try {
       final response = await _api.verifyEmail(code);
-      return _parseVerifyResponse(response, 'verifyEmail');
+
+      print("✅ Verify Response Code: ${response.statusCode}");
+      print("✅ Verify Response Body: ${response.body}");
+
+      return await _parseVerifyResponse(response, 'verifyEmail');
     } catch (e) {
-      debugPrint("❌ KycService.verifyEmail: $e");
+      print("❌ verifyEmail Error: $e");
       rethrow;
     }
   }
-
   // ── Phone ──────────────────────────────────────────────────────────────────
 
   /// POST /api/v1/kyc/phone/send
   /// Triggers a 6-digit OTP SMS to the user's registered phone number.
-  /// Throws if phone is not set on the account (422) or already verified (422).
   ///
-  /// Note: SMS is currently logged server-side (Termii pending sender-ID
-  /// approval). Check Laravel logs for the code during testing.
+  /// Controller returns:
+  ///   { "status": true, "message": "SMS code sent to 080XXXXXXXX" }
+  ///
+  /// Throws if phone not set (422) or already verified (422).
+  /// Note: OTP is currently logged server-side (Termii pending sender-ID approval).
   Future<String> sendPhoneOtp() async {
     try {
       final response = await _api.sendPhoneOtp();
@@ -111,15 +136,17 @@ class KycService {
 
   /// POST /api/v1/kyc/phone/verify
   /// Submits the 6-digit [code] the user received by SMS.
-  /// Returns the updated [KycStatus] on success.
   ///
-  /// Controller validates: required|string|size:6
+  /// Controller validates: required|string|size:6  (field name: "code")
+  /// Controller returns:
+  ///   { "status": true, "message": "Phone number verified successfully.", "data": { "progress": 0.67 } }
+  ///
   /// Throws on invalid/expired code (422).
   Future<KycStatus> verifyPhone(String code) async {
     _assertOtpFormat(code);
     try {
       final response = await _api.verifyPhone(code);
-      return _parseVerifyResponse(response, 'verifyPhone');
+      return await _parseVerifyResponse(response, 'verifyPhone');
     } catch (e) {
       debugPrint("❌ KycService.verifyPhone: $e");
       rethrow;
@@ -131,12 +158,18 @@ class KycService {
   /// POST /api/v1/kyc/identity/verify
   /// Submits the user's NIN and an optional supporting [document] file.
   ///
-  /// [nin] must be exactly 11 numeric digits (validated server-side).
-  /// [document] is optional; accepted formats: pdf, jpg, jpeg, png — max 5 MB.
+  /// Controller validates:
+  ///   nin      — required|string|size:11|regex:/^[0-9]+$/
+  ///   document — nullable|file|mimes:pdf,jpg,jpeg,png|max:5120 (5 MB)
   ///
-  /// Returns the updated [KycStatus] on success.
-  /// Throws if NIN is already used by another account, already verified, or
-  /// the file exceeds the size limit.
+  /// Controller returns:
+  ///   {
+  ///     "status": true,
+  ///     "message": "Identity verified successfully.",
+  ///     "data": { "document_uploaded": bool, "progress": 1.0 }
+  ///   }
+  ///
+  /// Throws if NIN already used (422), already verified (422), or file too large (422).
   Future<KycStatus> verifyIdentity({
     required String nin,
     File? document,
@@ -144,7 +177,7 @@ class KycService {
     _assertNinFormat(nin);
     try {
       final response = await _api.verifyIdentity(nin: nin, document: document);
-      return _parseVerifyResponse(response, 'verifyIdentity');
+      return await _parseVerifyResponse(response, 'verifyIdentity');
     } catch (e) {
       debugPrint("❌ KycService.verifyIdentity: $e");
       rethrow;
@@ -154,10 +187,12 @@ class KycService {
   // ── Private helpers ────────────────────────────────────────────────────────
 
   /// Parses the standard verify response envelope:
-  /// { "status": true, "data": { "progress": 0.67 } }
+  /// { "status": true, "message": "...", "data": { "progress": 0.67 } }
   ///
-  /// Merges the returned progress into a fresh [KycStatus] by re-fetching,
-  /// or falls back to a minimal status built from the progress value alone.
+  /// The verify endpoints only return { progress } in data, not the full
+  /// status object. Re-fetches the full status so the UI stays consistent.
+  /// Falls back to a minimal KycStatus built from the progress value if
+  /// the re-fetch fails.
   Future<KycStatus> _parseVerifyResponse(
     dynamic response,
     String caller,
@@ -165,12 +200,10 @@ class KycService {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
 
     if (body['status'] == true) {
-      // The verify endpoints only return { progress } in data, not the full
-      // status object. Re-fetch the full status so the UI stays consistent.
       try {
         return await getStatus();
       } catch (_) {
-        // If the re-fetch fails, return a minimal status with the new progress.
+        // Re-fetch failed — build a minimal status from the returned progress
         final progress = (body['data']?['progress'] as num?)?.toDouble() ?? 0.0;
         return KycStatus(
           emailVerified: false,
@@ -186,7 +219,7 @@ class KycService {
   }
 
   /// Client-side guard: OTP must be exactly 6 numeric digits.
-  /// Matches the server rule: required|string|size:6
+  /// Matches controller rule: required|string|size:6
   void _assertOtpFormat(String code) {
     if (code.length != 6 || int.tryParse(code) == null) {
       throw 'Please enter the 6-digit code.';
@@ -194,7 +227,7 @@ class KycService {
   }
 
   /// Client-side guard: NIN must be exactly 11 numeric digits.
-  /// Matches the server rule: required|string|size:11|regex:/^[0-9]+$/
+  /// Matches controller rule: required|string|size:11|regex:/^[0-9]+$/
   void _assertNinFormat(String nin) {
     if (nin.length != 11 || int.tryParse(nin) == null) {
       throw 'NIN must be exactly 11 digits.';

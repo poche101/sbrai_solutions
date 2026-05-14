@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sbrai_solutions/models/buyer/product_model.dart';
+import 'package:sbrai_solutions/models/product_model.dart';
 import 'package:sbrai_solutions/services/vendor/product_service.dart';
 import 'package:sbrai_solutions/buyer/screens/home_screen.dart';
 
@@ -20,7 +20,8 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialFavorites != null && widget.initialFavorites!.isNotEmpty) {
+    if (widget.initialFavorites != null &&
+        widget.initialFavorites!.isNotEmpty) {
       favoriteItems = List.from(widget.initialFavorites!);
       _isLoading = false;
     } else {

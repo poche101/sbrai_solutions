@@ -3,6 +3,43 @@
 //  Data models for Chat, ChatMessage, and Call features
 // ─────────────────────────────────────────────────────────────
 
+// ── Chat Participant ───────────────────────────────────────────
+// Unified participant model used by MessageScreen
+class ChatParticipant {
+  final int id;
+  final String name;
+  final String? avatarUrl;
+  final bool isVendor;
+
+  const ChatParticipant({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+    this.isVendor = false,
+  });
+
+  String get initial => name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+  factory ChatParticipant.fromUser(Map<String, dynamic> json) {
+    return ChatParticipant(
+      id: json['id'],
+      name: json['name'] ?? '',
+      avatarUrl: json['profile_photo'],
+      isVendor: false,
+    );
+  }
+
+  factory ChatParticipant.fromVendor(Map<String, dynamic> json) {
+    return ChatParticipant(
+      id: json['id'],
+      name: json['business_name'] ?? json['name'] ?? '',
+      avatarUrl: json['logo_path'],
+      isVendor: true,
+    );
+  }
+}
+
+// ── Chat Thread ────────────────────────────────────────────────
 class ChatThread {
   final int id;
   final int adId;
@@ -30,6 +67,69 @@ class ChatThread {
     this.vendor,
   });
 
+  // ── Convenience getters used by MessageScreen ──────────────
+
+  /// The ad title associated with this chat thread
+  String? get adTitle => ad?.title;
+
+  /// The last message in this thread
+  ChatMessageModel? get lastMessage => latestMessage;
+
+  /// Unread count — derived from read flags
+  /// Pass [currentUserId] to determine which side you are
+  int get unreadCount => 0; // Override per-role if needed
+
+  /// Updated at as DateTime for display
+  DateTime? get updatedAt => lastMessageAt != null
+      ? DateTime.tryParse(lastMessageAt!)?.toLocal()
+      : null;
+
+  /// Returns a unified ChatParticipant for the "other" person.
+  /// Pass [currentUserId] and [isVendor] to determine who the other party is.
+  ChatParticipant? otherParticipantFor({
+    required int currentUserId,
+    required bool isVendor,
+  }) {
+    if (isVendor) {
+      // Current user is vendor → other party is the buyer
+      return buyer != null
+          ? ChatParticipant(
+              id: buyer!.id,
+              name: buyer!.name,
+              avatarUrl: buyer!.profilePhoto,
+              isVendor: false,
+            )
+          : null;
+    } else {
+      // Current user is buyer → other party is the vendor
+      return vendor != null
+          ? ChatParticipant(
+              id: vendor!.id,
+              name: vendor!.displayName,
+              avatarUrl: vendor!.logoPath,
+              isVendor: true,
+            )
+          : null;
+    }
+  }
+
+  /// Default otherParticipant — assumes buyer perspective (vendor is other)
+  ChatParticipant? get otherParticipant => vendor != null
+      ? ChatParticipant(
+          id: vendor!.id,
+          name: vendor!.displayName,
+          avatarUrl: vendor!.logoPath,
+          isVendor: true,
+        )
+      : buyer != null
+      ? ChatParticipant(
+          id: buyer!.id,
+          name: buyer!.name,
+          avatarUrl: buyer!.profilePhoto,
+          isVendor: false,
+        )
+      : null;
+
   factory ChatThread.fromJson(Map<String, dynamic> json) {
     return ChatThread(
       id: json['id'],
@@ -51,6 +151,7 @@ class ChatThread {
   }
 }
 
+// ── Chat Message ───────────────────────────────────────────────
 class ChatMessageModel {
   final int id;
   final int chatId;
@@ -74,6 +175,9 @@ class ChatMessageModel {
 
   bool get isRead => readAt != null;
 
+  /// imageUrl alias for imagePath — used by MessageScreen
+  String? get imageUrl => imagePath;
+
   factory ChatMessageModel.fromJson(Map<String, dynamic> json) {
     return ChatMessageModel(
       id: json['id'],
@@ -88,6 +192,7 @@ class ChatMessageModel {
   }
 }
 
+// ── Chat Ad ────────────────────────────────────────────────────
 class ChatAd {
   final int id;
   final String title;
@@ -104,6 +209,7 @@ class ChatAd {
   }
 }
 
+// ── Chat User (Buyer) ──────────────────────────────────────────
 class ChatUser {
   final int id;
   final String name;
@@ -122,6 +228,7 @@ class ChatUser {
   String get initial => name.isNotEmpty ? name[0].toUpperCase() : '?';
 }
 
+// ── Chat Vendor ────────────────────────────────────────────────
 class ChatVendor {
   final int id;
   final String name;

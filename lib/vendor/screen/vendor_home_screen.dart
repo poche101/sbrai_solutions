@@ -2,15 +2,44 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
-import 'package:sbrai_solutions/models/buyer/product_model.dart';
+import 'package:sbrai_solutions/models/product_model.dart';
 import 'package:sbrai_solutions/services/vendor/product_service.dart';
 import 'package:sbrai_solutions/vendor/vendor_menu.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/product_details_screen.dart';
-import 'package:sbrai_solutions/providers/language_provider.dart';
 import 'package:sbrai_solutions/l10n/app_localizations.dart';
+import 'package:sbrai_solutions/services/chat_service.dart';
+import 'package:sbrai_solutions/buyer_service/api_service.dart';
+
+// ── Category image map ─────────────────────────────────────────────────────────
+const Map<String, String> _categoryImages = {
+  'sharp-sand': 'assets/images/sharp_sand.jpg',
+  'granite': 'assets/images/granite.jpg',
+  'blocks': 'assets/images/blocks.jpg',
+  'cement': 'assets/images/cement.jpg',
+  'iron-rods': 'assets/images/rods.jpg',
+  'paints': 'assets/images/paints.jpg',
+  'furniture': 'assets/images/furniture.jpg',
+  'scaffolding': 'assets/images/scaffolding.jpg',
+  'logistics': 'assets/images/logistics.jpg',
+  'borehole': 'assets/images/borehole.jpg',
+  'cleaning': 'assets/images/cleaning.jpg',
+  'fumigation': 'assets/images/fumigation.jpg',
+  'apartments': 'assets/images/apartments.jpg',
+  'houses': 'assets/images/houses.jpg',
+  'commercial': 'assets/images/commercial.jpg',
+  'land': 'assets/images/land.jpg',
+};
+
+// ── Supported locales ─────────────────────────────────────────────────────────
+const List<Map<String, String>> _supportedLocales = [
+  {'code': 'en', 'label': 'EN', 'full': 'English'},
+  {'code': 'fr', 'label': 'FR', 'full': 'Français'},
+  {'code': 'ha', 'label': 'HA', 'full': 'Hausa'},
+  {'code': 'yo', 'label': 'YO', 'full': 'Yorùbá'},
+  {'code': 'ig', 'label': 'IG', 'full': 'Igbo'},
+];
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,12 +49,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool _categoriesLoaded = false;
-
   final ProductService _productService = ProductService();
 
   String selectedState = "All Nigeria";
   String? selectedCategory;
+  String _currentLocale = 'en';
   final TextEditingController _searchController = TextEditingController();
 
   List<Product> displayedProducts = [];
@@ -33,8 +61,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final Set<int> _favoriteProductIds = {};
 
-  // Maps category name (as shown in UI) to its database ID
+  List<Map<String, dynamic>> categories = [];
   Map<String, int> _categoryNameToId = {};
+
+  static const String _baseUrl = 'https://sbraisolutions.com/api/v1';
 
   final List<String> nigeriaStates = [
     "All Nigeria",
@@ -77,30 +107,10 @@ class _HomeScreenState extends State<HomeScreen> {
     "Zamfara",
   ];
 
-  final List<Map<String, String>> categories = [
-    {'name': 'Sharp Sand', 'icon': 'assets/images/sharp_sand.jpg'},
-    {'name': 'Granite', 'icon': 'assets/images/granite.jpg'},
-    {'name': 'Blocks', 'icon': 'assets/images/blocks.jpg'},
-    {'name': 'Cement', 'icon': 'assets/images/cement.jpg'},
-    {'name': 'Iron Rods', 'icon': 'assets/images/rods.jpg'},
-    {'name': 'Paints', 'icon': 'assets/images/paints.jpg'},
-    {'name': 'Furniture', 'icon': 'assets/images/furniture.jpg'},
-    {'name': 'Scaffolding', 'icon': 'assets/images/scaffolding.jpg'},
-    {'name': 'Logistics', 'icon': 'assets/images/logistics.jpg'},
-    {'name': 'Borehole', 'icon': 'assets/images/borehole.jpg'},
-    {'name': 'Cleaning', 'icon': 'assets/images/cleaning.jpg'},
-    {'name': 'Fumigation', 'icon': 'assets/images/fumigation.jpg'},
-    {'name': 'Apartments', 'icon': 'assets/images/apartments.jpg'},
-    {'name': 'Houses', 'icon': 'assets/images/houses.jpg'},
-    {'name': 'Commercial', 'icon': 'assets/images/commercial.jpg'},
-    {'name': 'Land', 'icon': 'assets/images/land.jpg'},
-  ];
-
   @override
   void initState() {
     super.initState();
-    _fetchCategories();
-    _fetchProducts();
+    _loadAll();
   }
 
   @override
@@ -109,98 +119,125 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // ── FETCH CATEGORIES FROM API ──────────────────────────────────────────────
-  Future<void> _fetchCategories() async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://sbraisolutions.com/api/v1/categories'),
-        headers: {'Accept': 'application/json'},
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        // Response: { success: true, data: { product: [...], service: [...], property: [...] } }
-        if (data['success'] == true && data['data'] is Map) {
-          final allCats = data['data'] as Map<String, dynamic>;
-          final map = <String, int>{};
-          allCats.forEach((type, list) {
-            for (final cat in list) {
-              map[cat['name']] = cat['id'];
-            }
-          });
-          if (mounted) {
-            setState(() {
-              _categoryNameToId = map;
-              _categoriesLoaded = true;
-            });
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Category fetch error: $e');
-    }
-  }
-
-  // ── FETCH ADS FROM UNIFIED ENDPOINT ────────────────────────────────────────
-  Future<void> _fetchProducts() async {
+  Future<void> _loadAll() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
-
     try {
-      // Build search query
-      String? search;
-      final searchText = _searchController.text.trim();
-      final state = selectedState;
-      if (searchText.isNotEmpty && state != "All Nigeria") {
-        search = '$searchText $state';
-      } else if (searchText.isNotEmpty) {
-        search = searchText;
-      } else if (state != "All Nigeria") {
-        search = state;
-      }
-
-      int? categoryId;
-      if (selectedCategory != null &&
-          _categoryNameToId.containsKey(selectedCategory)) {
-        categoryId = _categoryNameToId[selectedCategory];
-      }
-
-      final response = await _productService.getProducts(
-        page: 1,
-        perPage: 40,
-        search: search,
-        categoryId: categoryId,
-      );
-
-      // Safely extract the ads list from either paginated or flat response
-      final dynamic responseData = response['data'];
-      List<dynamic> adsList = [];
-
-      if (responseData is Map && responseData.containsKey('data')) {
-        adsList = (responseData['data'] as List<dynamic>?) ?? [];
-      } else if (responseData is List) {
-        adsList = responseData;
-      }
-
-      if (mounted) {
-        setState(() {
-          displayedProducts = adsList
-              .map((json) => Product.fromJson(json as Map<String, dynamic>))
-              .toList();
-          isLoading = false;
-        });
-      }
+      await _loadCategories();
+      await _loadProducts();
     } catch (e) {
-      debugPrint("❌ Error loading ads: $e");
+      debugPrint("❌ _loadAll error: $e");
+    } finally {
       if (mounted) setState(() => isLoading = false);
     }
   }
 
-  void _filterByCategory(String categoryName) {
-    setState(() {
-      selectedCategory = (selectedCategory == categoryName)
-          ? null
-          : categoryName;
-    });
-    _fetchProducts();
+  Future<void> _loadCategories() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$_baseUrl/categories'),
+            headers: {'Accept': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data['success'] == true && data['data'] is Map) {
+          final grouped = data['data'] as Map<String, dynamic>;
+          final List<Map<String, dynamic>> loaded = [];
+          final Map<String, int> nameToId = {};
+
+          grouped.forEach((type, list) {
+            if (list is List) {
+              for (final cat in list) {
+                final name = cat['name']?.toString() ?? '';
+                final id = cat['id'] as int?;
+                final slug = cat['slug']?.toString() ?? '';
+                if (name.isNotEmpty && id != null) {
+                  loaded.add({
+                    'id': id,
+                    'name': name,
+                    'type': type,
+                    'slug': slug,
+                  });
+                  nameToId[name] = id;
+                }
+              }
+            }
+          });
+
+          categories = loaded;
+          _categoryNameToId = nameToId;
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ _loadCategories: $e");
+    }
+  }
+
+  Future<void> _loadProducts({int? categoryId}) async {
+    try {
+      final queryParams = <String, String>{'page': '1', 'per_page': '40'};
+
+      final searchText = _searchController.text.trim();
+      if (searchText.isNotEmpty && selectedState != "All Nigeria") {
+        queryParams['search'] = '$searchText $selectedState';
+      } else if (searchText.isNotEmpty) {
+        queryParams['search'] = searchText;
+      } else if (selectedState != "All Nigeria") {
+        queryParams['search'] = selectedState;
+      }
+
+      final cid =
+          categoryId ??
+          (selectedCategory != null &&
+                  _categoryNameToId.containsKey(selectedCategory)
+              ? _categoryNameToId[selectedCategory]
+              : null);
+      if (cid != null) queryParams['category_id'] = cid.toString();
+
+      final uri = Uri.parse(
+        '$_baseUrl/ads',
+      ).replace(queryParameters: queryParams);
+
+      final response = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final responseData = decoded['data'];
+        List<dynamic> adsList =
+            responseData is Map && responseData.containsKey('data')
+            ? (responseData['data'] as List<dynamic>?) ?? []
+            : responseData is List
+            ? responseData
+            : [];
+
+        displayedProducts = adsList
+            .map((j) => Product.fromJson(j as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint("❌ _loadProducts: $e");
+    }
+  }
+
+  Future<void> _onRefresh() => _loadAll();
+
+  void _openCategoryPage(Map<String, dynamic> cat) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _CategoryProductsPage(
+          categoryId: cat['id'] as int,
+          categoryName: cat['name'].toString(),
+          categorySlug: cat['slug']?.toString() ?? '',
+          baseUrl: _baseUrl,
+        ),
+      ),
+    );
   }
 
   void _toggleFavorite(Product product) {
@@ -210,23 +247,36 @@ class _HomeScreenState extends State<HomeScreen> {
         _favoriteProductIds.remove(product.id);
       } else {
         _favoriteProductIds.add(product.id!);
-        final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("${product.name} ${l10n.addedToFavorites}"),
-            duration: const Duration(seconds: 2),
-            action: SnackBarAction(
-              label: l10n.view,
-              textColor: Colors.white,
-              onPressed: () {},
-            ),
-          ),
-        );
       }
     });
   }
 
-  // ── BUILD ──────────────────────────────────────────────────────────────────
+  Future<void> _openChat(Product product) async {
+    final apiService = ApiService();
+    final token = await apiService.getToken() ?? '';
+    final userData = await apiService.getUserData();
+    final currentUserId = int.tryParse(userData['id']?.toString() ?? '0') ?? 0;
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          chatId: product.chatId ?? 0,
+          authToken: token,
+          currentUserId: currentUserId,
+          otherPartyName: product.vendorName ?? 'Seller',
+          otherPartyInitial: (product.vendorName?.isNotEmpty ?? false)
+              ? product.vendorName![0].toUpperCase()
+              : 'S',
+          adTitle: product.name,
+          otherPartyId: product.vendorId ?? 0,
+          service: ChatService(token),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -238,80 +288,55 @@ class _HomeScreenState extends State<HomeScreen> {
         userName: "Guest User",
         userEmail: "guest@example.com",
       ),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Colors.black87),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
-        title: Image.asset('assets/images/logo.png', height: 25),
-        actions: [
-          _buildLanguageDropdown(context),
-          const SizedBox(width: 8),
-          const Icon(Icons.person_outline, color: Colors.black87),
-          Center(
-            child: Text(
-              "  ${l10n.vendor}      ",
-              style: const TextStyle(color: Colors.black87, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
+      appBar: _buildAppBar(l10n),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const PostAdScreen()),
-        ),
+        ).then((_) => _loadAll()),
         backgroundColor: const Color(0xFFE85D22),
         shape: const CircleBorder(),
         child: const Icon(Icons.add, color: Colors.white, size: 30),
       ),
       body: RefreshIndicator(
-        onRefresh: _fetchProducts,
+        onRefresh: _onRefresh,
         color: const Color(0xFFE85D22),
         child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            // Orange Header
             SliverToBoxAdapter(
               child: Container(
                 color: const Color(0xFFE85D22),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 20,
-                ),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
                 child: Column(
                   children: [
                     Text(
                       l10n.appTitle,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    _buildSearchBar(l10n),
                     const SizedBox(height: 20),
-                    _buildFunctionalSearchBar(l10n),
-                    const SizedBox(height: 25),
-                    _buildDynamicCategoryGrid(l10n),
-                    const SizedBox(height: 15),
-                    _buildTrendingSection(l10n),
+                    _buildCategoryGrid(),
                   ],
                 ),
               ),
             ),
+
+            // Section Header
             SliverPadding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
               sliver: SliverToBoxAdapter(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      selectedCategory == null
-                          ? l10n.recommendedForYou
-                          : "${l10n.resultsFor} $selectedCategory",
+                      l10n.recommendedForYou,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -328,11 +353,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+
+            // Products / Loading / Empty State
             if (isLoading)
               const SliverToBoxAdapter(
                 child: Center(
                   child: Padding(
-                    padding: EdgeInsets.only(top: 50.0),
+                    padding: EdgeInsets.only(top: 40),
                     child: CircularProgressIndicator(color: Color(0xFFE85D22)),
                   ),
                 ),
@@ -341,8 +368,21 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 50.0),
-                    child: Text(l10n.noItemsFound),
+                    padding: const EdgeInsets.only(top: 40),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.inbox_outlined,
+                          size: 60,
+                          color: Colors.grey.shade300,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          l10n.noItemsFound,
+                          style: TextStyle(color: Colors.grey.shade500),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               )
@@ -357,34 +397,276 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisSpacing: 12,
                   ),
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) => _buildDynamicProductCard(
-                      displayedProducts[index],
-                      l10n,
-                    ),
+                    (ctx, i) => _buildProductCard(displayedProducts[i], l10n),
                     childCount: displayedProducts.length,
                   ),
                 ),
               ),
-            const SliverToBoxAdapter(child: SizedBox(height: 80)),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
       ),
     );
   }
 
-  // ── WIDGETS ────────────────────────────────────────────────────────────────
+  PreferredSizeWidget _buildAppBar(AppLocalizations l10n) {
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 0.5,
+      leading: Builder(
+        builder: (ctx) => IconButton(
+          icon: const Icon(Icons.menu, color: Colors.black87),
+          onPressed: () => Scaffold.of(ctx).openDrawer(),
+        ),
+      ),
+      title: Image.asset('assets/images/logo.png', height: 28),
+      actions: [
+        _buildLanguageDropdown(),
+        const SizedBox(width: 16),
+        const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.person_outline, color: Colors.black87, size: 20),
+            SizedBox(width: 4),
+            Text(
+              "Vendor",
+              style: TextStyle(
+                color: Colors.black87,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(width: 12),
+          ],
+        ),
+      ],
+    );
+  }
 
-  Widget _buildDynamicProductCard(Product product, AppLocalizations l10n) {
-    final bool isFavorited = _favoriteProductIds.contains(product.id);
-    final List<String> serviceCategories = [
+  Widget _buildLanguageDropdown() {
+    return PopupMenuButton<String>(
+      initialValue: _currentLocale,
+      onSelected: (code) => setState(() => _currentLocale = code),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      itemBuilder: (_) => _supportedLocales
+          .map(
+            (l) => PopupMenuItem<String>(
+              value: l['code'],
+              child: Text(
+                l['full']!,
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ),
+          )
+          .toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _supportedLocales.firstWhere(
+                (l) => l['code'] == _currentLocale,
+                orElse: () => _supportedLocales.first,
+              )['label']!,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 3),
+            const Icon(
+              Icons.keyboard_arrow_down,
+              size: 16,
+              color: Colors.black54,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar(AppLocalizations l10n) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E237E),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          height: 48,
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedState,
+              dropdownColor: const Color(0xFF1E237E),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+              icon: const Icon(
+                Icons.keyboard_arrow_down,
+                color: Colors.white,
+                size: 18,
+              ),
+              items: nigeriaStates
+                  .map(
+                    (s) => DropdownMenuItem(
+                      value: s,
+                      child: Text(
+                        s,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() => selectedState = v);
+                  _loadAll();
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'I am looking for...',
+                      hintStyle: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 13,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                      ),
+                    ),
+                    onSubmitted: (_) => _loadAll(),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _loadAll,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE85D22),
+                      borderRadius: BorderRadius.horizontal(
+                        right: Radius.circular(10),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.search,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryGrid() {
+    if (isLoading)
+      return const SizedBox(
+        height: 80,
+        child: Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+    if (categories.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Text(
+          "No categories available",
+          style: TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 10,
+        childAspectRatio: 0.78,
+      ),
+      itemCount: categories.length,
+      itemBuilder: (_, i) {
+        final cat = categories[i];
+        final name = cat['name'].toString();
+        final slug = cat['slug']?.toString() ?? '';
+        final imgPath = _categoryImages[slug];
+
+        return GestureDetector(
+          onTap: () => _openCategoryPage(cat),
+          child: Column(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: imgPath != null
+                      ? Image.asset(
+                          imgPath,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (_, __, ___) => _categoryPlaceholder(),
+                        )
+                      : _categoryPlaceholder(),
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _categoryPlaceholder() => Container(
+    color: Colors.white24,
+    child: const Icon(Icons.category_outlined, color: Colors.white54, size: 28),
+  );
+
+  Widget _buildProductCard(Product product, AppLocalizations l10n) {
+    final bool isFav = _favoriteProductIds.contains(product.id);
+    final bool isService = [
       'logistics',
       'borehole',
       'cleaning',
       'fumigation',
-    ];
-    final bool isService = serviceCategories.contains(
-      product.category.toLowerCase(),
-    );
+    ].contains(product.category.toLowerCase());
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -404,7 +686,7 @@ class _HomeScreenState extends State<HomeScreen> {
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
               blurRadius: 10,
-              offset: const Offset(0, 5),
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -418,16 +700,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(16),
                     ),
-                    child: Image.network(
-                      product.imageUrl,
-                      width: double.infinity,
-                      height: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey.shade200,
-                        child: const Icon(Icons.image, color: Colors.grey),
-                      ),
-                    ),
+                    child: product.imageUrl.startsWith('http')
+                        ? Image.network(
+                            product.imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(
+                                Icons.image,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          )
+                        : Image.asset(product.imageUrl, fit: BoxFit.cover),
                   ),
                   if (isService)
                     Positioned(
@@ -435,8 +720,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       left: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+                          horizontal: 7,
+                          vertical: 3,
                         ),
                         decoration: BoxDecoration(
                           color: Colors.blue.shade700,
@@ -446,7 +731,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           l10n.service,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 10,
+                            fontSize: 9,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -458,18 +743,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: GestureDetector(
                       onTap: () => _toggleFavorite(product),
                       child: Container(
-                        padding: const EdgeInsets.all(6),
+                        padding: const EdgeInsets.all(5),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.9),
                           shape: BoxShape.circle,
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black12, blurRadius: 4),
-                          ],
                         ),
                         child: Icon(
-                          isFavorited ? Icons.favorite : Icons.favorite_border,
-                          size: 18,
-                          color: isFavorited ? Colors.red : Colors.grey,
+                          isFav ? Icons.favorite : Icons.favorite_border,
+                          size: 16,
+                          color: isFav ? Colors.red : Colors.grey,
                         ),
                       ),
                     ),
@@ -478,7 +760,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(9),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -486,18 +768,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     product.name,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Color(0xFF0F172A),
+                      fontSize: 13,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Row(
                     children: [
                       const Icon(
                         Icons.location_on,
-                        size: 12,
+                        size: 11,
                         color: Colors.grey,
                       ),
                       const SizedBox(width: 2),
@@ -505,7 +786,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Text(
                           product.location,
                           style: const TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             color: Colors.grey,
                           ),
                           maxLines: 1,
@@ -514,44 +795,33 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
-                    "₦${product.price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}",
+                    "₦${product.price.toStringAsFixed(0)}",
                     style: const TextStyle(
                       color: Color(0xFFE85D22),
                       fontWeight: FontWeight.bold,
-                      fontSize: 15,
+                      fontSize: 14,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
                       Expanded(
-                        child: _buildActionButton(
+                        child: _actionBtn(
                           l10n.call,
                           Icons.call_outlined,
                           false,
                           onTap: () {},
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Expanded(
-                        child: _buildActionButton(
+                        child: _actionBtn(
                           l10n.chat,
                           Icons.chat_bubble_outline,
                           true,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ChatScreen(
-                                product: product,
-                                userName: product.userName,
-                                userInitial: product.userName.isNotEmpty
-                                    ? product.userName[0].toUpperCase()
-                                    : 'U',
-                              ),
-                            ),
-                          ),
+                          onTap: () => _openChat(product),
                         ),
                       ),
                     ],
@@ -565,21 +835,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildActionButton(
+  Widget _actionBtn(
     String label,
     IconData icon,
-    bool isPrimary, {
+    bool primary, {
     VoidCallback? onTap,
   }) {
     return SizedBox(
-      height: 36,
+      height: 34,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          backgroundColor: isPrimary
+          backgroundColor: primary
               ? const Color(0xFFE85D22)
               : Colors.transparent,
           side: BorderSide(
-            color: isPrimary ? const Color(0xFFE85D22) : Colors.grey.shade300,
+            color: primary ? const Color(0xFFE85D22) : Colors.grey.shade300,
           ),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: EdgeInsets.zero,
@@ -590,15 +860,15 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(
               icon,
-              size: 14,
-              color: isPrimary ? Colors.white : Colors.black87,
+              size: 13,
+              color: primary ? Colors.white : Colors.black87,
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
-                color: isPrimary ? Colors.white : Colors.black87,
+                fontSize: 11,
+                color: primary ? Colors.white : Colors.black87,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -607,210 +877,195 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
 
-  Widget _buildDynamicCategoryGrid(AppLocalizations l10n) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 18,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.85,
-      ),
-      itemCount: categories.length,
-      itemBuilder: (context, index) {
-        final isSelected = selectedCategory == categories[index]['name'];
-        return GestureDetector(
-          onTap: () => _filterByCategory(categories[index]['name']!),
-          child: Column(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
-                    border: isSelected
-                        ? Border.all(color: Colors.white, width: 2)
-                        : null,
-                    image: DecorationImage(
-                      image: AssetImage(categories[index]['icon']!),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                categories[index]['name']!,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-              ),
-            ],
-          ),
-        );
-      },
-    );
+// ══════════════════════════════════════════════════════════════════════════════
+// Category Products Page - Vertical List Style (Like your screenshot)
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _CategoryProductsPage extends StatefulWidget {
+  final int categoryId;
+  final String categoryName;
+  final String categorySlug;
+  final String baseUrl;
+
+  const _CategoryProductsPage({
+    required this.categoryId,
+    required this.categoryName,
+    required this.categorySlug,
+    required this.baseUrl,
+  });
+
+  @override
+  State<_CategoryProductsPage> createState() => _CategoryProductsPageState();
+}
+
+class _CategoryProductsPageState extends State<_CategoryProductsPage> {
+  List<Product> products = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProducts();
   }
 
-  Widget _buildFunctionalSearchBar(AppLocalizations l10n) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 4,
-          child: PopupMenuButton<String>(
-            onSelected: (value) {
-              setState(() => selectedState = value);
-              _fetchProducts();
-            },
-            itemBuilder: (context) => nigeriaStates
-                .map((s) => PopupMenuItem(value: s, child: Text(s)))
+  Future<void> _fetchProducts() async {
+    setState(() => isLoading = true);
+    try {
+      final uri = Uri.parse('${widget.baseUrl}/ads').replace(
+        queryParameters: {
+          'page': '1',
+          'per_page': '40',
+          'category_id': widget.categoryId.toString(),
+        },
+      );
+
+      final response = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final responseData = decoded['data'];
+        List<dynamic> adsList =
+            responseData is Map && responseData.containsKey('data')
+            ? (responseData['data'] as List?) ?? []
+            : responseData is List
+            ? responseData
+            : [];
+
+        if (mounted) {
+          setState(
+            () => products = adsList
+                .map((j) => Product.fromJson(j as Map<String, dynamic>))
                 .toList(),
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      selectedState,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const Icon(
-                    Icons.keyboard_arrow_down,
-                    color: Colors.white70,
-                    size: 18,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 7,
-          child: Container(
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    onSubmitted: (_) => _fetchProducts(),
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                    decoration: const InputDecoration(
-                      hintText: 'Search...',
-                      hintStyle: TextStyle(color: Colors.white54, fontSize: 13),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 15),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: _fetchProducts,
-                  icon: const Icon(Icons.search, color: Colors.white, size: 22),
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFFE85D22),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ category page error: $e");
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
   }
 
-  Widget _buildLanguageDropdown(BuildContext context) {
-    final languageProvider = Provider.of<LanguageProvider>(context);
-    final l10n = AppLocalizations.of(context)!;
-
-    final Map<String, String> languages = {
-      l10n.english: "en",
-      l10n.spanish: "es",
-      l10n.french: "fr",
-    };
-
-    final String currentLangName = languages.entries
-        .firstWhere(
-          (e) => e.value == languageProvider.locale.languageCode,
-          orElse: () => languages.entries.first,
-        )
-        .key;
-
-    return PopupMenuButton<String>(
-      onSelected: (value) {
-        languageProvider.setLanguage(Locale(languages[value]!));
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(4),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFE85D22),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
         ),
-        child: Row(
-          children: [
-            Text(
-              currentLangName.substring(0, 2).toUpperCase(),
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const Icon(
-              Icons.keyboard_arrow_down,
-              color: Colors.black,
-              size: 14,
-            ),
-          ],
-        ),
-      ),
-      itemBuilder: (context) => languages.keys
-          .map((l) => PopupMenuItem(value: l, child: Text(l)))
-          .toList(),
-    );
-  }
-
-  Widget _buildTrendingSection(AppLocalizations l10n) {
-    return Row(
-      children: [
-        Text(
-          l10n.trending,
+        title: Text(
+          widget.categoryName,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
-        const Spacer(),
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(
-            Icons.grid_view_rounded,
-            color: Colors.white,
-            size: 20,
+        elevation: 0,
+      ),
+      body: isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFE85D22)),
+            )
+          : products.isEmpty
+          ? const Center(child: Text("No products found in this category"))
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: products.length,
+              itemBuilder: (context, index) =>
+                  _buildProductListCard(products[index]),
+            ),
+    );
+  }
+
+  Widget _buildProductListCard(Product product) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProductDetailsScreen(
+            product: product,
+            userName: product.userName,
           ),
         ),
-      ],
+      ),
+      child: Card(
+        elevation: 2,
+        margin: const EdgeInsets.only(bottom: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 85,
+                  height: 85,
+                  child: product.imageUrl.startsWith('http')
+                      ? Image.network(product.imageUrl, fit: BoxFit.cover)
+                      : Image.asset(product.imageUrl, fit: BoxFit.cover),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on,
+                          size: 14,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            product.location,
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "₦${product.price.toStringAsFixed(0)}",
+                      style: const TextStyle(
+                        color: Color(0xFFE85D22),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

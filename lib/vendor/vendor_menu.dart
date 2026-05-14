@@ -6,9 +6,10 @@ import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/kyc_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart'
     as vendor;
-import 'package:sbrai_solutions/vendor/screen/message_screen.dart';
+import 'package:sbrai_solutions/screens/message_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/vendor_settings_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/login_screen.dart';
+import 'package:sbrai_solutions/buyer_service/api_service.dart';
 
 class VendorMenu extends StatefulWidget {
   final String userName;
@@ -29,13 +30,11 @@ class _VendorMenuState extends State<VendorMenu> {
   bool _isLoadingProfile = false;
   final VendorAuthService _authService = VendorAuthService();
 
-  // Dynamic user data from API
   String _displayName = '';
   String _displayEmail = '';
   bool _isVerified = false;
   String? _businessName;
-
-  // Placeholder for favorite products - You can populate this from your API later
+  String? _profilePhotoUrl; // ✅ added
 
   @override
   void initState() {
@@ -53,11 +52,12 @@ class _VendorMenuState extends State<VendorMenu> {
 
       if (response['status'] == 'success' && response['data'] != null) {
         final vendorData = response['data'];
-
         setState(() {
           _displayName = vendorData['full_name'] ?? widget.userName;
           _displayEmail = vendorData['email'] ?? widget.userEmail;
           _businessName = vendorData['business_name'];
+          _profilePhotoUrl = vendorData['profile_photo_url']
+              ?.toString(); // ✅ added
           _isVerified =
               vendorData['email_verified_at'] != null ||
               vendorData['nin_verified_at'] != null;
@@ -66,10 +66,31 @@ class _VendorMenuState extends State<VendorMenu> {
     } catch (e) {
       debugPrint('Error loading profile in menu: $e');
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingProfile = false);
-      }
+      if (mounted) setState(() => _isLoadingProfile = false);
     }
+  }
+
+  Future<void> _navigateToMessages() async {
+    final apiService = ApiService();
+    final token = await apiService.getToken() ?? '';
+    final userData = await apiService.getUserData();
+    final currentUserId = int.tryParse(userData['id']?.toString() ?? '0') ?? 0;
+
+    if (!mounted) return;
+
+    Navigator.pop(context);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MessageScreen(
+          threads: [],
+          authToken: token,
+          currentUserId: currentUserId,
+          isVendor: true,
+        ),
+      ),
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -83,7 +104,6 @@ class _VendorMenuState extends State<VendorMenu> {
           const SnackBar(
             content: Text('Logged out successfully'),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
           ),
         );
 
@@ -96,11 +116,8 @@ class _VendorMenuState extends State<VendorMenu> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Logout failed: ${e.toString().replaceAll('Exception: ', '')}',
-            ),
+            content: Text('Logout failed: $e'),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -116,7 +133,7 @@ class _VendorMenuState extends State<VendorMenu> {
         color: Colors.white,
         child: Column(
           children: [
-            // --- HEADER SECTION ---
+            // ── Header ────────────────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.only(
                 top: 50,
@@ -137,14 +154,24 @@ class _VendorMenuState extends State<VendorMenu> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const CircleAvatar(
+                      // ✅ Shows profile photo if available, falls back to icon
+                      CircleAvatar(
                         radius: 35,
-                        backgroundColor: Color(0xFFFFF3E0),
-                        child: Icon(
-                          Icons.person_outline,
-                          size: 45,
-                          color: Color(0xFFFF7043),
-                        ),
+                        backgroundColor: const Color(0xFFFFF3E0),
+                        backgroundImage:
+                            (_profilePhotoUrl != null &&
+                                _profilePhotoUrl!.isNotEmpty)
+                            ? NetworkImage(_profilePhotoUrl!)
+                            : null,
+                        child:
+                            (_profilePhotoUrl == null ||
+                                _profilePhotoUrl!.isEmpty)
+                            ? const Icon(
+                                Icons.person_outline,
+                                size: 45,
+                                color: Color(0xFFFF7043),
+                              )
+                            : null,
                       ),
                       IconButton(
                         icon: const Icon(
@@ -158,15 +185,9 @@ class _VendorMenuState extends State<VendorMenu> {
                   ),
                   const SizedBox(height: 15),
                   if (_isLoadingProfile)
-                    const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Color(0xFFFF7043),
-                        ),
-                      ),
+                    const CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFFFF7043),
                     )
                   else ...[
                     Text(
@@ -185,8 +206,7 @@ class _VendorMenuState extends State<VendorMenu> {
                         fontSize: 13,
                       ),
                     ),
-                    if (_businessName != null) ...[
-                      const SizedBox(height: 4),
+                    if (_businessName != null)
                       Text(
                         _businessName!,
                         style: const TextStyle(
@@ -195,7 +215,6 @@ class _VendorMenuState extends State<VendorMenu> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ],
                   ],
                   const SizedBox(height: 12),
                   Row(
@@ -221,7 +240,7 @@ class _VendorMenuState extends State<VendorMenu> {
               ),
             ),
 
-            // --- MENU ITEMS ---
+            // ── Menu Items ────────────────────────────────────────────────────
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -235,18 +254,16 @@ class _VendorMenuState extends State<VendorMenu> {
                     Navigator.pop(context);
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => const ProfileScreen(),
-                      ),
-                    ).then((_) => _loadProfileData());
+                      MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                    ).then(
+                      (_) => _loadProfileData(),
+                    ); // ✅ refresh photo after returning
                   }),
                   _buildMenuItem(Icons.add_box_outlined, 'Post Ad', () {
                     Navigator.pop(context);
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => const PostAdScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const PostAdScreen()),
                     );
                   }),
                   _buildMenuItem(Icons.dashboard_outlined, 'Dashboard', () {
@@ -254,31 +271,24 @@ class _VendorMenuState extends State<VendorMenu> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const VendorDashboardScreen(),
+                        builder: (_) => const VendorDashboardScreen(),
                       ),
                     );
                   }),
-
-                  // FIXED: Added required initialFavorites parameter
                   _buildMenuItem(Icons.favorite_outline, 'Favorites', () {
                     Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const vendor.FavoriteScreen(),
+                        builder: (_) => const vendor.FavoriteScreen(),
                       ),
                     );
                   }),
-
-                  _buildMenuItem(Icons.chat_bubble_outline, 'Messages', () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const MessageScreen(),
-                      ),
-                    );
-                  }),
+                  _buildMenuItem(
+                    Icons.chat_bubble_outline,
+                    'Messages',
+                    _navigateToMessages,
+                  ),
                   const Divider(
                     height: 30,
                     thickness: 0.8,
@@ -291,7 +301,7 @@ class _VendorMenuState extends State<VendorMenu> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const VendorSettingsScreen(),
+                        builder: (_) => const VendorSettingsScreen(),
                       ),
                     );
                   }),
@@ -299,52 +309,32 @@ class _VendorMenuState extends State<VendorMenu> {
                     Navigator.pop(context);
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => const KYCScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const KYCScreen()),
                     );
                   }),
                   _isLoggingOut
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Center(
-                            child: SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.red,
-                                ),
-                              ),
-                            ),
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: CircularProgressIndicator(),
                           ),
                         )
                       : _buildMenuItem(
                           Icons.logout_outlined,
                           'Logout',
-                          () async => await _handleLogout(),
+                          _handleLogout,
                           color: Colors.red.shade300,
                         ),
                 ],
               ),
             ),
 
-            // --- FOOTER ---
+            // ── Footer ────────────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.only(bottom: 30, top: 10),
               child: Column(
                 children: [
-                  Image.asset(
-                    'assets/images/logo.png',
-                    height: 40,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.storefront_rounded,
-                      color: Colors.grey,
-                      size: 30,
-                    ),
-                  ),
+                  Image.asset('assets/images/logo.png', height: 40),
                   const SizedBox(height: 10),
                   const Text(
                     'Version 1.0.0',

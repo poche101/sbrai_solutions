@@ -17,14 +17,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _businessNameController = TextEditingController();
+  final _businessCategoryController = TextEditingController();
   final _addressController = TextEditingController();
+  final _stateController = TextEditingController();
+  final _cityController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
   bool _isPasswordVisible = false;
   bool _isLoading = false;
 
-  // Connection to the service
+  // Business category options
+  static const List<String> _businessCategories = [
+    'Sharp Sand',
+    'Granite',
+    'Blocks',
+    'Cement',
+    'Iron Rods',
+    'Paints',
+    'Furniture',
+    'Scaffolding',
+    'Logistics',
+    'Borehole',
+    'Cleaning',
+    'Fumigation',
+    'Apartments',
+    'Houses',
+    'Commercial',
+    'Land',
+  ];
+
+  String? _selectedCategory;
+
   final VendorAuthService _authService = VendorAuthService();
 
   @override
@@ -33,19 +57,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _businessNameController.dispose();
+    _businessCategoryController.dispose();
     _addressController.dispose();
+    _stateController.dispose();
+    _cityController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  // Custom Toast implementation as requested
   void _showSuccessToast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor:
-            Colors.transparent, // Custom background handles the look
+        backgroundColor: Colors.transparent,
         elevation: 0,
         duration: const Duration(seconds: 3),
         content: Container(
@@ -91,9 +116,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _handleRegistration() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       debugPrint("🚀 UI: Initiating registration for ${_emailController.text}");
@@ -103,17 +126,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
         businessName: _businessNameController.text.trim(),
+        businessCategory: _selectedCategory!,
         address: _addressController.text.trim(),
+        state: _stateController.text.trim(),
+        city: _cityController.text.trim(),
         password: _passwordController.text,
         confirmPassword: _confirmPasswordController.text,
       );
 
       if (mounted) {
-        // Updated check for successful registration
-        if (response['token'] != null || response['status'] == 'success') {
-          _showSuccessToast('Registration successful! Please login.');
+        // Success: token is nested under data.token, or success flag is true
+        final bool isSuccess =
+            response['success'] == true ||
+            response['status'] == 'success' ||
+            response['data']?['token'] != null;
 
-          // Navigate after a small delay to let user see the toast
+        if (isSuccess) {
+          _showSuccessToast(
+            response['message']?.toString() ??
+                'Registration successful! Please login.',
+          );
           Future.delayed(const Duration(milliseconds: 1500), () {
             if (mounted) {
               Navigator.pushReplacement(
@@ -130,7 +162,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       debugPrint("❌ UI ERROR: $e");
       if (mounted) {
         String errorMessage = e.toString().replaceAll('Exception: ', '');
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Registration failed: $errorMessage'),
@@ -139,11 +170,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -173,6 +200,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           key: _formKey,
           child: Column(
             children: [
+              // ── Header ──────────────────────────────────────────────────────
               Center(
                 child: Column(
                   children: [
@@ -207,13 +235,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 32),
 
+              // ── Personal Info ────────────────────────────────────────────────
               _buildLabel("Full Name"),
               _buildTextField(
                 _nameController,
                 "Enter your name",
-                validator: (value) => (value == null || value.isEmpty)
-                    ? "Full name is required"
-                    : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? "Full name is required" : null,
               ),
 
               _buildLabel("Email Address"),
@@ -221,10 +249,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _emailController,
                 "Enter email",
                 keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || value.isEmpty)
-                    return "Email is required";
-                  if (!value.contains('@')) return "Enter a valid email";
+                validator: (v) {
+                  if (v == null || v.isEmpty) return "Email is required";
+                  if (!v.contains('@')) return "Enter a valid email";
                   return null;
                 },
               ),
@@ -234,25 +261,76 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _phoneController,
                 "Enter phone number",
                 keyboardType: TextInputType.phone,
-                validator: (value) => (value == null || value.isEmpty)
-                    ? "Phone is required"
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? "Phone is required" : null,
+              ),
+
+              // ── Business Info ────────────────────────────────────────────────
+              _buildLabel("Business Name"),
+              _buildTextField(
+                _businessNameController,
+                "Enter business name",
+                validator: (v) => (v == null || v.isEmpty)
+                    ? "Business name is required"
                     : null,
               ),
 
-              _buildLabel("Business Name"),
-              _buildTextField(_businessNameController, "Enter business name"),
+              _buildLabel("Business Category"),
+              _buildCategoryDropdown(),
 
               _buildLabel("Business Address"),
-              _buildTextField(_addressController, "Enter address"),
+              _buildTextField(
+                _addressController,
+                "Enter business address",
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? "Address is required" : null,
+              ),
 
+              // State & City side by side
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel("State"),
+                        _buildTextField(
+                          _stateController,
+                          "e.g. Lagos",
+                          validator: (v) => (v == null || v.isEmpty)
+                              ? "State is required"
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel("City"),
+                        _buildTextField(
+                          _cityController,
+                          "e.g. Ikeja",
+                          validator: (v) => (v == null || v.isEmpty)
+                              ? "City is required"
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              // ── Password ─────────────────────────────────────────────────────
               _buildLabel("Password"),
               _buildTextField(
                 _passwordController,
                 "********",
                 isPassword: true,
-                validator: (value) => (value != null && value.length < 6)
-                    ? "Min 6 characters"
-                    : null,
+                validator: (v) =>
+                    (v != null && v.length < 8) ? "Min 8 characters" : null,
               ),
 
               _buildLabel("Confirm Password"),
@@ -260,8 +338,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _confirmPasswordController,
                 "********",
                 isPassword: true,
-                validator: (value) {
-                  if (value != _passwordController.text) {
+                validator: (v) {
+                  if (v != _passwordController.text) {
                     return "Passwords do not match";
                   }
                   return null;
@@ -270,6 +348,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               const SizedBox(height: 30),
 
+              // ── Submit ───────────────────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -359,6 +438,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Dropdown for business category ──────────────────────────────────────────
+  Widget _buildCategoryDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: DropdownButtonFormField<String>(
+        value: _selectedCategory,
+        hint: const Text("Select category"),
+        isExpanded: true,
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: const Color(0xFFE8F0FE),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+        ),
+        items: _businessCategories
+            .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+            .toList(),
+        onChanged: (val) => setState(() => _selectedCategory = val),
+        validator: (v) =>
+            (v == null || v.isEmpty) ? "Business category is required" : null,
       ),
     );
   }

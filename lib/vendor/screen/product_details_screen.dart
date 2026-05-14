@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:sbrai_solutions/models/buyer/product_model.dart';
-import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
+import 'package:sbrai_solutions/models/product_model.dart';
+import 'package:sbrai_solutions/screens/chat_screen.dart';
+import 'package:sbrai_solutions/services/chat_service.dart';
+import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
@@ -52,6 +54,44 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
   }
 
+  /// Opens the ChatScreen with all required parameters.
+  Future<void> _openChat(BuildContext context) async {
+    final apiService = ApiService();
+    final token = await apiService.getToken() ?? '';
+    final userData = await apiService.getUserData();
+
+    final currentUserId = int.tryParse(userData['id']?.toString() ?? '0') ?? 0;
+
+    // Safe vendor data
+    final vendorName = (widget.product.vendorName?.trim().isNotEmpty == true)
+        ? widget.product.vendorName!
+        : 'Seller';
+
+    final vendorInitial = vendorName.isNotEmpty
+        ? vendorName[0].toUpperCase()
+        : 'S';
+    final vendorId = widget.product.vendorId ?? 0;
+    final chatId = widget.product.chatId ?? 0;
+
+    if (!context.mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          chatId: chatId,
+          authToken: token,
+          currentUserId: currentUserId,
+          otherPartyName: vendorName,
+          otherPartyInitial: vendorInitial,
+          adTitle: widget.product.name,
+          otherPartyId: vendorId,
+          service: ChatService(token), // ← Fixed: Positional argument
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<String> images = widget.product.imageUrls;
@@ -81,7 +121,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Swipable Image Carousel
+                  // Image Carousel
                   Stack(
                     alignment: Alignment.center,
                     children: [
@@ -134,7 +174,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     ],
                   ),
 
-                  // Header Section (Name, Price, Location)
+                  // Name / Price / Location
                   _buildSectionCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,7 +199,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              "${widget.product.id ?? '23'}", // Example count from your image
+                              "${widget.product.id ?? ''}",
                               style: const TextStyle(
                                 color: Colors.grey,
                                 fontSize: 14,
@@ -189,7 +229,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     ),
                   ),
 
-                  // Description
+                  // Description, Seller Info, Safety Tips... (rest remains unchanged)
                   _buildSectionCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -215,7 +255,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     ),
                   ),
 
-                  // Seller Info
+                  // Seller Information
                   _buildSectionCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,15 +330,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Row(
+                        const Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.calendar_today_outlined,
                               size: 14,
                               color: Colors.grey,
                             ),
-                            const SizedBox(width: 8),
-                            const Text(
+                            SizedBox(width: 8),
+                            Text(
                               "Member since Jan 2025",
                               style: TextStyle(
                                 color: Colors.grey,
@@ -311,7 +351,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     ),
                   ),
 
-                  // Safety Tips Section
+                  // Safety Tips
                   Container(
                     margin: const EdgeInsets.all(12),
                     padding: const EdgeInsets.all(16),
@@ -368,6 +408,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
+  // Helper Widgets
   Widget _buildSafetyBullet(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -463,20 +504,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             child: SizedBox(
               height: 50,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ChatScreen(
-                        product: widget.product,
-                        userName: widget.userName,
-                        userInitial: widget.userName.isNotEmpty
-                            ? widget.userName[0].toUpperCase()
-                            : 'U',
-                      ),
-                    ),
-                  );
-                },
+                onPressed: () => _openChat(context),
                 icon: const Icon(
                   Icons.chat_bubble_outline,
                   color: Colors.white,

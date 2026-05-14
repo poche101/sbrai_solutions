@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'signup_page.dart';
 import 'home_screen.dart';
-import 'package:sbrai_solutions/account_selection_screen.dart'; // Added this import
+import 'package:sbrai_solutions/account_selection_screen.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 
 class SigninScreen extends StatefulWidget {
@@ -25,7 +25,6 @@ class _SigninScreenState extends State<SigninScreen> {
     super.dispose();
   }
 
-  /// Custom Toast Notification Implementation
   void _showCustomToast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -74,7 +73,6 @@ class _SigninScreenState extends State<SigninScreen> {
     );
   }
 
-  /// Navigation Helper
   void _navigateToHome() {
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
@@ -100,18 +98,26 @@ class _SigninScreenState extends State<SigninScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _apiService.post('/buyers/login', {
+      final response = await _apiService.post('auth/login/buyer', {
         'email': email,
         'password': password,
       }, userType: 'buyer');
 
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && responseData['status'] == 'success') {
-        await _apiService.saveToken(
-          responseData['data']['access_token'],
-          userType: 'buyer',
-        );
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        // ✅ UPDATED: Changed 'access_token' to 'token' to match your API response
+        final String? token = responseData['data']['token'];
+
+        if (token != null) {
+          await _apiService.saveToken(token, userType: 'buyer');
+        }
+
+        // Cache user details if available
+        if (responseData['data']['user'] != null) {
+          await _apiService.saveUserData(responseData['data']['user']);
+        }
+
         if (!mounted) return;
 
         _showCustomToast(responseData['message'] ?? "Signed in successfully");
@@ -131,31 +137,22 @@ class _SigninScreenState extends State<SigninScreen> {
     setState(() => _isLoading = true);
 
     try {
-      String? token;
-
       if (provider == 'google') {
-        token = "SOCIAL_TOKEN_FROM_SDK";
+        final response = await _apiService.signInWithGoogle();
+
+        if (response == null) {
+          setState(() => _isLoading = false);
+          return; // User cancelled
+        }
+
+        final responseData = jsonDecode(response.body);
+        if (response.statusCode == 200) {
+          if (!mounted) return;
+          _showCustomToast(responseData['message'] ?? "Signed in with Google");
+          _navigateToHome();
+        }
       } else if (provider == 'facebook') {
-        token = "FB_TOKEN_FROM_SDK";
-      }
-
-      if (token == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final response = await _apiService.socialLogin(provider, token);
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        if (!mounted) return;
-
-        final successMsg =
-            responseData['message'] ??
-            "Signed in with ${provider[0].toUpperCase()}${provider.substring(1)}";
-
-        _showCustomToast(successMsg);
-        _navigateToHome();
+        _showErrorSnackBar("Facebook login not yet implemented");
       }
     } catch (e) {
       _showErrorSnackBar("Social login failed: ${e.toString()}");
@@ -185,7 +182,6 @@ class _SigninScreenState extends State<SigninScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () {
-            // Updated to lead to account selection screen
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -233,7 +229,6 @@ class _SigninScreenState extends State<SigninScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                // Google Button
                 _buildSocialButton(
                   "Continue with Google",
                   'assets/icons/google.png',
@@ -241,7 +236,6 @@ class _SigninScreenState extends State<SigninScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Facebook Button
                 _buildSocialButton(
                   "Continue with Facebook",
                   'assets/icons/facebook.png',
@@ -280,7 +274,22 @@ class _SigninScreenState extends State<SigninScreen> {
                   obscureText: true,
                   decoration: _inputDecoration("Password"),
                 ),
-                const SizedBox(height: 32),
+
+                // ✅ ADDED: Forgot Password Button
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      // Navigate to Forgot Password Screen
+                    },
+                    child: const Text(
+                      "Forgot Password?",
+                      style: TextStyle(color: Color(0xFFFF6B35), fontSize: 13),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   height: 52,

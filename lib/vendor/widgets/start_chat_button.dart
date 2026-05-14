@@ -5,9 +5,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import 'package:flutter/material.dart';
-import '../models/chat_models.dart';
-import '../services/chat_service.dart';
-import '../screens/chat_screen.dart';
+import 'package:sbrai_solutions/services/chat_service.dart';
+import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
 
 class StartChatButton extends StatefulWidget {
   final int adId;

@@ -30,18 +30,14 @@ class ApiService {
   Future<void> saveUserData(Map<String, dynamic> userData) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // BuyerProfileController returns both 'full_name' and 'name'; prefer full_name.
     await prefs.setString(
       _nameKey,
       userData['full_name'] ?? userData['name'] ?? '',
     );
     await prefs.setString(_emailKey, userData['email'] ?? '');
-
-    // phone is cast to string in the controller to avoid int crashes.
     await prefs.setString(_phoneKey, userData['phone']?.toString() ?? '');
     await prefs.setString(_addressKey, userData['address'] ?? '');
 
-    // Controller returns 'photo' (primary) and 'profile_photo' (fallback).
     final String? photoUrl = userData['photo'] ?? userData['profile_photo'];
     if (photoUrl != null) await prefs.setString(_photoKey, photoUrl);
 
@@ -54,7 +50,7 @@ class ApiService {
       'name': prefs.getString(_nameKey),
       'email': prefs.getString(_emailKey),
       'photo': prefs.getString(_photoKey),
-      'phone': prefs.getString(_phoneKey), // same key, distinct map entry
+      'phone': prefs.getString(_phoneKey),
       'address': prefs.getString(_addressKey),
     };
   }
@@ -85,7 +81,6 @@ class ApiService {
   // AUTH
   // ---------------------------------------------------------------------------
 
-  // POST /api/v1/auth/register/buyer
   Future<http.Response> registerBuyer(Map<String, dynamic> data) async {
     return await post(
       'auth/register/buyer',
@@ -95,7 +90,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/auth/register/vendor
   Future<http.Response> registerVendor(Map<String, dynamic> data) async {
     return await post(
       'auth/register/vendor',
@@ -105,7 +99,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/auth/login/buyer
   Future<http.Response> loginBuyer(Map<String, dynamic> data) async {
     return await post(
       'auth/login/buyer',
@@ -115,7 +108,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/auth/login/vendor
   Future<http.Response> loginVendor(Map<String, dynamic> data) async {
     return await post(
       'auth/login/vendor',
@@ -125,7 +117,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/auth/logout  ← was wrongly 'buyers/logout'
   Future<void> logout() async {
     try {
       await post(
@@ -142,12 +133,10 @@ class ApiService {
     }
   }
 
-  // GET /api/v1/auth/me
   Future<http.Response> getMe() async {
     return await get('auth/me', isProtected: true, userType: 'buyer');
   }
 
-  // POST /api/v1/auth/fcm-token
   Future<http.Response> saveFcmToken(String fcmToken) async {
     return await post(
       'auth/fcm-token',
@@ -158,7 +147,7 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
-  // SOCIAL AUTH  — POST /api/v1/auth/social/{google|facebook}
+  // SOCIAL AUTH
   // ---------------------------------------------------------------------------
 
   Future<http.Response?> signInWithGoogle() async {
@@ -178,19 +167,16 @@ class ApiService {
     }
   }
 
-  // provider = 'google' | 'facebook'
-  // Route: POST /api/v1/auth/social/{provider}
   Future<http.Response> socialLogin(String provider, String accessToken) async {
     try {
       final response = await post(
-        'auth/social/$provider', // ← fixed from 'buyers/social-signup'
+        'auth/social/$provider',
         {'access_token': accessToken},
         isProtected: false,
         userType: 'buyer',
       );
 
       final responseData = jsonDecode(response.body);
-
       if (response.statusCode == 200 && responseData['success'] == true) {
         await saveToken(
           responseData['data']['access_token'],
@@ -200,7 +186,6 @@ class ApiService {
           await saveUserData(responseData['data']['user']);
         }
       }
-
       return response;
     } catch (e) {
       debugPrint("❌ Social login error: $e");
@@ -209,15 +194,13 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
-  // BUYER PROFILE   — /api/v1/buyers/profile
+  // BUYER PROFILE
   // ---------------------------------------------------------------------------
 
-  // GET /api/v1/buyers/profile
   Future<http.Response> getBuyerProfile() async {
     return await get('buyers/profile', isProtected: true, userType: 'buyer');
   }
 
-  // PUT /api/v1/buyers/profile/update
   Future<http.Response> updateBuyerProfile(Map<String, dynamic> data) async {
     return await put(
       'buyers/profile/update',
@@ -227,11 +210,11 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/buyers/profile/upload-photo  (Laravel method-spoof: _method=PUT)
+  /// Laravel route: POST api/v1/buyers/profile/upload-photo
   Future<http.Response> uploadBuyerPhoto(File imageFile) async {
     return await postMultipart(
       'buyers/profile/upload-photo',
-      {'_method': 'PUT'},
+      {},
       filePath: imageFile.path,
       fileField: 'profile_photo',
       isProtected: true,
@@ -240,15 +223,13 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
-  // FAVORITES   — /api/v1/buyers/favorites
+  // FAVORITES
   // ---------------------------------------------------------------------------
 
-  // GET /api/v1/buyers/favorites
   Future<http.Response> getFavorites() async {
     return await get('buyers/favorites', isProtected: true, userType: 'buyer');
   }
 
-  // DELETE /api/v1/buyers/favorites/{adId}
   Future<http.Response> removeFavorite(int adId) async {
     return await delete(
       'buyers/favorites/$adId',
@@ -257,7 +238,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/ads/{id}/favorite  (toggle — shared, needs auth)
   Future<http.Response> toggleFavorite(int adId) async {
     return await post(
       'ads/$adId/favorite',
@@ -271,7 +251,6 @@ class ApiService {
   // ADS (public)
   // ---------------------------------------------------------------------------
 
-  // GET /api/v1/ads
   Future<http.Response> getAds({Map<String, String>? queryParams}) async {
     final endpoint = queryParams == null || queryParams.isEmpty
         ? 'ads'
@@ -279,12 +258,10 @@ class ApiService {
     return await get(endpoint, isProtected: false, userType: 'buyer');
   }
 
-  // GET /api/v1/ads/{id}
   Future<http.Response> getAd(int id) async {
     return await get('ads/$id', isProtected: false, userType: 'buyer');
   }
 
-  // POST /api/v1/ads/{id}/view
   Future<http.Response> recordAdView(int adId) async {
     return await post(
       'ads/$adId/view',
@@ -295,29 +272,25 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
-  // CATEGORIES (public)
+  // CATEGORIES
   // ---------------------------------------------------------------------------
 
-  // GET /api/v1/categories
   Future<http.Response> getCategories() async {
     return await get('categories', isProtected: false, userType: 'buyer');
   }
 
-  // GET /api/v1/categories/{type}
   Future<http.Response> getCategoriesByType(String type) async {
     return await get('categories/$type', isProtected: false, userType: 'buyer');
   }
 
   // ---------------------------------------------------------------------------
-  // KYC   — /api/v1/kyc  (shared buyer & vendor)
+  // KYC
   // ---------------------------------------------------------------------------
 
-  // GET /api/v1/kyc/status
   Future<http.Response> getKycStatus() async {
     return await get('kyc/status', isProtected: true, userType: 'buyer');
   }
 
-  // POST /api/v1/kyc/email/send
   Future<http.Response> sendEmailOtp() async {
     return await post(
       'kyc/email/send',
@@ -327,17 +300,15 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/kyc/email/verify
-  Future<http.Response> verifyEmail(String otp) async {
+  Future<http.Response> verifyEmail(String code) async {
     return await post(
       'kyc/email/verify',
-      {'otp': otp},
+      {'code': code},
       isProtected: true,
       userType: 'buyer',
     );
   }
 
-  // POST /api/v1/kyc/phone/send
   Future<http.Response> sendPhoneOtp() async {
     return await post(
       'kyc/phone/send',
@@ -347,17 +318,15 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/kyc/phone/verify
   Future<http.Response> verifyPhone(String otp) async {
     return await post(
       'kyc/phone/verify',
-      {'otp': otp},
+      {'code': otp},
       isProtected: true,
       userType: 'buyer',
     );
   }
 
-  // POST /api/v1/kyc/identity/verify
   Future<http.Response> verifyIdentity({
     required String nin,
     File? document,
@@ -381,20 +350,17 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
-  // CHATS   — /api/v1/chats  (shared buyer & vendor)
+  // CHATS
   // ---------------------------------------------------------------------------
 
-  // GET /api/v1/chats
   Future<http.Response> getChats() async {
     return await get('chats', isProtected: true, userType: 'buyer');
   }
 
-  // POST /api/v1/chats
   Future<http.Response> startChat(Map<String, dynamic> data) async {
     return await post('chats', data, isProtected: true, userType: 'buyer');
   }
 
-  // GET /api/v1/chats/{id}/messages
   Future<http.Response> getChatMessages(int chatId) async {
     return await get(
       'chats/$chatId/messages',
@@ -403,7 +369,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/chats/{id}/messages
   Future<http.Response> sendChatMessage(
     int chatId,
     Map<String, dynamic> data,
@@ -416,7 +381,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/chats/{id}/read
   Future<http.Response> markChatRead(int chatId) async {
     return await post(
       'chats/$chatId/read',
@@ -427,10 +391,9 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
-  // CALLS   — /api/v1/calls  (shared buyer & vendor)
+  // CALLS
   // ---------------------------------------------------------------------------
 
-  // POST /api/v1/calls/token
   Future<http.Response> getCallToken({
     required String channelName,
     required int uid,
@@ -443,12 +406,11 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/calls/initiate
   Future<http.Response> initiateCall({
     required int receiverId,
     required String channelName,
     required String callerName,
-    required String callType, // 'audio' | 'video'
+    required String callType,
   }) async {
     return await post(
       'calls/initiate',
@@ -463,7 +425,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/calls/end
   Future<http.Response> endCall({
     required int receiverId,
     required String channelName,
@@ -477,25 +438,21 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
-  // VENDOR — /api/v1/vendor  (requires vendor middleware)
+  // VENDOR
   // ---------------------------------------------------------------------------
 
-  // GET /api/v1/vendor/dashboard
   Future<http.Response> getVendorDashboard() async {
     return await get('vendor/dashboard', isProtected: true, userType: 'vendor');
   }
 
-  // GET /api/v1/vendor/analytics
   Future<http.Response> getVendorAnalytics() async {
     return await get('vendor/analytics', isProtected: true, userType: 'vendor');
   }
 
-  // GET /api/v1/vendor/profile
   Future<http.Response> getVendorProfile() async {
     return await get('vendor/profile', isProtected: true, userType: 'vendor');
   }
 
-  // PATCH /api/v1/vendor/profile
   Future<http.Response> updateVendorProfile(Map<String, dynamic> data) async {
     return await patch(
       'vendor/profile',
@@ -505,7 +462,7 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/vendor/profile/photo
+  /// Laravel route: POST api/v1/vendor/profile/photo
   Future<http.Response> uploadVendorPhoto(File imageFile) async {
     return await postMultipart(
       'vendor/profile/photo',
@@ -517,7 +474,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/vendor/profile/logo
   Future<http.Response> uploadVendorLogo(File imageFile) async {
     return await postMultipart(
       'vendor/profile/logo',
@@ -529,12 +485,10 @@ class ApiService {
     );
   }
 
-  // GET /api/v1/vendor/voucher
   Future<http.Response> getVoucher() async {
     return await get('vendor/voucher', isProtected: true, userType: 'vendor');
   }
 
-  // POST /api/v1/vendor/voucher/topup
   Future<http.Response> voucherTopUp(Map<String, dynamic> data) async {
     return await post(
       'vendor/voucher/topup',
@@ -544,7 +498,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/vendor/voucher/spend
   Future<http.Response> voucherSpend(Map<String, dynamic> data) async {
     return await post(
       'vendor/voucher/spend',
@@ -554,7 +507,6 @@ class ApiService {
     );
   }
 
-  // GET /api/v1/vendor/voucher/transactions
   Future<http.Response> getVoucherTransactions() async {
     return await get(
       'vendor/voucher/transactions',
@@ -563,12 +515,10 @@ class ApiService {
     );
   }
 
-  // GET /api/v1/vendor/settings
   Future<http.Response> getVendorSettings() async {
     return await get('vendor/settings', isProtected: true, userType: 'vendor');
   }
 
-  // PATCH /api/v1/vendor/settings
   Future<http.Response> updateVendorSettings(Map<String, dynamic> data) async {
     return await patch(
       'vendor/settings',
@@ -578,7 +528,6 @@ class ApiService {
     );
   }
 
-  // GET /api/v1/vendor/settings/options
   Future<http.Response> getVendorSettingsOptions() async {
     return await get(
       'vendor/settings/options',
@@ -587,7 +536,6 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/vendor/settings/change-password
   Future<http.Response> changeVendorPassword(Map<String, dynamic> data) async {
     return await post(
       'vendor/settings/change-password',
@@ -597,7 +545,6 @@ class ApiService {
     );
   }
 
-  // DELETE /api/v1/vendor/settings/account
   Future<http.Response> deleteVendorAccount() async {
     return await delete(
       'vendor/settings/account',
@@ -606,12 +553,10 @@ class ApiService {
     );
   }
 
-  // GET /api/v1/vendor/ads/my
   Future<http.Response> getMyAds() async {
     return await get('vendor/ads/my', isProtected: true, userType: 'vendor');
   }
 
-  // POST /api/v1/vendor/ads
   Future<http.Response> createAd(Map<String, dynamic> data) async {
     return await post(
       'vendor/ads',
@@ -621,7 +566,7 @@ class ApiService {
     );
   }
 
-  // POST /api/v1/vendor/ads/{id}  (Laravel method-spoof for multipart updates)
+  /// Laravel route: POST api/v1/vendor/ads/{id}
   Future<http.Response> updateAd(
     int id,
     Map<String, String> fields, {
@@ -630,7 +575,7 @@ class ApiService {
     if (media != null) {
       return await postMultipart(
         'vendor/ads/$id',
-        {...fields, '_method': 'POST'},
+        fields,
         filePath: media.path,
         fileField: 'media',
         isProtected: true,
@@ -645,7 +590,6 @@ class ApiService {
     );
   }
 
-  // DELETE /api/v1/vendor/ads/{id}
   Future<http.Response> deleteAd(int id) async {
     return await delete(
       'vendor/ads/$id',
@@ -655,10 +599,9 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
-  // TRANSLATIONS (public)
+  // TRANSLATIONS
   // ---------------------------------------------------------------------------
 
-  // GET /api/v1/translations/locales
   Future<http.Response> getLocales() async {
     return await get(
       'translations/locales',
@@ -667,7 +610,6 @@ class ApiService {
     );
   }
 
-  // GET /api/v1/translations/{locale}
   Future<http.Response> getTranslations(String locale) async {
     return await get(
       'translations/$locale',
@@ -693,6 +635,8 @@ class ApiService {
           .get(url, headers: headers)
           .timeout(const Duration(seconds: 15));
       return _handleResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw _processError(e, "GET", endpoint);
     }
@@ -707,11 +651,14 @@ class ApiService {
     try {
       final url = _buildUrl(endpoint);
       final headers = await _getHeaders(protected: isProtected);
-      debugPrint("🚀 POST [$userType]: $url");
+      debugPrint("🚀 POST: $url");
+      debugPrint("🔑 Token being sent: ${headers['Authorization']}");
       final response = await http
           .post(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
       return _handleResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw _processError(e, "POST", endpoint);
     }
@@ -731,12 +678,13 @@ class ApiService {
           .put(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
       return _handleResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw _processError(e, "PUT", endpoint);
     }
   }
 
-  /// Used for PATCH endpoints (e.g. vendor/profile, vendor/settings).
   Future<http.Response> patch(
     String endpoint,
     Map<String, dynamic> data, {
@@ -751,6 +699,8 @@ class ApiService {
           .patch(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
       return _handleResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw _processError(e, "PATCH", endpoint);
     }
@@ -767,10 +717,14 @@ class ApiService {
     try {
       final url = _buildUrl(endpoint);
       final headers = await _getHeaders(protected: isProtected);
-      headers.remove('Content-Type'); // let http set multipart boundary
+
+      // Remove Content-Type so MultipartRequest can set its own boundary
+      headers.remove('Content-Type');
+      headers['Accept'] = 'application/json';
 
       final request = http.MultipartRequest('POST', url);
       request.headers.addAll(headers);
+
       data.forEach((key, value) => request.fields[key] = value);
 
       request.files.add(
@@ -781,12 +735,16 @@ class ApiService {
         ),
       );
 
-      debugPrint("🚀 UPLOAD [$userType]: $url");
+      debugPrint("🚀 UPLOAD ATTEMPT: POST $url");
+
       final streamed = await request.send().timeout(
         const Duration(seconds: 30),
       );
+
       final response = await http.Response.fromStream(streamed);
       return _handleResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw _processError(e, "UPLOAD", endpoint);
     }
@@ -805,6 +763,8 @@ class ApiService {
           .delete(url, headers: headers)
           .timeout(const Duration(seconds: 15));
       return _handleResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw _processError(e, "DELETE", endpoint);
     }
@@ -821,7 +781,12 @@ class ApiService {
     };
     if (protected) {
       final token = await getToken();
-      if (token != null) headers['Authorization'] = 'Bearer $token';
+      debugPrint(
+        "🔑 Auth token from storage: ${token ?? 'NULL — not logged in'}",
+      );
+      if (token != null) {
+        headers['Authorization'] = 'Bearer $token';
+      }
     }
     return headers;
   }
@@ -831,43 +796,81 @@ class ApiService {
     return Uri.parse('$baseUrl/$clean');
   }
 
+  /// Handles HTTP responses.
+  ///
+  /// Throws [ApiException] with a clean user-facing message on errors.
+  /// Using a typed exception prevents _processError from re-wrapping it.
   http.Response _handleResponse(http.Response response) {
-    debugPrint("📥 [${response.statusCode}]: ${response.body}");
+    debugPrint("📥 STATUS ${response.statusCode}: ${response.body}");
 
-    if (response.statusCode >= 200 && response.statusCode < 300)
+    if (response.statusCode >= 200 && response.statusCode < 300) {
       return response;
+    }
 
-    final dynamic decoded = jsonDecode(response.body);
+    // Safely decode — 500s may return HTML, not JSON
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {
+      // Non-JSON response (HTML error page, nginx 502, etc.)
+      debugPrint("⚠️ Non-JSON error response (${response.statusCode})");
+      throw ApiException(
+        "Server error (${response.statusCode}). Please try again.",
+      );
+    }
 
+    // 401 Unauthenticated — clear token and prompt re-login
+    // Exception: wrong password returns 401 but should NOT clear the token
     if (response.statusCode == 401 &&
         decoded is Map &&
         decoded['message'] != 'Incorrect email or password.') {
       clearToken();
-      throw "Session expired. Please sign in again.";
+      throw ApiException("Session expired. Please sign in again.");
     }
 
+    // 422 Validation errors — extract and join field messages
     if (response.statusCode == 422 &&
         decoded is Map &&
         decoded['errors'] != null) {
       final errors = decoded['errors'] as Map<String, dynamic>;
       final buffer = StringBuffer();
       errors.forEach((_, value) {
-        buffer.writeln(value is List ? value.join(', ') : value);
+        buffer.writeln(value is List ? value.join(', ') : value.toString());
       });
-      throw buffer.toString().trim();
+      throw ApiException(buffer.toString().trim());
     }
 
+    // Any other error with a message field
     if (decoded is Map && decoded.containsKey('message')) {
-      throw decoded['message'];
+      throw ApiException(
+        decoded['message']?.toString() ?? "An error occurred.",
+      );
     }
 
-    throw "Server error (${response.statusCode})";
+    throw ApiException(
+      "Server error (${response.statusCode}). Please try again.",
+    );
   }
 
+  /// Converts low-level exceptions (network, timeout) into clean strings.
+  /// Does NOT re-wrap [ApiException] — those pass through as-is via rethrow
+  /// in each HTTP method above.
   String _processError(dynamic e, String method, String endpoint) {
     debugPrint("❌ $method ERROR [$endpoint]: $e");
     if (e is SocketException) return "No internet connection.";
     if (e is TimeoutException) return "Connection timed out.";
-    return e.toString().replaceFirst('Exception: ', '');
+    // Unwrap any stray Exception wrappers
+    final msg = e.toString().replaceFirst('Exception: ', '');
+    return msg.isNotEmpty ? msg : "An unexpected error occurred.";
   }
+}
+
+/// Typed exception used internally by [ApiService._handleResponse].
+/// Prevents _processError from re-wrapping server error messages.
+class ApiException implements Exception {
+  final String message;
+  const ApiException(this.message);
+
+  @override
+  String toString() => message;
 }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sbrai_solutions/models/buyer/product_model.dart';
+import 'package:sbrai_solutions/models/product_model.dart';
 // Importing the dedicated BuyersMenu
 import 'package:sbrai_solutions/buyer/widgets/buyers_menu.dart';
 
@@ -91,20 +91,26 @@ class _HomeScreenState extends State<HomeScreen> {
     displayedProducts = allProducts;
   }
 
-  void _filterByCategory(String categoryName) {
-    setState(() {
-      if (selectedCategory == categoryName) {
-        selectedCategory = null;
-        displayedProducts = allProducts;
-      } else {
-        selectedCategory = categoryName;
-        displayedProducts = allProducts
-            .where(
-              (p) => p.category.toLowerCase() == categoryName.toLowerCase(),
-            )
-            .toList();
-      }
-    });
+  /// Opens a pop-up dialog for the selected category.
+  void _openCategoryModal(String categoryName, String categoryIcon) {
+    final List<Product> categoryProducts = allProducts
+        .where((p) => p.category.toLowerCase() == categoryName.toLowerCase())
+        .toList();
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
+        clipBehavior: Clip.hardEdge,
+        child: _CategoryBottomSheet(
+          categoryName: categoryName,
+          categoryIcon: categoryIcon,
+          products: categoryProducts,
+        ),
+      ),
+    );
   }
 
   @override
@@ -173,26 +179,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    selectedCategory == null
-                        ? "Recommended for You"
-                        : "Results for $selectedCategory",
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  const Text(
+                    "Recommended for You",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  if (selectedCategory != null)
-                    TextButton(
-                      onPressed: () => setState(() {
-                        selectedCategory = null;
-                        displayedProducts = allProducts;
-                      }),
-                      child: const Text(
-                        "Clear Filter",
-                        style: TextStyle(color: Colors.blue),
-                      ),
-                    ),
                   Text(
                     "${displayedProducts.length} items",
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
@@ -234,18 +224,17 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       itemCount: categories.length,
       itemBuilder: (context, index) {
-        bool isSelected = selectedCategory == categories[index]['name'];
         return GestureDetector(
-          onTap: () => _filterByCategory(categories[index]['name']!),
+          onTap: () => _openCategoryModal(
+            categories[index]['name']!,
+            categories[index]['icon']!,
+          ),
           child: Column(
             children: [
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(22),
-                    border: isSelected
-                        ? Border.all(color: Colors.white, width: 2)
-                        : null,
                     image: DecorationImage(
                       image: AssetImage(categories[index]['icon']!),
                       fit: BoxFit.cover,
@@ -256,10 +245,10 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               Text(
                 categories[index]['name']!,
-                style: TextStyle(
-                  color: isSelected ? Colors.black : Colors.white,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  fontWeight: FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -357,7 +346,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildLanguageDropdown() {
-    // Map to handle display codes for the new languages
     final Map<String, String> languageCodes = {
       "English": "EN",
       "French": "FR",
@@ -461,6 +449,344 @@ class _HomeScreenState extends State<HomeScreen> {
                     fontSize: 13,
                   ),
                   maxLines: 1,
+                ),
+                Text(
+                  "📍 ${product.location}",
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "₦${product.price.toStringAsFixed(0)}",
+                  style: const TextStyle(
+                    color: Color(0xFFE85D22),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildSmallButton("Call", Icons.call, false),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: _buildSmallButton(
+                        "Chat",
+                        Icons.chat_bubble_outline,
+                        true,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSmallButton(String label, IconData icon, bool isPrimary) {
+    return SizedBox(
+      height: 30,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isPrimary ? const Color(0xFFE85D22) : Colors.white,
+          foregroundColor: isPrimary ? Colors.white : Colors.black,
+          padding: EdgeInsets.zero,
+          elevation: 0,
+          side: isPrimary
+              ? BorderSide.none
+              : const BorderSide(color: Colors.grey),
+        ),
+        onPressed: () {},
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 12),
+            const SizedBox(width: 2),
+            Text(label, style: const TextStyle(fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Category Bottom Sheet (Jiji-style modal)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CategoryBottomSheet extends StatefulWidget {
+  final String categoryName;
+  final String categoryIcon;
+  final List<Product> products;
+
+  const _CategoryBottomSheet({
+    required this.categoryName,
+    required this.categoryIcon,
+    required this.products,
+  });
+
+  @override
+  State<_CategoryBottomSheet> createState() => _CategoryBottomSheetState();
+}
+
+class _CategoryBottomSheetState extends State<_CategoryBottomSheet> {
+  String _sortBy = 'Newest';
+  final List<String> _sortOptions = [
+    'Newest',
+    'Price: Low to High',
+    'Price: High to Low',
+  ];
+
+  List<Product> get _sortedProducts {
+    final list = List<Product>.from(widget.products);
+    if (_sortBy == 'Price: Low to High') {
+      list.sort((a, b) => a.price.compareTo(b.price));
+    } else if (_sortBy == 'Price: High to Low') {
+      list.sort((a, b) => b.price.compareTo(a.price));
+    }
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return SizedBox(
+      height: screenHeight * 0.82,
+      child: Column(
+        children: [
+          // Header
+          _buildHeader(context),
+
+          // Sort bar
+          if (widget.products.isNotEmpty) _buildSortBar(),
+
+          const Divider(height: 1),
+
+          // Product grid or empty state
+          Expanded(
+            child: widget.products.isEmpty
+                ? _buildEmptyState()
+                : _buildProductGrid(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 12),
+      child: Row(
+        children: [
+          // Category thumbnail
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              widget.categoryIcon,
+              width: 40,
+              height: 40,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 40,
+                height: 40,
+                color: const Color(0xFFE85D22).withOpacity(0.15),
+                child: const Icon(Icons.category, color: Color(0xFFE85D22)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.categoryName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                Text(
+                  "${widget.products.length} listing${widget.products.length == 1 ? '' : 's'} available",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          // Close button
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close, size: 20, color: Colors.black54),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSortBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.sort, size: 16, color: Colors.black54),
+          const SizedBox(width: 6),
+          const Text(
+            "Sort by:",
+            style: TextStyle(fontSize: 13, color: Colors.black54),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _sortOptions.map((option) {
+                  final isSelected = _sortBy == option;
+                  return GestureDetector(
+                    onTap: () => setState(() => _sortBy = option),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFFE85D22)
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFFE85D22)
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: Text(
+                        option,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected ? Colors.white : Colors.black54,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE85D22).withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.inbox_outlined,
+                size: 48,
+                color: Color(0xFFE85D22),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              "No listings yet",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Be the first to list a product\nor service in ${widget.categoryName}!",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade500,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductGrid() {
+    final products = _sortedProducts;
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.68,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+      ),
+      itemCount: products.length,
+      itemBuilder: (context, index) => _buildModalProductCard(products[index]),
+    );
+  }
+
+  Widget _buildModalProductCard(Product product) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+              child: Image.network(
+                product.imageUrl,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: Colors.grey.shade200,
+                  child: const Icon(Icons.image),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   "📍 ${product.location}",

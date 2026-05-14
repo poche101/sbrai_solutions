@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/buyer/widgets/email_verification.dart';
 import 'package:sbrai_solutions/buyer/widgets/phone_verification.dart';
 import 'package:sbrai_solutions/buyer/widgets/identity_verification.dart';
+import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:sbrai_solutions/buyer_service/kyc_service.dart';
 import 'package:sbrai_solutions/models/buyer/kyc_status_model.dart';
 
@@ -14,21 +15,27 @@ class KYCScreen extends StatefulWidget {
 
 class _KYCScreenState extends State<KYCScreen> {
   final KycService _kycService = KycService();
+  final ApiService _apiService = ApiService();
 
   // Null while loading, populated after getStatus() resolves
   KycStatus? _status;
   bool _isLoading = true;
   String? _errorMessage;
 
+  // Logged-in user details
+  String? _userEmail;
+  String? _userPhone;
+
   @override
   void initState() {
     super.initState();
-    _loadStatus();
+    _loadAll();
   }
 
   // ── Data ───────────────────────────────────────────────────────────────────
 
-  Future<void> _loadStatus() async {
+  /// Loads KYC status and user data in parallel.
+  Future<void> _loadAll() async {
     if (!mounted) return;
     setState(() {
       _isLoading = true;
@@ -36,8 +43,21 @@ class _KYCScreenState extends State<KYCScreen> {
     });
 
     try {
-      final status = await _kycService.getStatus();
-      if (mounted) setState(() => _status = status);
+      final results = await Future.wait([
+        _kycService.getStatus(),
+        _apiService.getUserData(),
+      ]);
+
+      if (mounted) {
+        final status = results[0] as KycStatus;
+        final userData = results[1] as Map<String, String?>;
+
+        setState(() {
+          _status = status;
+          _userEmail = userData['email'];
+          _userPhone = userData['phone'];
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _errorMessage = e.toString());
     } finally {
@@ -45,14 +65,13 @@ class _KYCScreenState extends State<KYCScreen> {
     }
   }
 
+  // Kept for the refresh button — reloads everything
+  Future<void> _loadStatus() => _loadAll();
+
   /// Navigates to a verification sub-screen and refreshes status on return.
-  /// The sub-screens no longer need to return `true` — the service re-fetches
-  /// the authoritative status from the server either way.
   Future<void> _navigateAndRefresh(Widget screen) async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
-    // Always refresh after returning — even a back-navigation might reflect
-    // a step the user completed before closing the screen.
-    await _loadStatus();
+    await _loadAll();
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -91,7 +110,6 @@ class _KYCScreenState extends State<KYCScreen> {
           ),
         ],
       ),
-      // Refresh button — useful when SMS OTP was logged server-side during testing
       actions: [
         if (!_isLoading)
           IconButton(
@@ -104,7 +122,7 @@ class _KYCScreenState extends State<KYCScreen> {
   }
 
   Widget _buildBody() {
-    // ── Loading state ──────────────────────────────────────────────────────
+    // ── Loading state ────────────────────────────────────────────────────────
     if (_isLoading) {
       return const Center(
         child: Column(
@@ -121,7 +139,7 @@ class _KYCScreenState extends State<KYCScreen> {
       );
     }
 
-    // ── Error state ────────────────────────────────────────────────────────
+    // ── Error state ──────────────────────────────────────────────────────────
     if (_errorMessage != null) {
       return Center(
         child: Padding(
@@ -155,25 +173,32 @@ class _KYCScreenState extends State<KYCScreen> {
       );
     }
 
-    // ── Loaded state ───────────────────────────────────────────────────────
+    // ── Loaded state ─────────────────────────────────────────────────────────
     final status = _status!;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // User info card — shows who is being verified
+        _buildUserInfoCard(),
+        const SizedBox(height: 16),
         _buildProgressCard(status),
         const SizedBox(height: 16),
         _buildVerificationTile(
           icon: Icons.mail_outline,
           title: 'Email Verification',
-          subtitle: 'Verify your email address',
+          subtitle: _userEmail != null && _userEmail!.isNotEmpty
+              ? _maskEmail(_userEmail!)
+              : 'Verify your email address',
           isCompleted: status.emailVerified,
           onTap: () => _navigateAndRefresh(const EmailVerification()),
         ),
         _buildVerificationTile(
           icon: Icons.phone_outlined,
           title: 'Phone Verification',
-          subtitle: 'Verify your phone number',
+          subtitle: _userPhone != null && _userPhone!.isNotEmpty
+              ? _maskPhone(_userPhone!)
+              : 'Verify your phone number',
           isCompleted: status.phoneVerified,
           onTap: () => _navigateAndRefresh(const PhoneVerification()),
         ),
@@ -193,6 +218,93 @@ class _KYCScreenState extends State<KYCScreen> {
   }
 
   // ── Widgets ────────────────────────────────────────────────────────────────
+
+  /// Shows the logged-in user's email and phone at the top of the screen.
+  Widget _buildUserInfoCard() {
+    final hasEmail = _userEmail != null && _userEmail!.isNotEmpty;
+    final hasPhone = _userPhone != null && _userPhone!.isNotEmpty;
+
+    return _buildCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF5F2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.person_outline,
+                  color: Color(0xFFF97316),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Your Account',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 14),
+          // Email row
+          _buildInfoRow(
+            icon: Icons.mail_outline,
+            label: 'Email',
+            value: hasEmail ? _userEmail! : 'Not set',
+            valueColor: hasEmail ? Colors.black87 : Colors.grey,
+          ),
+          const SizedBox(height: 10),
+          // Phone row
+          _buildInfoRow(
+            icon: Icons.phone_outlined,
+            label: 'Phone',
+            value: hasPhone ? _userPhone! : 'Not set — update your profile',
+            valueColor: hasPhone ? Colors.black87 : Colors.orange,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color valueColor = Colors.black87,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: Colors.grey[400]),
+        const SizedBox(width: 10),
+        Text(
+          '$label:',
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey[500],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              color: valueColor,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildProgressCard(KycStatus status) {
     final progress = status.progress;
@@ -220,7 +332,6 @@ class _KYCScreenState extends State<KYCScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          // Step label from model: "2 / 3 steps complete"
           Text(
             status.progressLabel,
             style: TextStyle(color: Colors.grey[500], fontSize: 12),
@@ -229,7 +340,6 @@ class _KYCScreenState extends State<KYCScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
-              // Never show fully-empty bar — use 0.05 as minimum visual fill
               value: progress == 0 ? 0.05 : progress,
               backgroundColor: const Color(0xFFFFE4E1),
               valueColor: AlwaysStoppedAnimation<Color>(
@@ -253,13 +363,11 @@ class _KYCScreenState extends State<KYCScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: InkWell(
-        // Completed steps are still tappable so users can re-verify if needed
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: _buildCard(
           child: Row(
             children: [
-              // Step icon
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -275,7 +383,6 @@ class _KYCScreenState extends State<KYCScreen> {
                 ),
               ),
               const SizedBox(width: 16),
-              // Title + subtitle
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,7 +405,6 @@ class _KYCScreenState extends State<KYCScreen> {
                   ],
                 ),
               ),
-              // Status icon
               Icon(
                 isCompleted ? Icons.check_circle : Icons.chevron_right,
                 color: isCompleted ? Colors.green : Colors.grey[400],
@@ -311,7 +417,6 @@ class _KYCScreenState extends State<KYCScreen> {
     );
   }
 
-  /// Shown when all three steps are complete and is_verified is true.
   Widget _buildVerifiedBanner() {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -425,5 +530,25 @@ class _KYCScreenState extends State<KYCScreen> {
         ],
       ),
     );
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  /// Masks email: john@example.com → j***@example.com
+  String _maskEmail(String email) {
+    final parts = email.split('@');
+    if (parts.length != 2) return email;
+    final name = parts[0];
+    final domain = parts[1];
+    if (name.isEmpty) return email;
+    return '${name[0]}***@$domain';
+  }
+
+  /// Masks phone: 08136386103 → 0813***6103
+  String _maskPhone(String phone) {
+    if (phone.length < 7) return phone;
+    final start = phone.substring(0, 4);
+    final end = phone.substring(phone.length - 4);
+    return '$start***$end';
   }
 }

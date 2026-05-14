@@ -21,7 +21,6 @@ import 'firebase_options.dart';
 // --- Background Message Handler ---
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Only initialize Firebase if it hasn't been initialized yet
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -33,21 +32,17 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Initialize Firebase only if not already initialized
-  if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  }
+  // Initialize Firebase
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // 2. Set up Background Notification Listener
+  // Set up Background Notification Listener
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // 3. Request Permissions
-  FirebaseMessaging messaging = FirebaseMessaging.instance;
+  // Request Notification Permissions
+  final messaging = FirebaseMessaging.instance;
   await messaging.requestPermission(alert: true, badge: true, sound: true);
 
-  // 4. SSL Bypass
+  // SSL Bypass (Only for development)
   HttpOverrides.global = MyHttpOverrides();
 
   runApp(
@@ -80,17 +75,16 @@ class SbraiSolutionsApp extends StatelessWidget {
               backgroundColor: Colors.white,
               elevation: 0,
               scrolledUnderElevation: 0,
-              centerTitle: false,
+              iconTheme: IconThemeData(color: Colors.black),
               titleTextStyle: TextStyle(
                 color: Colors.black,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
-              iconTheme: IconThemeData(color: Colors.black),
             ),
           ),
 
-          // Localization setup
+          // Localization
           locale: languageProvider.locale,
           localizationsDelegates: const [
             AppLocalizations.delegate,
@@ -100,10 +94,9 @@ class SbraiSolutionsApp extends StatelessWidget {
           ],
           supportedLocales: const [Locale('en'), Locale('es'), Locale('fr')],
 
-          // Change back to AccountSelectionScreen as home
           home: const AccountSelectionScreen(),
 
-          // Centralized route management
+          // Routes
           routes: {
             '/account-selection': (context) => const AccountSelectionScreen(),
             '/favorites': (context) => const FavoriteScreen(),
@@ -118,6 +111,7 @@ class SbraiSolutionsApp extends StatelessWidget {
   }
 }
 
+// SSL Bypass (Development Only)
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
