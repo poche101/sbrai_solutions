@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'signin_screen.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
+import 'signin_screen.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -35,6 +35,7 @@ class _SignupPageState extends State<SignupPage> {
 
   void _showCustomToast(String message, {bool isSuccess = true}) {
     if (!mounted) return;
+
     final overlay = Overlay.of(context);
     final overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
@@ -77,9 +78,9 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   Future<void> _handleSignup() async {
-    // Basic Client-side validation
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
+    // Basic validation
+    if (_nameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
         _passwordController.text.isEmpty) {
       _showCustomToast("Please fill in all required fields", isSuccess: false);
       return;
@@ -93,39 +94,36 @@ class _SignupPageState extends State<SignupPage> {
     setState(() => _isLoading = true);
 
     try {
-<<<<<<< HEAD
-      // ✅ Updated to use the specific helper method instead of manual post()
-=======
-      // API call to register
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
-      final response = await _apiService.registerBuyer({
-        'name': _nameController.text.trim(),
-        'email': _emailController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'address': _addressController.text.trim(),
-        'password': _passwordController.text,
-        'password_confirmation': _confirmPasswordController.text,
-      });
+      final response = await _apiService.post(
+        'register',
+        {
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'address': _addressController.text.trim(),
+          'password': _passwordController.text,
+          'password_confirmation': _confirmPasswordController.text,
+        },
+        userType:
+            'buyer', // Add the required userType here (e.g., 'buyer' or 'vendor')
+        isProtected: false,
+      );
 
       final responseData = jsonDecode(response.body);
 
-      // ✅ Check for both status code and the success boolean from your API
       if ((response.statusCode == 201 || response.statusCode == 200) &&
           responseData['success'] == true) {
         _showCustomToast(
           responseData['message'] ?? "Account created successfully!",
         );
 
-        // Optionally save the token immediately if your register API returns one
+        // Save token if returned
         if (responseData['data'] != null &&
             responseData['data']['access_token'] != null) {
           await _apiService.saveToken(
             responseData['data']['access_token'],
             userType: 'buyer',
           );
-          if (responseData['data']['user'] != null) {
-            await _apiService.saveUserData(responseData['data']['user']);
-          }
         }
 
         if (mounted) {
@@ -137,12 +135,10 @@ class _SignupPageState extends State<SignupPage> {
           });
         }
       } else {
-        // Handle cases where status is 200 but 'success' is false, or validation errors
         throw responseData['message'] ??
             "Registration failed. Please try again.";
       }
     } catch (e) {
-      // This catches network errors or the thrown error messages above
       _showCustomToast(e.toString(), isSuccess: false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -152,12 +148,8 @@ class _SignupPageState extends State<SignupPage> {
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isLoading = true);
     try {
-      final response = await _apiService.signInWithGoogle();
-      if (response != null) {
-        _showCustomToast("Signed in with Google successfully!");
-        // Navigate to Home/Dashboard after successful social login
-        // Navigator.pushReplacementNamed(context, '/home');
-      }
+      // TODO: Implement Google Sign-In with Firebase or your backend
+      _showCustomToast("Google Sign-In coming soon!", isSuccess: false);
     } catch (e) {
       _showCustomToast(e.toString(), isSuccess: false);
     } finally {
@@ -254,12 +246,10 @@ class _SignupPageState extends State<SignupPage> {
         _buildSocialButton(
           "Continue with Facebook",
           'assets/icons/facebook.png',
-          () {
-            _showCustomToast(
-              "Facebook login not yet implemented",
-              isSuccess: false,
-            );
-          },
+          () => _showCustomToast(
+            "Facebook login not yet implemented",
+            isSuccess: false,
+          ),
           isGoogle: false,
         ),
       ],
@@ -319,15 +309,15 @@ class _SignupPageState extends State<SignupPage> {
           "Password",
           "Enter Strong Password",
           Icons.lock_outline,
-          isPassword: true,
           controller: _passwordController,
+          isPassword: true,
         ),
         _buildField(
           "Confirm Password",
           "Repeat your password",
           Icons.lock_outline,
-          isPassword: true,
           controller: _confirmPasswordController,
+          isPassword: true,
         ),
       ],
     );

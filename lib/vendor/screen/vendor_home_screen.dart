@@ -41,6 +41,10 @@ const List<Map<String, String>> _supportedLocales = [
   {'code': 'ig', 'label': 'IG', 'full': 'Igbo'},
 ];
 
+// ══════════════════════════════════════════════════════════════════════════════
+// HomeScreen
+// ══════════════════════════════════════════════════════════════════════════════
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -54,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String selectedState = "All Nigeria";
   String? selectedCategory;
   String _currentLocale = 'en';
+
   final TextEditingController _searchController = TextEditingController();
 
   List<Product> displayedProducts = [];
@@ -119,11 +124,12 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  // ── Loaders ──────────────────────────────────────────────────────────────────
+
   Future<void> _loadAll() async {
     if (!mounted) return;
     setState(() => isLoading = true);
     try {
-<<<<<<< HEAD
       await _loadCategories();
       await _loadProducts();
     } catch (e) {
@@ -142,12 +148,6 @@ class _HomeScreenState extends State<HomeScreen> {
           )
           .timeout(const Duration(seconds: 15));
 
-=======
-      final response = await http.get(
-        Uri.parse('https://sbraisolutions.com/api/v1/categories'),
-        headers: {'Accept': 'application/json'},
-      );
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         if (data['success'] == true && data['data'] is Map) {
@@ -231,8 +231,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-<<<<<<< HEAD
   Future<void> _onRefresh() => _loadAll();
+
+  // ── Category tap → open category page ────────────────────────────────────────
 
   void _openCategoryPage(Map<String, dynamic> cat) {
     Navigator.push(
@@ -246,14 +247,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-=======
-  void _filterByCategory(String categoryName) {
-    setState(() {
-      selectedCategory =
-      (selectedCategory == categoryName) ? null : categoryName;
-    });
-    _fetchProducts();
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
   }
 
   void _toggleFavorite(Product product) {
@@ -294,6 +287,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ── Build ────────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -320,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            // Orange Header
+            // ── Orange header ──────────────────────────────────────────────
             SliverToBoxAdapter(
               child: Container(
                 color: const Color(0xFFE85D22),
@@ -344,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Section Header
+            // ── Section header ─────────────────────────────────────────────
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
               sliver: SliverToBoxAdapter(
@@ -369,9 +364,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-<<<<<<< HEAD
 
-            // Products / Loading / Empty State
+            // ── Products / Loading / Empty ─────────────────────────────────
             if (isLoading)
               const SliverToBoxAdapter(
                 child: Center(
@@ -421,51 +415,13 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
-=======
-            isLoading
-                ? const SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.only(top: 50.0),
-                  child: CircularProgressIndicator(
-                    color: Color(0xFFE85D22),
-                  ),
-                ),
-              ),
-            )
-                : displayedProducts.isEmpty
-                ? SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 50.0),
-                  child: Text(l10n.noItemsFound),
-                ),
-              ),
-            )
-                : SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              sliver: SliverGrid(
-                gridDelegate:
-                const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.62,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                      (context, index) => _buildDynamicProductCard(
-                      displayedProducts[index], l10n),
-                  childCount: displayedProducts.length,
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 80)),
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
           ],
         ),
       ),
     );
   }
+
+  // ── AppBar ───────────────────────────────────────────────────────────────────
 
   PreferredSizeWidget _buildAppBar(AppLocalizations l10n) {
     return AppBar(
@@ -500,6 +456,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
+
+  // ── Language dropdown ────────────────────────────────────────────────────────
 
   Widget _buildLanguageDropdown() {
     return PopupMenuButton<String>(
@@ -545,9 +503,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ── Search bar ───────────────────────────────────────────────────────────────
+
   Widget _buildSearchBar(AppLocalizations l10n) {
     return Row(
       children: [
+        // State picker
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
@@ -590,6 +551,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(width: 8),
+        // Search field
         Expanded(
           child: Container(
             height: 48,
@@ -643,12 +605,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ── Category grid ────────────────────────────────────────────────────────────
+
   Widget _buildCategoryGrid() {
-    if (isLoading)
+    if (isLoading) {
       return const SizedBox(
         height: 80,
         child: Center(child: CircularProgressIndicator(color: Colors.white)),
       );
+    }
+
     if (categories.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 16),
@@ -716,6 +682,8 @@ class _HomeScreenState extends State<HomeScreen> {
     child: const Icon(Icons.category_outlined, color: Colors.white54, size: 28),
   );
 
+  // ── Product card ─────────────────────────────────────────────────────────────
+
   Widget _buildProductCard(Product product, AppLocalizations l10n) {
     final bool isFav = _favoriteProductIds.contains(product.id);
     final bool isService = [
@@ -761,6 +729,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         ? Image.network(
                             product.imageUrl,
                             fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
                             errorBuilder: (_, __, ___) => Container(
                               color: Colors.grey.shade200,
                               child: const Icon(
@@ -769,7 +739,12 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                           )
-                        : Image.asset(product.imageUrl, fit: BoxFit.cover),
+                        : Image.asset(
+                            product.imageUrl,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                          ),
                   ),
                   if (isService)
                     Positioned(
@@ -892,33 +867,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-<<<<<<< HEAD
   Widget _actionBtn(
     String label,
     IconData icon,
     bool primary, {
     VoidCallback? onTap,
   }) {
-=======
-  Widget _buildActionButton(
-      String label,
-      IconData icon,
-      bool isPrimary, {
-        VoidCallback? onTap,
-      }) {
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
     return SizedBox(
       height: 34,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-<<<<<<< HEAD
           backgroundColor: primary
               ? const Color(0xFFE85D22)
               : Colors.transparent,
-=======
-          backgroundColor:
-          isPrimary ? const Color(0xFFE85D22) : Colors.transparent,
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
           side: BorderSide(
             color: primary ? const Color(0xFFE85D22) : Colors.grey.shade300,
           ),
@@ -951,7 +912,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Category Products Page - Vertical List Style (Like your screenshot)
+// Category Products Page
 // ══════════════════════════════════════════════════════════════════════════════
 
 class _CategoryProductsPage extends StatefulWidget {
@@ -1011,7 +972,6 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
             () => products = adsList
                 .map((j) => Product.fromJson(j as Map<String, dynamic>))
                 .toList(),
-<<<<<<< HEAD
           );
         }
       }
@@ -1024,137 +984,122 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final imgPath = _categoryImages[widget.categorySlug];
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFE85D22),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-=======
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(8),
+      body: CustomScrollView(
+        slivers: [
+          // ── Hero app bar with category image ────────────────────────────
+          SliverAppBar(
+            expandedHeight: 200,
+            pinned: true,
+            backgroundColor: const Color(0xFFE85D22),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              title: Text(
+                widget.categoryName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
               ),
+              background: imgPath != null
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.asset(imgPath, fit: BoxFit.cover),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.6),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Container(color: const Color(0xFFE85D22)),
+            ),
+          ),
+
+          // ── Count header ─────────────────────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
+            sliver: SliverToBoxAdapter(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Text(
-                      selectedState,
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
+                  Text(
+                    widget.categoryName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const Icon(
-                    Icons.keyboard_arrow_down,
-                    color: Colors.white70,
-                    size: 18,
+                  Text(
+                    "${products.length} items",
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 7,
-          child: Container(
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    onSubmitted: (_) => _fetchProducts(),
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: l10n.iAmLookingFor,
-                      hintStyle: const TextStyle(
-                          color: Colors.white54, fontSize: 13),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 15),
-                    ),
-                  ),
+
+          // ── Products ──────────────────────────────────────────────────────
+          if (isLoading)
+            const SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 60),
+                  child: CircularProgressIndicator(color: Color(0xFFE85D22)),
                 ),
-                IconButton(
-                  onPressed: _fetchProducts,
-                  icon: const Icon(Icons.search,
-                      color: Colors.white, size: 22),
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFFE85D22),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLanguageDropdown(BuildContext context) {
-    final languageProvider = Provider.of<LanguageProvider>(context);
-    final l10n = AppLocalizations.of(context)!;
-
-    final Map<String, String> languages = {
-      l10n.english: "en",
-      l10n.spanish: "es",
-      l10n.french: "fr",
-    };
-
-    String currentLangName = languages.entries
-        .firstWhere(
-            (e) => e.value == languageProvider.locale.languageCode,
-        orElse: () => languages.entries.first)
-        .key;
-
-    return PopupMenuButton<String>(
-      onSelected: (value) {
-        languageProvider.setLanguage(Locale(languages[value]!));
-      },
-      child: Container(
-        padding:
-        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(4),
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
-        ),
-        title: Text(
-          widget.categoryName,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        elevation: 0,
-      ),
-      body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE85D22)),
+              ),
             )
-          : products.isEmpty
-          ? const Center(child: Text("No products found in this category"))
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: products.length,
-              itemBuilder: (context, index) =>
-                  _buildProductListCard(products[index]),
+          else if (products.isEmpty)
+            SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 60),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.inbox_outlined,
+                        size: 60,
+                        color: Colors.grey.shade300,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        "No products in ${widget.categoryName} yet",
+                        style: TextStyle(color: Colors.grey.shade500),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) => _buildProductListCard(products[i]),
+                  childCount: products.length,
+                ),
+              ),
             ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 40)),
+        ],
+      ),
     );
   }
 
@@ -1183,7 +1128,14 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
                   width: 85,
                   height: 85,
                   child: product.imageUrl.startsWith('http')
-                      ? Image.network(product.imageUrl, fit: BoxFit.cover)
+                      ? Image.network(
+                          product.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.image, color: Colors.grey),
+                          ),
+                        )
                       : Image.asset(product.imageUrl, fit: BoxFit.cover),
                 ),
               ),
@@ -1235,7 +1187,7 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey),
+              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
             ],
           ),
         ),

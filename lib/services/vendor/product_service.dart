@@ -8,15 +8,15 @@ import '../api_service.dart';
 class ProductService {
   final ApiService _apiService = ApiService();
 
-  // --- FAVORITES SECTION ---
+  // ─────────────────────────────────────────────────────────────
+  // FAVORITES SECTION
+  // ─────────────────────────────────────────────────────────────
 
-  /// Toggle favorite for an ad.
-  /// Backend route: POST /api/v1/ads/{id}/favorite (auth required)
   Future<Map<String, dynamic>> toggleFavorite(int productId) async {
     try {
       final response = await _apiService.post(
         '/ads/$productId/favorite',
-        {}, // no body needed
+        {},
         isProtected: true,
       );
       return jsonDecode(response.body);
@@ -26,8 +26,6 @@ class ProductService {
     }
   }
 
-  /// Get all favorites for the buyer.
-  /// Backend route: GET /api/v1/buyers/favorites (auth required)
   Future<Map<String, dynamic>> getFavorites() async {
     try {
       final response = await _apiService.get(
@@ -41,10 +39,11 @@ class ProductService {
     }
   }
 
-  // --- DYNAMIC LISTING MANAGEMENT (PRODUCTS & SERVICES) ---
+  // ─────────────────────────────────────────────────────────────
+  // LISTING MANAGEMENT (Create, Update, Delete)
+  // ─────────────────────────────────────────────────────────────
 
-  /// Create a new ad (product or service).
-  /// Backend route: POST /api/v1/vendor/ads (auth required, vendor only)
+  /// Create a new ad/listing
   Future<Map<String, dynamic>> createListing({
     required int categoryId,
     required String title,
@@ -86,8 +85,7 @@ class ProductService {
     }
   }
 
-  /// Update an existing ad.
-  /// Backend route: POST /api/v1/vendor/ads/{id} (auth required, vendor only)
+  /// Update an existing ad/listing
   Future<Map<String, dynamic>> updateListing({
     required int id,
     int? categoryId,
@@ -100,28 +98,27 @@ class ProductService {
   }) async {
     try {
       final String urlPath = '/vendor/ads/$id';
-      final Map<String, String> data = {};
+      final Map<String, String> fields = {};
 
-      if (categoryId != null) data['category_id'] = categoryId.toString();
-      if (title != null) data['title'] = title;
-      if (description != null) data['description'] = description;
-      if (price != null) data['price'] = price.toString();
-      if (priceUnit != null) data['price_unit'] = priceUnit;
-      if (location != null) data['location'] = location;
+      if (categoryId != null) fields['category_id'] = categoryId.toString();
+      if (title != null) fields['title'] = title;
+      if (description != null) fields['description'] = description;
+      if (price != null) fields['price'] = price.toString();
+      if (priceUnit != null) fields['price_unit'] = priceUnit;
+      if (location != null) fields['location'] = location;
 
       if (newImages != null && newImages.isNotEmpty) {
-        // Backend uses POST for multipart updates (no method spoofing needed)
         return await _handleMultipartRequest(
           urlPath: urlPath,
-          method: 'POST',
-          fields: data,
+          method: 'POST', // Backend uses POST for updates with files
+          fields: fields,
           images: newImages,
         );
       } else {
-        // No images → standard POST (backend may accept fields)
+        // No new images → simple update
         final response = await _apiService.post(
           urlPath,
-          data,
+          fields,
           isProtected: true,
         );
         return jsonDecode(response.body);
@@ -132,10 +129,21 @@ class ProductService {
     }
   }
 
-  // --- FETCHING & FILTERS ---
+  /// Delete an ad/listing
+  Future<Map<String, dynamic>> deleteListing(int id) async {
+    try {
+      final response = await _apiService.delete('/ads/$id', isProtected: true);
+      return jsonDecode(response.body);
+    } catch (e) {
+      debugPrint('❌ Delete listing error: $e');
+      rethrow;
+    }
+  }
 
-  /// Get paginated list of public ads.
-  /// Backend route: GET /api/v1/ads (public)
+  // ─────────────────────────────────────────────────────────────
+  // FETCHING & FILTERS
+  // ─────────────────────────────────────────────────────────────
+
   Future<Map<String, dynamic>> getProducts({
     int page = 1,
     int perPage = 20,
@@ -147,17 +155,14 @@ class ProductService {
         'page': page.toString(),
         'per_page': perPage.toString(),
       };
-      if (search != null && search.isNotEmpty) {
-        queryParams['search'] = search;
-      }
-      if (categoryId != null) {
+      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+      if (categoryId != null)
         queryParams['category_id'] = categoryId.toString();
-      }
 
       final queryString = Uri(queryParameters: queryParams).query;
       final response = await _apiService.get(
         '/ads?$queryString',
-        isProtected: false,               // public route
+        isProtected: false,
       );
       return jsonDecode(response.body);
     } catch (e) {
@@ -166,14 +171,9 @@ class ProductService {
     }
   }
 
-  /// Get a single public ad by ID.
-  /// Backend route: GET /api/v1/ads/{id} (public)
   Future<Map<String, dynamic>> getProduct(int id) async {
     try {
-      final response = await _apiService.get(
-        '/ads/$id',
-        isProtected: false,
-      );
+      final response = await _apiService.get('/ads/$id', isProtected: false);
       return jsonDecode(response.body);
     } catch (e) {
       debugPrint('❌ Get ad error: $e');
@@ -181,10 +181,10 @@ class ProductService {
     }
   }
 
-  // --- PRIVATE HELPERS ---
+  // ─────────────────────────────────────────────────────────────
+  // PRIVATE HELPERS
+  // ─────────────────────────────────────────────────────────────
 
-  /// Handles multipart image upload for ad creation/update.
-  /// Always uses `photos[]` as the file field name (fixed key).
   Future<Map<String, dynamic>> _handleMultipartRequest({
     required String urlPath,
     required String method,
@@ -202,12 +202,12 @@ class ProductService {
 
     request.fields.addAll(fields);
 
-    // Attach up to 5 images with the fixed field name
+    // Attach images with 'photos[]' field name (as expected by backend)
     for (int i = 0; i < images.length && i < 5; i++) {
       final file = images[i];
       request.files.add(
         await http.MultipartFile.fromPath(
-          'photos[]',               // <-- fixed field name
+          'photos[]',
           file.path,
           filename: path.basename(file.path),
         ),
@@ -224,13 +224,13 @@ class ProductService {
     }
   }
 
-  /// Converts an HTTP error response into a meaningful string.
   String _handleError(http.Response response) {
     try {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) {
-        if (decoded.containsKey('errors')) return decoded['errors'].toString();
-        if (decoded.containsKey('message')) return decoded['message'];
+        return decoded['message'] ??
+            decoded['errors']?.toString() ??
+            'Server error';
       }
       return 'Server error: ${response.statusCode}';
     } catch (_) {

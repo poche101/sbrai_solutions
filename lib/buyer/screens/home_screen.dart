@@ -1,16 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
-import 'package:sbrai_solutions/models/product_model.dart';
-// Importing the dedicated BuyersMenu
-=======
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
-import 'package:sbrai_solutions/models/buyer/product_model.dart';
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
+import 'package:sbrai_solutions/models/product_model.dart';
 import 'package:sbrai_solutions/buyer/widgets/buyers_menu.dart';
 import 'package:sbrai_solutions/services/vendor/product_service.dart';
+import 'package:sbrai_solutions/services/chat_service.dart';
 import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/product_details_screen.dart';
 import 'package:sbrai_solutions/providers/language_provider.dart';
@@ -26,10 +22,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final ApiService _apiService = ApiService();
   final ProductService _productService = ProductService();
-
+  late final ChatService _chatService;
   // User data
   String userName = "";
   String userEmail = "";
+  int currentUserId = 0;
+  String authToken = "";
 
   // Filters
   String selectedState = "All Nigeria";
@@ -46,11 +44,43 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<String> nigeriaStates = [
     "All Nigeria",
-    "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
-    "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT",
-    "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi",
-    "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo",
-    "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
+    "Abia",
+    "Adamawa",
+    "Akwa Ibom",
+    "Anambra",
+    "Bauchi",
+    "Bayelsa",
+    "Benue",
+    "Borno",
+    "Cross River",
+    "Delta",
+    "Ebonyi",
+    "Edo",
+    "Ekiti",
+    "Enugu",
+    "FCT",
+    "Gombe",
+    "Imo",
+    "Jigawa",
+    "Kaduna",
+    "Kano",
+    "Katsina",
+    "Kebbi",
+    "Kogi",
+    "Kwara",
+    "Lagos",
+    "Nasarawa",
+    "Niger",
+    "Ogun",
+    "Ondo",
+    "Osun",
+    "Oyo",
+    "Plateau",
+    "Rivers",
+    "Sokoto",
+    "Taraba",
+    "Yobe",
+    "Zamfara",
   ];
 
   final List<Map<String, String>> categories = [
@@ -86,13 +116,25 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  /// Load user info from SharedPreferences
   Future<void> _loadUserData() async {
-    final userData = await _apiService.getUserData();
-    setState(() {
-      userName = userData['name'] ?? "Buyer";
-      userEmail = userData['email'] ?? "";
-    });
+    try {
+      final userData = await _apiService.getUserData();
+
+      setState(() {
+        userName = userData['name']?.toString() ?? "Buyer";
+        userEmail = userData['email']?.toString() ?? "";
+
+        currentUserId =
+            (userData['id'] as int?) ??
+            (int.tryParse(userData['id']?.toString() ?? '') ?? 0);
+
+        authToken =
+            userData['token']?.toString() ??
+            (userData['access_token']?.toString() ?? "");
+      });
+    } catch (e) {
+      debugPrint("Error loading user data: $e");
+    }
   }
 
   Future<void> _fetchCategories() async {
@@ -139,7 +181,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       int? categoryId;
-      if (selectedCategory != null && _categoryNameToId.containsKey(selectedCategory)) {
+      if (selectedCategory != null &&
+          _categoryNameToId.containsKey(selectedCategory)) {
         categoryId = _categoryNameToId[selectedCategory];
       }
 
@@ -174,39 +217,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-<<<<<<< HEAD
-  /// Opens a pop-up dialog for the selected category.
-  void _openCategoryModal(String categoryName, String categoryIcon) {
-    final List<Product> categoryProducts = allProducts
-        .where((p) => p.category.toLowerCase() == categoryName.toLowerCase())
-        .toList();
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
-        clipBehavior: Clip.hardEdge,
-        child: _CategoryBottomSheet(
-          categoryName: categoryName,
-          categoryIcon: categoryIcon,
-          products: categoryProducts,
-        ),
-      ),
-    );
-=======
   void _filterByCategory(String categoryName) {
     setState(() {
-      selectedCategory = (selectedCategory == categoryName) ? null : categoryName;
+      selectedCategory = (selectedCategory == categoryName)
+          ? null
+          : categoryName;
     });
     _fetchProducts();
   }
 
   Future<void> _toggleFavorite(Product product) async {
     if (product.id == null) return;
-    
-    // Optimistic UI update
+
     setState(() {
       if (_favoriteProductIds.contains(product.id)) {
         _favoriteProductIds.remove(product.id);
@@ -227,7 +249,6 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     } catch (e) {
-      // Revert on error
       setState(() {
         if (_favoriteProductIds.contains(product.id)) {
           _favoriteProductIds.remove(product.id);
@@ -237,11 +258,47 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error updating favorite: $e"), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text("Error updating favorite: $e"),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
+  }
+
+  void _openChat(Product product) {
+    if (currentUserId == 0 || authToken.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please login to start chat")),
+      );
+      return;
+    }
+
+    // Safe fallback using only fields that should exist in most Product models
+    final String otherPartyName =
+        "Seller"; // You can improve this later when you know the exact field
+
+    final int otherPartyId =
+        0; // Will be updated once you know the correct field name
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          chatId: product.chatId ?? 0,
+          authToken: authToken,
+          currentUserId: currentUserId,
+          otherPartyName: otherPartyName,
+          otherPartyInitial: otherPartyName.isNotEmpty
+              ? otherPartyName[0].toUpperCase()
+              : 'S',
+          adTitle: product.name,
+          otherPartyId: otherPartyId,
+          service: _chatService,
+        ),
+      ),
+    );
   }
 
   @override
@@ -280,49 +337,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-<<<<<<< HEAD
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Container(
-              color: const Color(0xFFE85D22),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
-              child: Column(
-                children: [
-                  const Text(
-                    "What are you looking for?",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildFunctionalSearchBar(),
-                  const SizedBox(height: 25),
-                  _buildDynamicCategoryGrid(),
-                  const SizedBox(height: 15),
-                  _buildTrendingSection(),
-                ],
-              ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.all(12),
-            sliver: SliverToBoxAdapter(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Recommended for You",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    "${displayedProducts.length} items",
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                  ),
-                ],
-=======
       body: RefreshIndicator(
         onRefresh: _fetchProducts,
         color: const Color(0xFFE85D22),
@@ -332,7 +346,10 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(
               child: Container(
                 color: const Color(0xFFE85D22),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 20,
+                ),
                 child: Column(
                   children: [
                     Text(
@@ -351,7 +368,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildTrendingSection(l10n),
                   ],
                 ),
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
               ),
             ),
             SliverPadding(
@@ -371,7 +387,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     Text(
                       "${displayedProducts.length} ${l10n.items}",
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -382,34 +401,40 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Center(
                       child: Padding(
                         padding: EdgeInsets.only(top: 50.0),
-                        child: CircularProgressIndicator(color: Color(0xFFE85D22)),
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFE85D22),
+                        ),
                       ),
                     ),
                   )
                 : displayedProducts.isEmpty
-                    ? SliverToBoxAdapter(
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 50.0),
-                            child: Text(l10n.noItemsFound),
-                          ),
-                        ),
-                      )
-                    : SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        sliver: SliverGrid(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                ? SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 50.0),
+                        child: Text(l10n.noItemsFound),
+                      ),
+                    ),
+                  )
+                : SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
                             childAspectRatio: 0.62,
                             mainAxisSpacing: 12,
                             crossAxisSpacing: 12,
                           ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => _buildDynamicProductCard(displayedProducts[index], l10n),
-                            childCount: displayedProducts.length,
-                          ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildDynamicProductCard(
+                          displayedProducts[index],
+                          l10n,
                         ),
+                        childCount: displayedProducts.length,
                       ),
+                    ),
+                  ),
             const SliverToBoxAdapter(child: SizedBox(height: 20)),
           ],
         ),
@@ -418,23 +443,24 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildDynamicProductCard(Product product, AppLocalizations l10n) {
-    final bool isFavorited = _favoriteProductIds.contains(product.id) || product.isFavorite;
+    final bool isFavorited = _favoriteProductIds.contains(product.id);
+
     final List<String> serviceCategories = [
       'logistics',
       'borehole',
       'cleaning',
       'fumigation',
     ];
-    final bool isService = serviceCategories.contains(product.category.toLowerCase());
+    final bool isService = serviceCategories.contains(
+      product.category.toLowerCase(),
+    );
 
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ProductDetailsScreen(
-            product: product,
-            userName: userName,
-          ),
+          builder: (context) =>
+              ProductDetailsScreen(product: product, userName: userName),
         ),
       ),
       child: Container(
@@ -456,7 +482,9 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Stack(
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
                     child: Image.network(
                       product.imageUrl,
                       width: double.infinity,
@@ -473,7 +501,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       top: 8,
                       left: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.blue.shade700,
                           borderRadius: BorderRadius.circular(4),
@@ -498,7 +529,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.9),
                           shape: BoxShape.circle,
-                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black12, blurRadius: 4),
+                          ],
                         ),
                         child: Icon(
                           isFavorited ? Icons.favorite : Icons.favorite_border,
@@ -529,12 +562,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.location_on, size: 12, color: Colors.grey),
+                      const Icon(
+                        Icons.location_on,
+                        size: 12,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(width: 2),
                       Expanded(
                         child: Text(
                           product.location,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -559,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Icons.call_outlined,
                           false,
                           onTap: () {
-                             // Implement phone call logic
+                            // Implement phone call logic
                           },
                         ),
                       ),
@@ -569,18 +609,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           l10n.chat,
                           Icons.chat_bubble_outline,
                           true,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ChatScreen(
-                                  product: product,
-                                  userName: userName,
-                                  userInitial: userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                                ),
-                              ),
-                            );
-                          },
+                          onTap: () => _openChat(product),
                         ),
                       ),
                     ],
@@ -594,13 +623,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildActionButton(String label, IconData icon, bool isPrimary, {VoidCallback? onTap}) {
+  Widget _buildActionButton(
+    String label,
+    IconData icon,
+    bool isPrimary, {
+    VoidCallback? onTap,
+  }) {
     return SizedBox(
       height: 36,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          backgroundColor: isPrimary ? const Color(0xFFE85D22) : Colors.transparent,
-          side: BorderSide(color: isPrimary ? const Color(0xFFE85D22) : Colors.grey.shade300),
+          backgroundColor: isPrimary
+              ? const Color(0xFFE85D22)
+              : Colors.transparent,
+          side: BorderSide(
+            color: isPrimary ? const Color(0xFFE85D22) : Colors.grey.shade300,
+          ),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: EdgeInsets.zero,
         ),
@@ -608,7 +646,11 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 14, color: isPrimary ? Colors.white : Colors.black87),
+            Icon(
+              icon,
+              size: 14,
+              color: isPrimary ? Colors.white : Colors.black87,
+            ),
             const SizedBox(width: 4),
             Text(
               label,
@@ -636,25 +678,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       itemCount: categories.length,
       itemBuilder: (context, index) {
-<<<<<<< HEAD
-=======
         final isSelected = selectedCategory == categories[index]['name'];
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
         return GestureDetector(
-          onTap: () => _openCategoryModal(
-            categories[index]['name']!,
-            categories[index]['icon']!,
-          ),
+          onTap: () => _filterByCategory(categories[index]['name']!),
           child: Column(
             children: [
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(22),
-<<<<<<< HEAD
-=======
-                    border: isSelected ? Border.all(color: Colors.white, width: 2) : null,
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
+                    border: isSelected
+                        ? Border.all(color: Colors.white, width: 2)
+                        : null,
                     image: DecorationImage(
                       image: AssetImage(categories[index]['icon']!),
                       fit: BoxFit.cover,
@@ -665,11 +700,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               Text(
                 categories[index]['name']!,
-<<<<<<< HEAD
                 style: const TextStyle(
-=======
-                style: TextStyle(
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
                   color: Colors.white,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -714,7 +745,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 18),
+                  const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Colors.white70,
+                    size: 18,
+                  ),
                 ],
               ),
             ),
@@ -738,9 +773,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: const TextStyle(color: Colors.white, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: l10n.iAmLookingFor,
-                      hintStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                      hintStyle: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 13,
+                      ),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 15,
+                      ),
                     ),
                   ),
                 ),
@@ -749,7 +789,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: const Icon(Icons.search, color: Colors.white, size: 22),
                   style: IconButton.styleFrom(
                     backgroundColor: const Color(0xFFE85D22),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
                 ),
               ],
@@ -760,15 +802,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-<<<<<<< HEAD
-  Widget _buildLanguageDropdown() {
-    final Map<String, String> languageCodes = {
-      "English": "EN",
-      "French": "FR",
-      "Yoruba": "YO",
-      "Hausa": "HA",
-      "Igbo": "IG",
-=======
   Widget _buildLanguageDropdown(BuildContext context) {
     final languageProvider = Provider.of<LanguageProvider>(context);
     final l10n = AppLocalizations.of(context)!;
@@ -777,12 +810,13 @@ class _HomeScreenState extends State<HomeScreen> {
       l10n.english: "en",
       l10n.spanish: "es",
       l10n.french: "fr",
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
     };
 
     String currentLangName = languages.entries
-        .firstWhere((e) => e.value == languageProvider.locale.languageCode,
-            orElse: () => languages.entries.first)
+        .firstWhere(
+          (e) => e.value == languageProvider.locale.languageCode,
+          orElse: () => languages.entries.first,
+        )
         .key;
 
     return PopupMenuButton<String>(
@@ -805,7 +839,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const Icon(Icons.keyboard_arrow_down, color: Colors.black, size: 14),
+            const Icon(
+              Icons.keyboard_arrow_down,
+              color: Colors.black,
+              size: 14,
+            ),
           ],
         ),
       ),
@@ -829,7 +867,11 @@ class _HomeScreenState extends State<HomeScreen> {
         const Spacer(),
         IconButton(
           onPressed: () {},
-          icon: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 20),
+          icon: const Icon(
+            Icons.grid_view_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
         ),
       ],
     );
@@ -837,7 +879,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Category Bottom Sheet (Jiji-style modal)
+// Category Bottom Sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CategoryBottomSheet extends StatefulWidget {
@@ -881,15 +923,9 @@ class _CategoryBottomSheetState extends State<_CategoryBottomSheet> {
       height: screenHeight * 0.82,
       child: Column(
         children: [
-          // Header
           _buildHeader(context),
-
-          // Sort bar
           if (widget.products.isNotEmpty) _buildSortBar(),
-
           const Divider(height: 1),
-
-          // Product grid or empty state
           Expanded(
             child: widget.products.isEmpty
                 ? _buildEmptyState()
@@ -905,7 +941,6 @@ class _CategoryBottomSheetState extends State<_CategoryBottomSheet> {
       padding: const EdgeInsets.fromLTRB(16, 0, 8, 12),
       child: Row(
         children: [
-          // Category thumbnail
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Image.asset(
@@ -941,7 +976,6 @@ class _CategoryBottomSheetState extends State<_CategoryBottomSheet> {
               ],
             ),
           ),
-          // Close button
           IconButton(
             onPressed: () => Navigator.pop(context),
             icon: Container(

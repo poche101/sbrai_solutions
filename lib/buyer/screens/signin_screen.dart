@@ -25,6 +25,22 @@ class _SigninScreenState extends State<SigninScreen> {
     super.dispose();
   }
 
+  // ── Navigation ─────────────────────────────────────────────────────────────
+
+  void _navigateToHome() {
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    });
+  }
+
+  // ── Toasts / Snackbars ─────────────────────────────────────────────────────
+
   void _showCustomToast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -73,149 +89,6 @@ class _SigninScreenState extends State<SigninScreen> {
     );
   }
 
-  void _navigateToHome() {
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-              (route) => false,
-        );
-      }
-    });
-  }
-
-  /// Handle Email/Password Login
-  Future<void> _handleLogin() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-
-    if (email.isEmpty || password.isEmpty) {
-      _showErrorSnackBar("Please enter both email and password");
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-<<<<<<< HEAD
-      final response = await _apiService.post('auth/login/buyer', {
-=======
-      // Use the dedicated loginBuyer method from ApiService
-      final response = await _apiService.loginBuyer({
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
-        'email': email,
-        'password': password,
-      });
-
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-
-<<<<<<< HEAD
-      if (response.statusCode == 200 && responseData['success'] == true) {
-        // ✅ UPDATED: Changed 'access_token' to 'token' to match your API response
-        final String? token = responseData['data']['token'];
-
-=======
-      // Check for success flag (consistent with ApiService.socialLogin)
-      if (response.statusCode == 200 && responseData['success'] == true) {
-        // Save the authentication token
-        final token = responseData['data']['access_token'];
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
-        if (token != null) {
-          await _apiService.saveToken(token, userType: 'buyer');
-        }
-
-<<<<<<< HEAD
-        // Cache user details if available
-=======
-        // Save user data if returned
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
-        if (responseData['data']['user'] != null) {
-          await _apiService.saveUserData(responseData['data']['user']);
-        }
-
-        if (!mounted) return;
-
-        final successMsg = responseData['message'] ?? "Signed in successfully";
-        _showCustomToast(successMsg);
-        _navigateToHome();
-      } else {
-        // Use the error message from the API if available
-        throw responseData['message'] ?? "Login failed";
-      }
-    } catch (e) {
-      _showErrorSnackBar(e.toString());
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  /// Handle Social Login (Google/Facebook)
-  Future<void> _handleSocialLogin(String provider) async {
-    setState(() => _isLoading = true);
-
-    try {
-<<<<<<< HEAD
-      if (provider == 'google') {
-        final response = await _apiService.signInWithGoogle();
-
-        if (response == null) {
-          setState(() => _isLoading = false);
-          return; // User cancelled
-        }
-
-        final responseData = jsonDecode(response.body);
-        if (response.statusCode == 200) {
-          if (!mounted) return;
-          _showCustomToast(responseData['message'] ?? "Signed in with Google");
-          _navigateToHome();
-        }
-      } else if (provider == 'facebook') {
-        _showErrorSnackBar("Facebook login not yet implemented");
-=======
-      // In a real app, you would obtain the actual access token from the respective SDK.
-      // For demonstration, we're using dummy tokens – replace with real implementation.
-      String? accessToken;
-
-      if (provider == 'google') {
-        // Replace with actual Google Sign-In token retrieval
-        // e.g., final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-        // accessToken = (await googleUser?.authentication)?.accessToken;
-        accessToken = "DUMMY_GOOGLE_TOKEN";
-      } else if (provider == 'facebook') {
-        // Replace with actual Facebook Login token
-        accessToken = "DUMMY_FACEBOOK_TOKEN";
-      }
-
-      if (accessToken == null) {
-        _showErrorSnackBar("Could not retrieve $provider token.");
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final response = await _apiService.socialLogin(provider, accessToken);
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && responseData['success'] == true) {
-        if (!mounted) return;
-
-        final successMsg =
-            responseData['message'] ??
-                "Signed in with ${provider[0].toUpperCase()}${provider.substring(1)}";
-
-        _showCustomToast(successMsg);
-        _navigateToHome();
-      } else {
-        throw responseData['message'] ?? "Social login failed";
->>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
-      }
-    } catch (e) {
-      _showErrorSnackBar("Social login error: ${e.toString()}");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -227,6 +100,93 @@ class _SigninScreenState extends State<SigninScreen> {
     );
   }
 
+  // ── Login ──────────────────────────────────────────────────────────────────
+
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      _showErrorSnackBar('Please enter both email and password');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Route: POST /api/v1/auth/login/buyer
+      final response = await _apiService.loginBuyer({
+        'email': email,
+        'password': password,
+      });
+
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        // Token key returned by AuthController — 'access_token'
+        final token =
+            responseData['data']['access_token'] ??
+            responseData['data']['token'];
+
+        if (token != null) {
+          await _apiService.saveToken(token, userType: 'buyer');
+        }
+
+        if (responseData['data']['user'] != null) {
+          await _apiService.saveUserData(responseData['data']['user']);
+        }
+
+        if (!mounted) return;
+        _showCustomToast(responseData['message'] ?? 'Signed in successfully');
+        _navigateToHome();
+      } else {
+        throw responseData['message'] ?? 'Login failed. Please try again.';
+      }
+    } catch (e) {
+      _showErrorSnackBar(e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── Social Login ───────────────────────────────────────────────────────────
+
+  Future<void> _handleSocialLogin(String provider) async {
+    setState(() => _isLoading = true);
+
+    try {
+      if (provider == 'google') {
+        // Uses ApiService.signInWithGoogle() which handles the Google Sign-In
+        // flow and posts to POST /api/v1/auth/social/google internally.
+        final response = await _apiService.signInWithGoogle();
+
+        if (response == null) {
+          // User cancelled the Google sign-in dialog
+          return;
+        }
+
+        final responseData = jsonDecode(response.body);
+
+        if (response.statusCode == 200 && responseData['success'] == true) {
+          if (!mounted) return;
+          _showCustomToast(responseData['message'] ?? 'Signed in with Google');
+          _navigateToHome();
+        } else {
+          throw responseData['message'] ?? 'Google sign-in failed';
+        }
+      } else if (provider == 'facebook') {
+        // Facebook login not yet implemented — show friendly message
+        _showErrorSnackBar('Facebook login is coming soon');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Social login error: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -236,23 +196,19 @@ class _SigninScreenState extends State<SigninScreen> {
         elevation: 0.5,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AccountSelectionScreen(),
-              ),
-            );
-          },
+          onPressed: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const AccountSelectionScreen()),
+          ),
         ),
         title: const Text(
-          "Sign In",
+          'Sign In',
           style: TextStyle(color: Colors.black, fontSize: 18),
         ),
       ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 450),
             padding: const EdgeInsets.all(24),
@@ -264,47 +220,51 @@ class _SigninScreenState extends State<SigninScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Logo
                 Image.asset(
                   'assets/images/logo.png',
                   height: 50,
-                  errorBuilder: (context, error, stackTrace) => const Icon(
+                  errorBuilder: (_, __, ___) => const Icon(
                     Icons.hub_rounded,
                     color: Colors.orange,
                     size: 50,
                   ),
                 ),
                 const SizedBox(height: 20),
+
                 const Text(
-                  "Welcome Back",
+                  'Welcome Back',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const Text(
-                  "Sign in to your account to continue",
+                  'Sign in to your account to continue',
                   style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
                 const SizedBox(height: 32),
 
+                // Social buttons
                 _buildSocialButton(
-                  "Continue with Google",
+                  'Continue with Google',
                   'assets/icons/google.png',
                   onTap: () => _handleSocialLogin('google'),
                 ),
                 const SizedBox(height: 12),
-
                 _buildSocialButton(
-                  "Continue with Facebook",
+                  'Continue with Facebook',
                   'assets/icons/facebook.png',
                   onTap: () => _handleSocialLogin('facebook'),
                 ),
 
                 const SizedBox(height: 24),
+
+                // Divider
                 const Row(
                   children: [
                     Expanded(child: Divider(color: Colors.black12)),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
-                        "OR SIGN IN WITH EMAIL",
+                        'OR SIGN IN WITH EMAIL',
                         style: TextStyle(
                           color: Colors.grey,
                           fontSize: 11,
@@ -316,35 +276,41 @@ class _SigninScreenState extends State<SigninScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                _buildInputLabel("Email Address"),
+
+                // Email field
+                _buildInputLabel('Email Address'),
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: _inputDecoration("Email Address"),
+                  decoration: _inputDecoration('Email Address'),
                 ),
                 const SizedBox(height: 20),
-                _buildInputLabel("Password"),
+
+                // Password field
+                _buildInputLabel('Password'),
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: _inputDecoration("Password"),
+                  decoration: _inputDecoration('Password'),
                 ),
 
-                // ✅ ADDED: Forgot Password Button
+                // Forgot password
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {
-                      // Navigate to Forgot Password Screen
+                      // TODO: navigate to ForgotPasswordScreen
                     },
                     child: const Text(
-                      "Forgot Password?",
+                      'Forgot Password?',
                       style: TextStyle(color: Color(0xFFFF6B35), fontSize: 13),
                     ),
                   ),
                 ),
 
                 const SizedBox(height: 16),
+
+                // Sign In button
                 SizedBox(
                   width: double.infinity,
                   height: 52,
@@ -360,20 +326,23 @@ class _SigninScreenState extends State<SigninScreen> {
                     ),
                     child: _isLoading
                         ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
                         : const Text(
-                      "Sign In",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                            'Sign In',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                   ),
                 ),
+
                 const SizedBox(height: 24),
+
+                // Sign up link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -382,16 +351,12 @@ class _SigninScreenState extends State<SigninScreen> {
                       style: TextStyle(color: Colors.grey),
                     ),
                     GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SignupPage(),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SignupPage()),
+                      ),
                       child: const Text(
-                        "Sign Up",
+                        'Sign Up',
                         style: TextStyle(
                           color: Color(0xFFFF6B35),
                           fontWeight: FontWeight.bold,
@@ -400,6 +365,7 @@ class _SigninScreenState extends State<SigninScreen> {
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 12),
               ],
             ),
@@ -409,14 +375,16 @@ class _SigninScreenState extends State<SigninScreen> {
     );
   }
 
+  // ── Sub-widgets ────────────────────────────────────────────────────────────
+
   Widget _buildSocialButton(
-      String text,
-      String assetPath, {
-        required VoidCallback onTap,
-      }) {
-    final bool isGoogle = text.contains("Google");
+    String text,
+    String assetPath, {
+    required VoidCallback onTap,
+  }) {
+    final bool isGoogle = text.contains('Google');
     final Color brandColor = isGoogle
-        ? const Color.fromARGB(255, 154, 5, 45)
+        ? const Color(0xFF9A052D)
         : const Color(0xFF1877F2);
 
     return Container(
@@ -438,7 +406,7 @@ class _SigninScreenState extends State<SigninScreen> {
               assetPath,
               height: 22,
               width: 22,
-              errorBuilder: (context, error, stackTrace) => Icon(
+              errorBuilder: (_, __, ___) => Icon(
                 isGoogle ? Icons.g_mobiledata : Icons.facebook,
                 color: brandColor,
                 size: 28,
@@ -463,7 +431,7 @@ class _SigninScreenState extends State<SigninScreen> {
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 8.0),
+        padding: const EdgeInsets.only(bottom: 8),
         child: Text(
           label,
           style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),

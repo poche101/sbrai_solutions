@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sbrai_solutions/services/vendor/product_service.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -176,8 +177,9 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
 
   late TabController _tabController;
 
+  final ProductService _productService = ProductService();
+
   VendorStats stats = VendorStats.empty;
-  // ✅ Default voucher balance is always 5000 until the API returns a value
   double voucherBalance = 5000;
   List<ActivityItem> activities = [];
   List<DashboardProduct> products = [];
@@ -195,7 +197,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
         if (_tabController.index == 2 && analytics.profileViews == 0) {
           _fetchAnalytics();
         }
-        setState(() {});
       });
     _fetchDashboard();
   }
@@ -206,20 +207,10 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
     super.dispose();
   }
 
-  // ── Auth helpers ──────────────────────────────────────────────────────────────
-
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('vendor_auth_token');
   }
-
-  Map<String, String> _headers(String token) => {
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer $token',
-  };
-
-  // ── API: Dashboard ────────────────────────────────────────────────────────────
 
   Future<void> _fetchDashboard() async {
     setState(() {
@@ -231,7 +222,10 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       if (token == null) throw 'Not authenticated';
 
       final res = await http
-          .get(Uri.parse('$_base/vendor/dashboard'), headers: _headers(token))
+          .get(
+            Uri.parse('$_base/vendor/dashboard'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
@@ -240,7 +234,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
           final data = body['data'] as Map<String, dynamic>;
           setState(() {
             stats = VendorStats.fromJson(data['stats'] ?? {});
-            // ✅ Keep 5000 default if API returns 0 or null
             final apiBalance =
                 (data['voucher_balance'] as num?)?.toDouble() ?? 0;
             voucherBalance = apiBalance > 0 ? apiBalance : 5000;
@@ -265,8 +258,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
     }
   }
 
-  // ── API: Analytics ────────────────────────────────────────────────────────────
-
   Future<void> _fetchAnalytics() async {
     setState(() => _loadingAnalytics = true);
     try {
@@ -274,7 +265,10 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       if (token == null) return;
 
       final res = await http
-          .get(Uri.parse('$_base/vendor/analytics'), headers: _headers(token))
+          .get(
+            Uri.parse('$_base/vendor/analytics'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
@@ -302,62 +296,24 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
     }
   }
 
-  // ── API: Fetch single listing (for edit pre-fill) ─────────────────────────────
-
-  Future<DashboardProduct?> _fetchListing(int id) async {
-    try {
-      final token = await _getToken();
-      if (token == null) return null;
-
-      final res = await http
-          .get(Uri.parse('$_base/vendor/ads/$id'), headers: _headers(token))
-          .timeout(const Duration(seconds: 15));
-
-      if (res.statusCode == 200) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
-        if (body['success'] == true && body['data'] != null) {
-          return DashboardProduct.fromJson(
-            body['data'] as Map<String, dynamic>,
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('❌ Fetch listing: $e');
-    }
-    return null;
-  }
-
-  // ── Delete listing ────────────────────────────────────────────────────────────
-
+  // Delete Listing
   Future<void> _deleteListing(DashboardProduct product) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Delete Listing',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Delete Listing'),
         content: Text(
           'Are you sure you want to delete "${product.title}"? This cannot be undone.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Colors.black54),
-            ),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Delete'),
           ),
         ],
@@ -367,59 +323,43 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
     if (confirmed != true) return;
 
     try {
-      final token = await _getToken();
-      if (token == null) throw 'Not authenticated';
+      await _productService.deleteListing(product.id);
 
-      final res = await http
-          .delete(
-            Uri.parse('$_base/vendor/ads/${product.id}'),
-            headers: _headers(token),
-          )
-          .timeout(const Duration(seconds: 15));
+      setState(() {
+        products.removeWhere((p) => p.id == product.id);
+      });
 
-      if (res.statusCode == 200 || res.statusCode == 204) {
-        setState(() => products.removeWhere((p) => p.id == product.id));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Listing deleted successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-        throw decoded['message'] ?? 'Failed to delete listing';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Listing deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Failed to delete: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
   }
 
-  // ── Edit listing ──────────────────────────────────────────────────────────────
-  // ✅ Fetches the full listing from the API first so description and all
-  //    fields are properly pre-populated, then opens the edit screen.
-
+  // Edit Listing
   Future<void> _editListing(DashboardProduct product) async {
-    // Show a subtle loading indicator on the card while we fetch
     final token = await _getToken();
     if (token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Session expired. Please log in again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session expired. Please login again.')),
+        );
+      }
       return;
     }
-
-    // Try to fetch the full listing details; fall back to the dashboard
-    // product if the request fails so the user can still edit basic fields.
-    final fullProduct = await _fetchListing(product.id) ?? product;
 
     if (!mounted) return;
 
@@ -427,20 +367,16 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       context,
       MaterialPageRoute(
         builder: (_) => _EditListingScreen(
-          product: fullProduct,
+          product: product,
           token: token,
           baseUrl: _base,
-          onSaved: _fetchDashboard,
+          onSaved: _fetchDashboard, // Full refresh after edit
         ),
       ),
     );
   }
 
-  // ── Navigate to My Listings tab ───────────────────────────────────────────────
-
   void _goToManageListings() => _tabController.animateTo(1);
-
-  // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -518,8 +454,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       ),
     );
   }
-
-  // ── Stats grid ────────────────────────────────────────────────────────────────
 
   Widget _buildStatsGrid() {
     final items = [
@@ -601,8 +535,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
     );
   }
 
-  // ── Tab bar ───────────────────────────────────────────────────────────────────
-
   Widget _buildTabBar() {
     return Container(
       height: 48,
@@ -636,8 +568,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
     );
   }
 
-  // ── Tab content ───────────────────────────────────────────────────────────────
-
   Widget _buildTabContent() {
     switch (_tabController.index) {
       case 0:
@@ -669,8 +599,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
         return const SizedBox();
     }
   }
-
-  // ── Voucher card ──────────────────────────────────────────────────────────────
 
   Widget _buildVoucherCard() {
     return Container(
@@ -732,7 +660,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
                   style: TextStyle(color: Colors.grey, fontSize: 13),
                 ),
                 Text(
-                  // ✅ Always shows 5000 minimum
                   '₦${_formatNumber(voucherBalance.toInt())}',
                   style: const TextStyle(
                     fontSize: 28,
@@ -747,8 +674,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       ),
     );
   }
-
-  // ── Activity list ─────────────────────────────────────────────────────────────
 
   Widget _buildActivityList() {
     return Container(
@@ -783,8 +708,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       ),
     );
   }
-
-  // ── Quick actions ─────────────────────────────────────────────────────────────
 
   Widget _buildQuickActions(BuildContext context) {
     return GridView.count(
@@ -846,8 +769,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       ),
     );
   }
-
-  // ── My Listings tab ───────────────────────────────────────────────────────────
 
   Widget _buildMyListingsTab() {
     if (products.isEmpty) {
@@ -931,7 +852,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Thumbnail
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: p.imageUrl.startsWith('http')
@@ -949,7 +869,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Category + status row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -989,8 +908,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
                     color: Colors.black87,
                   ),
                 ),
-                if (p.location.isNotEmpty) ...[
-                  const SizedBox(height: 3),
+                if (p.location.isNotEmpty)
                   Row(
                     children: [
                       const Icon(
@@ -1012,7 +930,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
                       ),
                     ],
                   ),
-                ],
                 const SizedBox(height: 4),
                 Text(
                   p.price,
@@ -1023,7 +940,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
                   ),
                 ),
                 const SizedBox(height: 10),
-                // ── Engagement stats row ──────────────────────────────────
                 Row(
                   children: [
                     _iconStat(Icons.visibility_outlined, '${p.views}'),
@@ -1034,11 +950,9 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
                   ],
                 ),
                 const SizedBox(height: 8),
-                // ── Action buttons row ────────────────────────────────────
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    // Edit button
                     GestureDetector(
                       onTap: () => _editListing(p),
                       child: Container(
@@ -1072,7 +986,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Delete button
                     GestureDetector(
                       onTap: () => _deleteListing(p),
                       child: Container(
@@ -1114,8 +1027,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       ),
     );
   }
-
-  // ── Analytics tab ─────────────────────────────────────────────────────────────
 
   Widget _buildAnalyticsTab() {
     return Column(
@@ -1205,8 +1116,6 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen>
       ),
     );
   }
-
-  // ── Shared helpers ────────────────────────────────────────────────────────────
 
   Widget _sectionHeader(String title) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
@@ -1345,9 +1254,7 @@ class _EditListingScreenState extends State<_EditListingScreen> {
   late TextEditingController _locationController;
   late TextEditingController _descriptionController;
 
-  // ✅ Status dropdown — pre-populated from the fetched listing
   late String _selectedStatus;
-
   bool _isSaving = false;
 
   static const List<String> _statusOptions = ['active', 'inactive', 'sold'];
@@ -1356,8 +1263,6 @@ class _EditListingScreenState extends State<_EditListingScreen> {
   void initState() {
     super.initState();
     final p = widget.product;
-
-    // Strip "₦ " prefix and commas so the price field shows a plain number
     final rawPrice = p.priceRaw > 0
         ? p.priceRaw.toStringAsFixed(0)
         : p.price.replaceAll(RegExp(r'[₦,\s]'), '');
@@ -1366,7 +1271,6 @@ class _EditListingScreenState extends State<_EditListingScreen> {
     _priceController = TextEditingController(text: rawPrice);
     _priceUnitController = TextEditingController(text: p.priceUnit);
     _locationController = TextEditingController(text: p.location);
-    // ✅ description is now properly pre-populated from the full API response
     _descriptionController = TextEditingController(text: p.description);
 
     _selectedStatus = _statusOptions.contains(p.status) ? p.status : 'active';
@@ -1382,43 +1286,25 @@ class _EditListingScreenState extends State<_EditListingScreen> {
     super.dispose();
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────────
-
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _isSaving = true);
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('vendor_auth_token') ?? widget.token;
+      final result = await ProductService().updateListing(
+        id: widget.product.id,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+        price: double.tryParse(_priceController.text.trim()),
+        priceUnit: _priceUnitController.text.trim(),
+        location: _locationController.text.trim(),
+      );
 
-      final body = jsonEncode({
-        'title': _titleController.text.trim(),
-        'price': _priceController.text.trim(),
-        'price_unit': _priceUnitController.text.trim(),
-        'location': _locationController.text.trim(),
-        'status': _selectedStatus,
-        if (_descriptionController.text.trim().isNotEmpty)
-          'description': _descriptionController.text.trim(),
-      });
-
-      // ✅ POST to /vendor/ads/{id} — the backend accepts both PUT and POST
-      //    so multipart clients (image uploads) work too
-      final res = await http
-          .post(
-            Uri.parse('${widget.baseUrl}/vendor/ads/${widget.product.id}'),
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-            body: body,
-          )
-          .timeout(const Duration(seconds: 15));
-
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        widget.onSaved(); // refresh dashboard
+      if (result['success'] == true) {
+        widget.onSaved();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1429,8 +1315,7 @@ class _EditListingScreenState extends State<_EditListingScreen> {
           Navigator.pop(context);
         }
       } else {
-        final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-        throw decoded['message'] ?? 'Failed to update listing';
+        throw result['message'] ?? 'Update failed';
       }
     } catch (e) {
       if (mounted) {
@@ -1442,8 +1327,6 @@ class _EditListingScreenState extends State<_EditListingScreen> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
-
-  // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -1495,7 +1378,6 @@ class _EditListingScreenState extends State<_EditListingScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // ── Current image preview ──────────────────────────────────────
               if (widget.product.imageUrl.startsWith('http'))
                 Container(
                   width: double.infinity,
@@ -1517,7 +1399,6 @@ class _EditListingScreenState extends State<_EditListingScreen> {
                   ),
                 ),
 
-              // ── Listing details card ───────────────────────────────────────
               _buildCard(
                 children: [
                   const Text(
@@ -1552,7 +1433,6 @@ class _EditListingScreenState extends State<_EditListingScreen> {
 
               const SizedBox(height: 16),
 
-              // ── Pricing card ───────────────────────────────────────────────
               _buildCard(
                 children: [
                   const Text(
@@ -1574,12 +1454,10 @@ class _EditListingScreenState extends State<_EditListingScreen> {
                               hint: 'e.g. 5000',
                               keyboardType: TextInputType.number,
                               validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
+                                if (v == null || v.trim().isEmpty)
                                   return 'Price is required';
-                                }
-                                if (double.tryParse(v.trim()) == null) {
+                                if (double.tryParse(v.trim()) == null)
                                   return 'Enter a valid number';
-                                }
                                 return null;
                               },
                             ),
@@ -1606,7 +1484,6 @@ class _EditListingScreenState extends State<_EditListingScreen> {
 
               const SizedBox(height: 16),
 
-              // ── Status card ────────────────────────────────────────────────
               _buildCard(
                 children: [
                   const Text(
@@ -1648,19 +1525,14 @@ class _EditListingScreenState extends State<_EditListingScreen> {
                                       : Colors.grey,
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  s[0].toUpperCase() + s.substring(1),
-                                  style: const TextStyle(fontSize: 14),
-                                ),
+                                Text(s[0].toUpperCase() + s.substring(1)),
                               ],
                             ),
                           ),
                         )
                         .toList(),
                     onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _selectedStatus = val);
-                      }
+                      if (val != null) setState(() => _selectedStatus = val);
                     },
                   ),
                 ],
@@ -1668,7 +1540,6 @@ class _EditListingScreenState extends State<_EditListingScreen> {
 
               const SizedBox(height: 24),
 
-              // ── Save button ────────────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -1706,8 +1577,6 @@ class _EditListingScreenState extends State<_EditListingScreen> {
       ),
     );
   }
-
-  // ── Shared form helpers ───────────────────────────────────────────────────────
 
   Widget _buildCard({required List<Widget> children}) => Container(
     width: double.infinity,
