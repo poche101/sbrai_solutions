@@ -93,7 +93,11 @@ class _SignupPageState extends State<SignupPage> {
     setState(() => _isLoading = true);
 
     try {
+<<<<<<< HEAD
       // ✅ Updated to use the specific helper method instead of manual post()
+=======
+      // API call to register
+>>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
       final response = await _apiService.registerBuyer({
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),

@@ -79,7 +79,7 @@ class _SigninScreenState extends State<SigninScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
-          (route) => false,
+              (route) => false,
         );
       }
     });
@@ -98,31 +98,49 @@ class _SigninScreenState extends State<SigninScreen> {
     setState(() => _isLoading = true);
 
     try {
+<<<<<<< HEAD
       final response = await _apiService.post('auth/login/buyer', {
+=======
+      // Use the dedicated loginBuyer method from ApiService
+      final response = await _apiService.loginBuyer({
+>>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
         'email': email,
         'password': password,
-      }, userType: 'buyer');
+      });
 
       final Map<String, dynamic> responseData = jsonDecode(response.body);
 
+<<<<<<< HEAD
       if (response.statusCode == 200 && responseData['success'] == true) {
         // ✅ UPDATED: Changed 'access_token' to 'token' to match your API response
         final String? token = responseData['data']['token'];
 
+=======
+      // Check for success flag (consistent with ApiService.socialLogin)
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        // Save the authentication token
+        final token = responseData['data']['access_token'];
+>>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
         if (token != null) {
           await _apiService.saveToken(token, userType: 'buyer');
         }
 
+<<<<<<< HEAD
         // Cache user details if available
+=======
+        // Save user data if returned
+>>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
         if (responseData['data']['user'] != null) {
           await _apiService.saveUserData(responseData['data']['user']);
         }
 
         if (!mounted) return;
 
-        _showCustomToast(responseData['message'] ?? "Signed in successfully");
+        final successMsg = responseData['message'] ?? "Signed in successfully";
+        _showCustomToast(successMsg);
         _navigateToHome();
       } else {
+        // Use the error message from the API if available
         throw responseData['message'] ?? "Login failed";
       }
     } catch (e) {
@@ -137,6 +155,7 @@ class _SigninScreenState extends State<SigninScreen> {
     setState(() => _isLoading = true);
 
     try {
+<<<<<<< HEAD
       if (provider == 'google') {
         final response = await _apiService.signInWithGoogle();
 
@@ -153,9 +172,45 @@ class _SigninScreenState extends State<SigninScreen> {
         }
       } else if (provider == 'facebook') {
         _showErrorSnackBar("Facebook login not yet implemented");
+=======
+      // In a real app, you would obtain the actual access token from the respective SDK.
+      // For demonstration, we're using dummy tokens – replace with real implementation.
+      String? accessToken;
+
+      if (provider == 'google') {
+        // Replace with actual Google Sign-In token retrieval
+        // e.g., final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+        // accessToken = (await googleUser?.authentication)?.accessToken;
+        accessToken = "DUMMY_GOOGLE_TOKEN";
+      } else if (provider == 'facebook') {
+        // Replace with actual Facebook Login token
+        accessToken = "DUMMY_FACEBOOK_TOKEN";
+      }
+
+      if (accessToken == null) {
+        _showErrorSnackBar("Could not retrieve $provider token.");
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final response = await _apiService.socialLogin(provider, accessToken);
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        if (!mounted) return;
+
+        final successMsg =
+            responseData['message'] ??
+                "Signed in with ${provider[0].toUpperCase()}${provider.substring(1)}";
+
+        _showCustomToast(successMsg);
+        _navigateToHome();
+      } else {
+        throw responseData['message'] ?? "Social login failed";
+>>>>>>> 76b8c0d6dcbe4d85b0706e7e1e4a928465303ba2
       }
     } catch (e) {
-      _showErrorSnackBar("Social login failed: ${e.toString()}");
+      _showErrorSnackBar("Social login error: ${e.toString()}");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -305,17 +360,17 @@ class _SigninScreenState extends State<SigninScreen> {
                     ),
                     child: _isLoading
                         ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
                         : const Text(
-                            "Sign In",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                      "Sign In",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -355,10 +410,10 @@ class _SigninScreenState extends State<SigninScreen> {
   }
 
   Widget _buildSocialButton(
-    String text,
-    String assetPath, {
-    required VoidCallback onTap,
-  }) {
+      String text,
+      String assetPath, {
+        required VoidCallback onTap,
+      }) {
     final bool isGoogle = text.contains("Google");
     final Color brandColor = isGoogle
         ? const Color.fromARGB(255, 154, 5, 45)
