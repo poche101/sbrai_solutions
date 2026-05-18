@@ -4,8 +4,6 @@ import 'screen/profile_screen.dart';
 import 'screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/kyc_screen.dart';
-import 'package:sbrai_solutions/vendor/screen/vendor_favorite_screen.dart'
-    as vendor;
 import 'package:sbrai_solutions/screens/message_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/settings/vendor_settings_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/login_screen.dart';
@@ -34,7 +32,7 @@ class _VendorMenuState extends State<VendorMenu> {
   String _displayEmail = '';
   bool _isVerified = false;
   String? _businessName;
-  String? _profilePhotoUrl; // ✅ added
+  String? _profilePhotoUrl;
 
   @override
   void initState() {
@@ -56,8 +54,7 @@ class _VendorMenuState extends State<VendorMenu> {
           _displayName = vendorData['full_name'] ?? widget.userName;
           _displayEmail = vendorData['email'] ?? widget.userEmail;
           _businessName = vendorData['business_name'];
-          _profilePhotoUrl = vendorData['profile_photo_url']
-              ?.toString(); // ✅ added
+          _profilePhotoUrl = vendorData['profile_photo_url']?.toString();
           _isVerified =
               vendorData['email_verified_at'] != null ||
               vendorData['nin_verified_at'] != null;
@@ -133,7 +130,7 @@ class _VendorMenuState extends State<VendorMenu> {
         color: Colors.white,
         child: Column(
           children: [
-            // ── Header ────────────────────────────────────────────────────────
+            // Header
             Container(
               padding: const EdgeInsets.only(
                 top: 50,
@@ -154,7 +151,6 @@ class _VendorMenuState extends State<VendorMenu> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // ✅ Shows profile photo if available, falls back to icon
                       CircleAvatar(
                         radius: 35,
                         backgroundColor: const Color(0xFFFFF3E0),
@@ -240,7 +236,7 @@ class _VendorMenuState extends State<VendorMenu> {
               ),
             ),
 
-            // ── Menu Items ────────────────────────────────────────────────────
+            // Menu Items
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -255,9 +251,7 @@ class _VendorMenuState extends State<VendorMenu> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                    ).then(
-                      (_) => _loadProfileData(),
-                    ); // ✅ refresh photo after returning
+                    ).then((_) => _loadProfileData());
                   }),
                   _buildMenuItem(Icons.add_box_outlined, 'Post Ad', () {
                     Navigator.pop(context);
@@ -272,15 +266,6 @@ class _VendorMenuState extends State<VendorMenu> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const VendorDashboardScreen(),
-                      ),
-                    );
-                  }),
-                  _buildMenuItem(Icons.favorite_outline, 'Favorites', () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const vendor.FavoriteScreen(),
                       ),
                     );
                   }),
@@ -329,7 +314,7 @@ class _VendorMenuState extends State<VendorMenu> {
               ),
             ),
 
-            // ── Footer ────────────────────────────────────────────────────────
+            // Footer
             Padding(
               padding: const EdgeInsets.only(bottom: 30, top: 10),
               child: Column(

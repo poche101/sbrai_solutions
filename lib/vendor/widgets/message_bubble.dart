@@ -1,6 +1,5 @@
 // ─────────────────────────────────────────────────────────────
 //  widgets/message_bubble.dart
-//  Single chat message bubble (text or image)
 // ─────────────────────────────────────────────────────────────
 
 import 'dart:io';
@@ -11,8 +10,8 @@ class MessageBubble extends StatelessWidget {
   final ChatMessageModel message;
   final bool isMe;
 
-  // Replace with your API storage URL
-  static const _storageBaseUrl = 'https://your-api.com/storage/';
+  // ✅ fixed: matches your actual API base
+  static const _storageBaseUrl = 'https://sbraisolutions.com/storage/';
 
   const MessageBubble({super.key, required this.message, required this.isMe});
 
@@ -100,6 +99,18 @@ class MessageBubble extends StatelessWidget {
                   color: isMe ? Colors.white : Colors.black87,
                   fontSize: 14,
                   height: 1.4,
+                ),
+              ),
+            ),
+          // ✅ show placeholder if message has neither text nor image yet
+          if (!hasText && !hasImage)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Text(
+                '...',
+                style: TextStyle(
+                  color: isMe ? Colors.white70 : Colors.black38,
+                  fontSize: 14,
                 ),
               ),
             ),

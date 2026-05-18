@@ -1,11 +1,10 @@
 // ─────────────────────────────────────────────────────────────
 //  widgets/chat_input_bar.dart
-//  Bottom input bar: image picker + text field + send button
 // ─────────────────────────────────────────────────────────────
 
 import 'package:flutter/material.dart';
 
-class ChatInputBar extends StatelessWidget {
+class ChatInputBar extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onSendText;
   final VoidCallback onPickImage;
@@ -18,6 +17,32 @@ class ChatInputBar extends StatelessWidget {
     required this.onPickImage,
     this.isSending = false,
   });
+
+  @override
+  State<ChatInputBar> createState() => _ChatInputBarState();
+}
+
+class _ChatInputBarState extends State<ChatInputBar> {
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    final hasText = widget.controller.text.trim().isNotEmpty;
+    if (hasText != _hasText) {
+      setState(() => _hasText = hasText);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,14 +64,24 @@ class ChatInputBar extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // Image picker button
-            _RoundedIconBtn(
-              icon: Icons.image_outlined,
-              onTap: isSending ? null : onPickImage,
+            // ── Image picker — slides away when typing ─────────────
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _hasText
+                  ? const SizedBox(key: ValueKey('hidden'), width: 0)
+                  : _RoundedIconBtn(
+                      key: const ValueKey('image'),
+                      icon: Icons.image_outlined,
+                      onTap: widget.isSending ? null : widget.onPickImage,
+                    ),
             ),
-            const SizedBox(width: 8),
 
-            // Text field
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: _hasText ? 0 : 8,
+            ),
+
+            // ── Text field ─────────────────────────────────────────
             Expanded(
               child: Container(
                 constraints: const BoxConstraints(maxHeight: 120),
@@ -55,30 +90,55 @@ class ChatInputBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(color: Colors.grey.shade200),
                 ),
-                child: TextField(
-                  controller: controller,
-                  maxLines: null,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    hintText: 'Type a message...',
-                    hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: widget.controller,
+                        maxLines: null,
+                        textCapitalization: TextCapitalization.sentences,
+                        enabled: !widget.isSending,
+                        decoration: const InputDecoration(
+                          hintText: 'Type a message...',
+                          hintStyle: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          border: InputBorder.none,
+                        ),
+                        style: const TextStyle(fontSize: 14),
+                        onSubmitted: (_) {
+                          if (!widget.isSending) widget.onSendText();
+                        },
+                      ),
                     ),
-                    border: InputBorder.none,
-                  ),
-                  style: const TextStyle(fontSize: 14),
-                  onSubmitted: (_) => onSendText(),
+                    // ── Emoji placeholder ──────────────────────────
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8, bottom: 8),
+                      child: Icon(
+                        Icons.emoji_emotions_outlined,
+                        size: 20,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+
             const SizedBox(width: 8),
 
-            // Send button
+            // ── Send button ────────────────────────────────────────
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
-              child: isSending
+              transitionBuilder: (child, animation) =>
+                  ScaleTransition(scale: animation, child: child),
+              child: widget.isSending
                   ? const SizedBox(
                       key: ValueKey('loading'),
                       width: 46,
@@ -93,24 +153,32 @@ class ChatInputBar extends StatelessWidget {
                     )
                   : GestureDetector(
                       key: const ValueKey('send'),
-                      onTap: onSendText,
-                      child: Container(
+                      onTap: _hasText ? widget.onSendText : null,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
                         width: 46,
                         height: 46,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE85D22),
+                          // grey when empty, orange when ready
+                          color: _hasText
+                              ? const Color(0xFFE85D22)
+                              : Colors.grey.shade300,
                           borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFE85D22).withOpacity(0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
+                          boxShadow: _hasText
+                              ? [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFFE85D22,
+                                    ).withOpacity(0.35),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ]
+                              : [],
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.send_rounded,
-                          color: Colors.white,
+                          color: _hasText ? Colors.white : Colors.grey.shade500,
                           size: 20,
                         ),
                       ),
@@ -127,7 +195,7 @@ class _RoundedIconBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
 
-  const _RoundedIconBtn({required this.icon, this.onTap});
+  const _RoundedIconBtn({super.key, required this.icon, this.onTap});
 
   @override
   Widget build(BuildContext context) {

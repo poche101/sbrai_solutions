@@ -1,12 +1,12 @@
+// lib/vendor/screens/kyc_screen.dart
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/l10n/app_localizations.dart';
-// import '../../../l10n/app_localizations.dart';
-// Ensure these paths match your actual project structure
+import 'package:sbrai_solutions/services/vendor/vendor_kyc_service.dart';
+import 'package:sbrai_solutions/services/vendor/vendor_auth_service.dart';
+import 'package:sbrai_solutions/models/vendor/vendor_kyc_status.dart';
 import 'package:sbrai_solutions/vendor/widgets/email_verification.dart';
 import 'package:sbrai_solutions/vendor/widgets/phone_verification.dart';
 import 'package:sbrai_solutions/vendor/widgets/identity_verification.dart';
-// BUSINESS VERIFICATION COMMENTED OUT - Will be re-enabled later
-// import 'package:sbrai_solutions/vendor/widgets/business_verification.dart';
 
 class KYCScreen extends StatefulWidget {
   const KYCScreen({super.key});
@@ -16,56 +16,79 @@ class KYCScreen extends StatefulWidget {
 }
 
 class _KYCScreenState extends State<KYCScreen> {
-  // Dynamic State: Tracking which steps are verified
-  bool isEmailVerified = false;
-  bool isPhoneVerified = false;
-  bool isIdentityVerified = false;
-  // BUSINESS VERIFICATION COMMENTED OUT
-  // bool isBusinessVerified = false;
+  final VendorKYCService _kycService = VendorKYCService(); // ✅ renamed
+  final VendorAuthService _authService = VendorAuthService();
 
-  // Logic to calculate progress percentage (updated for 3 items instead of 4)
-  double get _calculationProgress {
-    int completed = 0;
-    if (isEmailVerified) completed++;
-    if (isPhoneVerified) completed++;
-    if (isIdentityVerified) completed++;
-    // if (isBusinessVerified) completed++; // COMMENTED OUT
-    return completed / 3; // Changed from 4 to 3
+  // ── State ──────────────────────────────────────────────────────────────────
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  VendorKycStatus _status = VendorKycStatus.empty();
+
+  // Real vendor contact info pulled from profile
+  String _vendorEmail = '';
+  String _vendorPhone = '';
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
   }
 
-  /// Helper method to navigate and update state on return
-  /// Expects the verification screens to return 'true' upon success
-  Future<void> _navigateAndVerify(Widget screen, String type) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => screen),
-    );
+  /// Fetches KYC status and vendor profile in parallel.
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-    if (result == true) {
-      setState(() {
-        switch (type) {
-          case 'email':
-            isEmailVerified = true;
-            break;
-          case 'phone':
-            isPhoneVerified = true;
-            break;
-          case 'identity':
-            isIdentityVerified = true;
-            break;
-        // BUSINESS VERIFICATION COMMENTED OUT
-        // case 'business':
-        //   isBusinessVerified = true;
-        //   break;
-        }
-      });
+    try {
+      final results = await Future.wait([
+        _kycService.getStatus(),
+        _authService.getProfile(),
+      ]);
+
+      final kycStatus = results[0] as VendorKycStatus;
+      final profile = results[1] as Map<String, dynamic>;
+
+      // Profile envelope: { "status": "success", "data": { "email": ..., "phone_number": ... } }
+      final profileData = profile['data'] as Map<String, dynamic>? ?? profile;
+
+      if (mounted) {
+        setState(() {
+          _status = kycStatus;
+          _vendorEmail = profileData['email']?.toString() ?? '';
+          _vendorPhone =
+              profileData['phone_number']?.toString() ?? ''; // ✅ fixed key
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
+  // ── Navigation ─────────────────────────────────────────────────────────────
+  /// Pushes a verification screen, then always refreshes status on return.
+  Future<void> _navigateAndRefresh(Widget screen) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
+    ); // ✅ removed unused result — always reload
+
+    await _loadData();
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    double progress = _calculationProgress;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -94,10 +117,21 @@ class _KYCScreenState extends State<KYCScreen> {
           ],
         ),
       ),
-      body: ListView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+          ? _buildErrorState(l10n)
+          : _buildBody(l10n),
+    );
+  }
+
+  Widget _buildBody(AppLocalizations l10n) {
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Dynamic Progress Card
+          // Progress Card
           _buildCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,7 +144,7 @@ class _KYCScreenState extends State<KYCScreen> {
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                     Text(
-                      '${(progress * 100).toInt()}%',
+                      '${(_status.progress * 100).toInt()}%',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -119,10 +153,12 @@ class _KYCScreenState extends State<KYCScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: LinearProgressIndicator(
-                    value: progress == 0 ? 0.05 : progress,
+                    value: _status.progress == 0 ? 0.05 : _status.progress,
                     backgroundColor: const Color(0xFFFFE4E1),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      progress == 1.0 ? Colors.green : const Color(0xFFFCA5A5),
+                      _status.progress >= 1.0
+                          ? Colors.green
+                          : const Color(0xFFFCA5A5),
                     ),
                     minHeight: 8,
                   ),
@@ -133,49 +169,75 @@ class _KYCScreenState extends State<KYCScreen> {
 
           const SizedBox(height: 16),
 
-          // Verification Items
+          // Verification Tiles
           _buildVerificationTile(
             icon: Icons.mail_outline,
             title: l10n.emailVerification,
-            subtitle: 'vendor@demo.com',
-            isCompleted: isEmailVerified,
-            onTap: () => _navigateAndVerify(const EmailVerification(), 'email'),
+            subtitle: _vendorEmail.isNotEmpty ? _vendorEmail : '—',
+            isCompleted: _status.emailVerified,
+            onTap: () => _navigateAndRefresh(const EmailVerification()),
           ),
           _buildVerificationTile(
             icon: Icons.phone_outlined,
             title: l10n.phoneVerification,
-            subtitle: '08087654321',
-            isCompleted: isPhoneVerified,
-            onTap: () => _navigateAndVerify(const PhoneVerification(), 'phone'),
+            subtitle: _vendorPhone.isNotEmpty ? _vendorPhone : '—',
+            isCompleted: _status.phoneVerified,
+            onTap: () => _navigateAndRefresh(
+              PhoneVerification(phoneNumber: _vendorPhone),
+              // ✅ fixed parameter name
+            ),
           ),
           _buildVerificationTile(
             icon: Icons.badge_outlined,
             title: l10n.identityVerification,
-            subtitle: l10n.ninRequired, // Changed from "NIN or BVN required" to "NIN required"
-            isCompleted: isIdentityVerified,
-            onTap: () =>
-                _navigateAndVerify(const IdentityVerification(), 'identity'),
+            subtitle: l10n.ninRequired,
+            isCompleted: _status.identityVerified,
+            onTap: () => _navigateAndRefresh(const IdentityVerification()),
           ),
-
-          // BUSINESS VERIFICATION COMMENTED OUT
-          // _buildVerificationTile(
-          //   icon: Icons.apartment_outlined,
-          //   title: l10n.businessVerification,
-          //   subtitle: l10n.businessVerificationRequired,
-          //   isCompleted: isBusinessVerified,
-          //   onTap: () =>
-          //       _navigateAndVerify(const BusinessVerification(), 'business'),
-          // ),
 
           const SizedBox(height: 8),
 
-          // Info Box
           _buildInfoBox(l10n),
         ],
       ),
     );
   }
 
+  // ── Error state ────────────────────────────────────────────────────────────
+  Widget _buildErrorState(AppLocalizations l10n) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage ?? 'Something went wrong.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black87),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF97316),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Reusable widgets ───────────────────────────────────────────────────────
   Widget _buildVerificationTile({
     required IconData icon,
     required String title,
@@ -269,7 +331,11 @@ class _KYCScreenState extends State<KYCScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.info_outline, color: Color(0xFF2563EB), size: 20),
+              const Icon(
+                Icons.info_outline,
+                color: Color(0xFF2563EB),
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 l10n.whyVerify,

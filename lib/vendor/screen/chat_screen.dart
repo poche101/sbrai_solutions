@@ -1,6 +1,5 @@
 // ─────────────────────────────────────────────────────────────
 //  screens/chat_screen.dart
-//  Real-time chat screen connected to the Laravel API
 // ─────────────────────────────────────────────────────────────
 
 import 'dart:io';
@@ -56,8 +55,16 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _loadMessages();
-    _markRead();
+    // ✅ guard: don't load if chatId is invalid
+    if (widget.chatId > 0) {
+      _loadMessages();
+      _markRead();
+    } else {
+      setState(() {
+        _isLoading = false;
+        _error = 'Invalid chat session. Please go back and try again.';
+      });
+    }
     _scrollController.addListener(_onScroll);
   }
 
@@ -69,7 +76,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onScroll() {
-    // Load older messages when scrolled near the top
     if (_scrollController.position.pixels <=
             _scrollController.position.minScrollExtent + 100 &&
         !_isLoadingMore &&
@@ -91,40 +97,46 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     try {
       final result = await widget.service.getMessages(widget.chatId, page: 1);
-      setState(() {
-        // API returns latest-first, so reverse for chronological display
-        _messages
-          ..clear()
-          ..addAll(result.data.reversed);
-        _currentPage = 1;
-        _hasMore = result.hasMore;
-        _isLoading = false;
-      });
-      _scrollToBottom();
+      if (mounted) {
+        setState(() {
+          _messages
+            ..clear()
+            ..addAll(result.data.reversed);
+          _currentPage = 1;
+          _hasMore = result.hasMore;
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          // ✅ cleaner error message — strip exception prefix
+          _error = e.toString().replaceFirst('ChatApiException', '').trim();
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _loadMore() async {
+    if (!_hasMore || _isLoadingMore) return;
     setState(() => _isLoadingMore = true);
     try {
       final result = await widget.service.getMessages(
         widget.chatId,
         page: _currentPage + 1,
       );
-      setState(() {
-        // Prepend older messages at the top
-        _messages.insertAll(0, result.data.reversed);
-        _currentPage++;
-        _hasMore = result.hasMore;
-        _isLoadingMore = false;
-      });
+      if (mounted) {
+        setState(() {
+          _messages.insertAll(0, result.data.reversed);
+          _currentPage++;
+          _hasMore = result.hasMore;
+          _isLoadingMore = false;
+        });
+      }
     } catch (_) {
-      setState(() => _isLoadingMore = false);
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -135,7 +147,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _controller.clear();
     setState(() => _isSending = true);
 
-    // Optimistic UI: add a temporary message
     final tempMsg = ChatMessageModel(
       id: -DateTime.now().millisecondsSinceEpoch,
       chatId: widget.chatId,
@@ -151,18 +162,18 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.chatId,
         message: text,
       );
-      // Replace temp with real message
-      final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
-      if (idx != -1) {
-        setState(() => _messages[idx] = sent);
+      if (mounted) {
+        final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
+        if (idx != -1) setState(() => _messages[idx] = sent);
       }
     } catch (e) {
-      // Remove failed temp message
-      setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
-      _showError('Failed to send message');
-      _controller.text = text; // Restore text
+      if (mounted) {
+        setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
+        _controller.text = text;
+        _showError('Failed to send message. Please try again.');
+      }
     } finally {
-      setState(() => _isSending = false);
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -175,12 +186,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() => _isSending = true);
 
-    // Optimistic image placeholder
     final tempMsg = ChatMessageModel(
       id: -DateTime.now().millisecondsSinceEpoch,
       chatId: widget.chatId,
       senderId: widget.currentUserId,
-      imagePath: picked.path, // local path for preview
+      imagePath: picked.path,
       createdAt: DateTime.now().toIso8601String(),
     );
     setState(() => _messages.add(tempMsg));
@@ -191,39 +201,41 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.chatId,
         image: File(picked.path),
       );
-      final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
-      if (idx != -1) setState(() => _messages[idx] = sent);
+      if (mounted) {
+        final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
+        if (idx != -1) setState(() => _messages[idx] = sent);
+      }
     } catch (e) {
-      setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
-      _showError('Failed to send image');
+      if (mounted) {
+        setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
+        _showError('Failed to send image. Please try again.');
+      }
     } finally {
-      setState(() => _isSending = false);
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
   Future<void> _startCall(CallType callType) async {
     final channelName =
         'chat_${widget.chatId}_${DateTime.now().millisecondsSinceEpoch}';
-    const uid = 1; // Use actual user ID in production
+    // ✅ use actual currentUserId instead of hardcoded 1
+    final uid = widget.currentUserId;
 
     try {
-      // 1. Get Agora token
       final tokenResp = await widget.service.getCallToken(
         channelName: channelName,
         uid: uid,
       );
 
-      // 2. Notify receiver via API
       await widget.service.initiateCall(
         receiverId: widget.otherPartyId,
         channelName: channelName,
-        callerName: 'Me', // Replace with actual user name
+        callerName: widget.otherPartyName,
         callType: callType,
       );
 
       if (!mounted) return;
 
-      // 3. Navigate to call screen
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -247,7 +259,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 150), () {
-      if (_scrollController.hasClients) {
+      if (_scrollController.hasClients &&
+          _scrollController.position.hasContentDimensions) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -264,6 +277,11 @@ class _ChatScreenState extends State<ChatScreen> {
         content: Text(msg),
         backgroundColor: Colors.red.shade700,
         behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+        ),
       ),
     );
   }
@@ -271,7 +289,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: _buildAppBar(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: _orange))
@@ -279,14 +297,10 @@ class _ChatScreenState extends State<ChatScreen> {
           ? _buildError()
           : Column(
               children: [
-                // Ad context bar
                 if (widget.adTitle.isNotEmpty) _buildAdBar(),
-                // Load more indicator
                 if (_isLoadingMore)
                   const LinearProgressIndicator(color: _orange, minHeight: 2),
-                // Message list
                 Expanded(child: _buildMessageList()),
-                // Input bar
                 ChatInputBar(
                   controller: _controller,
                   onSendText: _sendText,
@@ -311,7 +325,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: const Color(0xFFF5F5F5),
+            backgroundColor: const Color(0xFFFFF5F2),
             child: Text(
               widget.otherPartyInitial,
               style: const TextStyle(
@@ -336,6 +350,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                // ✅ show ad title under name in appbar
+                if (widget.adTitle.isNotEmpty)
+                  Text(
+                    widget.adTitle,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                  ),
               ],
             ),
           ),
@@ -344,10 +365,12 @@ class _ChatScreenState extends State<ChatScreen> {
       actions: [
         IconButton(
           icon: const Icon(Icons.phone_outlined, color: Colors.black),
+          tooltip: 'Voice call',
           onPressed: () => _startCall(CallType.audio),
         ),
         IconButton(
           icon: const Icon(Icons.videocam_outlined, color: Colors.black),
+          tooltip: 'Video call',
           onPressed: () => _startCall(CallType.video),
         ),
         IconButton(
@@ -361,16 +384,20 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildAdBar() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      color: Colors.grey.shade50,
+      color: const Color(0xFFFFF5F2),
       width: double.infinity,
       child: Row(
         children: [
-          const Icon(Icons.shopping_bag_outlined, size: 14, color: Colors.grey),
+          const Icon(Icons.shopping_bag_outlined, size: 14, color: _orange),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Product: ${widget.adTitle}',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              widget.adTitle,
+              style: const TextStyle(
+                fontSize: 12,
+                color: _orange,
+                fontWeight: FontWeight.w500,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -381,43 +408,133 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessageList() {
     if (_messages.isEmpty) {
-      return const Center(
-        child: Text(
-          'No messages yet',
-          style: TextStyle(color: Colors.grey, fontSize: 14),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 56,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No messages yet',
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Say hello to start the conversation!',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+            ),
+          ],
         ),
       );
     }
+
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       itemCount: _messages.length,
       itemBuilder: (context, index) {
         final msg = _messages[index];
         final isMe = msg.senderId == widget.currentUserId;
-        return MessageBubble(message: msg, isMe: isMe);
+
+        // ✅ date separator between messages on different days
+        final showDate =
+            index == 0 ||
+            _isDifferentDay(_messages[index - 1].createdAt, msg.createdAt);
+
+        return Column(
+          children: [
+            if (showDate) _buildDateSeparator(msg.createdAt),
+            MessageBubble(message: msg, isMe: isMe),
+          ],
+        );
       },
+    );
+  }
+
+  bool _isDifferentDay(String? a, String? b) {
+    if (a == null || b == null) return false;
+    final da = DateTime.tryParse(a)?.toLocal();
+    final db = DateTime.tryParse(b)?.toLocal();
+    if (da == null || db == null) return false;
+    return da.year != db.year || da.month != db.month || da.day != db.day;
+  }
+
+  Widget _buildDateSeparator(String? iso) {
+    if (iso == null) return const SizedBox.shrink();
+    final dt = DateTime.tryParse(iso)?.toLocal();
+    if (dt == null) return const SizedBox.shrink();
+
+    final now = DateTime.now();
+    String label;
+    if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+      label = 'Today';
+    } else if (dt.year == now.year &&
+        dt.month == now.month &&
+        dt.day == now.day - 1) {
+      label = 'Yesterday';
+    } else {
+      label = '${dt.day}/${dt.month}/${dt.year}';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: Colors.grey.shade300)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade500,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(child: Divider(color: Colors.grey.shade300)),
+        ],
+      ),
     );
   }
 
   Widget _buildError() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-          const SizedBox(height: 12),
-          Text(
-            _error ?? 'Failed to load messages',
-            style: const TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _loadMessages,
-            style: ElevatedButton.styleFrom(backgroundColor: _orange),
-            child: const Text('Retry', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.wifi_off_rounded, size: 56, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              _error ?? 'Failed to load messages',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadMessages,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _orange,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

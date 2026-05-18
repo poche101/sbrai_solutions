@@ -124,7 +124,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final response = await _authService.register(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
-        phone: _phoneController.text.trim(),
+        phoneNumber: _phoneController.text.trim(), // ✅ fixed: was 'phone:'
         businessName: _businessNameController.text.trim(),
         businessCategory: _selectedCategory!,
         address: _addressController.text.trim(),

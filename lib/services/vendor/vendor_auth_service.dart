@@ -11,7 +11,7 @@ class VendorAuthService {
   Future<Map<String, dynamic>> register({
     required String name,
     required String email,
-    required String phone,
+    required String phoneNumber, // ✅ fixed: camelCase
     required String businessName,
     required String businessCategory,
     required String address,
@@ -24,15 +24,12 @@ class VendorAuthService {
       debugPrint("🔐 Attempting vendor registration for: $email");
       debugPrint("🚀 TARGET URL: ${ApiService.baseUrl}/auth/register/vendor");
 
-      // ApiService._handleResponse already throws clean messages for
-      // 422 validation errors and other non-2xx responses, so we just
-      // need to call and return the decoded body on success.
       final response = await _apiService.post(
         'auth/register/vendor',
         {
           'name': name,
           'email': email,
-          'phone': phone,
+          'phone': phoneNumber, // ✅ fixed: updated reference
           'business_name': businessName,
           'business_category': businessCategory,
           'business_address': address,
@@ -48,7 +45,6 @@ class VendorAuthService {
       final responseData = jsonDecode(response.body) as Map<String, dynamic>;
       debugPrint("📦 Registration response: $responseData");
 
-      // Save token if returned on registration
       final token = responseData['data']?['token']?.toString();
       if (token != null) {
         await _apiService.saveToken(token, userType: 'vendor');
@@ -142,17 +138,12 @@ class VendorAuthService {
     required String address,
   }) async {
     try {
-      final response = await _apiService.patch(
-        // ✅ was post()
-        'vendor/profile', // ✅ was vendor/update-profile
-        {
-          'name': name, // ✅ was full_name
-          'phone': phone.toString(),
-          'business_name': businessName,
-          'business_address': address,
-        },
-        isProtected: true,
-      );
+      final response = await _apiService.patch('vendor/profile', {
+        'name': name,
+        'phone': phone,
+        'business_name': businessName,
+        'business_address': address,
+      }, isProtected: true);
       return jsonDecode(response.body) as Map<String, dynamic>;
     } catch (e) {
       debugPrint("❌ Update profile error: $e");
@@ -160,13 +151,14 @@ class VendorAuthService {
     }
   }
 
+  /// ---------------- UPLOAD PHOTO ----------------
   Future<Map<String, dynamic>> uploadPhoto(String filePath) async {
     try {
       final response = await _apiService.upload(
-        'vendor/profile/photo', // ✅ correct endpoint
+        'vendor/profile/photo',
         {},
         filePath: filePath,
-        fileField: 'photo', // ← check what field name the controller expects
+        fileField: 'photo',
         isProtected: true,
       );
       return jsonDecode(response.body) as Map<String, dynamic>;
