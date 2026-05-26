@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import 'package:sbrai_solutions/models/product_model.dart';
 import 'package:sbrai_solutions/services/vendor/product_service.dart';
 import 'package:sbrai_solutions/vendor/vendor_menu.dart';
@@ -11,6 +12,8 @@ import 'package:sbrai_solutions/vendor/screen/product_details_screen.dart';
 import 'package:sbrai_solutions/l10n/app_localizations.dart';
 import 'package:sbrai_solutions/services/chat_service.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
+import 'package:sbrai_solutions/providers/language_provider.dart';
+import 'package:sbrai_solutions/services/translation_service.dart';
 
 // ── Category image map ─────────────────────────────────────────────────────────
 const Map<String, String> _categoryImages = {
@@ -42,22 +45,21 @@ const List<Map<String, String>> _supportedLocales = [
 ];
 
 // ══════════════════════════════════════════════════════════════════════════════
-// HomeScreen
+// VendorHomeScreen
 // ══════════════════════════════════════════════════════════════════════════════
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class VendorHomeScreen extends StatefulWidget {
+  const VendorHomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<VendorHomeScreen> createState() => _VendorHomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _VendorHomeScreenState extends State<VendorHomeScreen> {
   final ProductService _productService = ProductService();
 
   String selectedState = "All Nigeria";
   String? selectedCategory;
-  String _currentLocale = 'en';
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -70,6 +72,27 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, int> _categoryNameToId = {};
 
   static const String _baseUrl = 'https://sbraisolutions.com/api/v1';
+
+  // ── Translation state ──────────────────────────────────────────────────────
+
+  /// Cache: "$originalText|$langCode" → translated string.
+  /// Avoids redundant API calls across locale switches and reloads.
+  final Map<String, String> _translationCache = {};
+
+  bool _isTranslatingProducts = false;
+  bool _isTranslatingCategories = false;
+  Locale? _lastTranslatedLocale;
+
+  /// product.id (or index) → translated name
+  final Map<String, String> _translatedProductNames = {};
+
+  /// product.id (or index) → translated location
+  final Map<String, String> _translatedProductLocations = {};
+
+  /// category original name → translated name
+  final Map<String, String> _translatedCategoryNames = {};
+
+  // ── Nigeria states ─────────────────────────────────────────────────────────
 
   final List<String> nigeriaStates = [
     "All Nigeria",
@@ -112,6 +135,8 @@ class _HomeScreenState extends State<HomeScreen> {
     "Zamfara",
   ];
 
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
   @override
   void initState() {
     super.initState();
@@ -119,10 +144,132 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Re-translate whenever the locale changes
+    _translateAllDynamicContent();
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
+
+  // ── Translation helpers ────────────────────────────────────────────────────
+
+  /// Returns the translated string for [text] in [targetLang].
+  /// Uses [_translationCache] to avoid duplicate API calls.
+  Future<String?> _translateText(String text, String targetLang) async {
+    if (text.trim().isEmpty) return text;
+    final cacheKey = '$text|$targetLang';
+    if (_translationCache.containsKey(cacheKey)) {
+      return _translationCache[cacheKey];
+    }
+    try {
+      final result = await TranslationService().translateText(text, targetLang);
+      if (result != null) _translationCache[cacheKey] = result;
+      return result;
+    } catch (_) {
+      return null; // fall back to original
+    }
+  }
+
+  /// Central entry point – called after locale changes or after new data loads.
+  Future<void> _translateAllDynamicContent() async {
+    final currentLocale = context.read<LanguageProvider>().locale;
+
+    // Nothing to do if locale hasn't changed
+    if (_lastTranslatedLocale == currentLocale) return;
+    _lastTranslatedLocale = currentLocale;
+
+    final targetLang = currentLocale.languageCode;
+
+    // Reset to originals when switching back to English
+    if (targetLang == 'en') {
+      setState(() {
+        _translatedProductNames.clear();
+        _translatedProductLocations.clear();
+        _translatedCategoryNames.clear();
+      });
+      return;
+    }
+
+    // Run both translation batches concurrently
+    await Future.wait([
+      _translateProducts(targetLang),
+      _translateCategories(targetLang),
+    ]);
+  }
+
+  /// Translates name + location for every product in [displayedProducts].
+  Future<void> _translateProducts(String targetLang) async {
+    if (displayedProducts.isEmpty) return;
+    if (mounted) setState(() => _isTranslatingProducts = true);
+
+    try {
+      final futures = <Future<void>>[];
+
+      for (final product in displayedProducts) {
+        final key = _productKey(product);
+
+        futures.add(
+          _translateText(product.name, targetLang).then((translated) {
+            if (translated != null && mounted) {
+              setState(() => _translatedProductNames[key] = translated);
+            }
+          }),
+        );
+
+        if (product.location.trim().isNotEmpty) {
+          futures.add(
+            _translateText(product.location, targetLang).then((translated) {
+              if (translated != null && mounted) {
+                setState(() => _translatedProductLocations[key] = translated);
+              }
+            }),
+          );
+        }
+      }
+
+      await Future.wait(futures);
+    } catch (e) {
+      debugPrint('❌ _translateProducts: $e');
+    } finally {
+      if (mounted) setState(() => _isTranslatingProducts = false);
+    }
+  }
+
+  /// Translates category names in [categories].
+  Future<void> _translateCategories(String targetLang) async {
+    if (categories.isEmpty) return;
+    if (mounted) setState(() => _isTranslatingCategories = true);
+
+    try {
+      final futures = <Future<void>>[];
+
+      for (final cat in categories) {
+        final name = cat['name'].toString();
+        futures.add(
+          _translateText(name, targetLang).then((translated) {
+            if (translated != null && mounted) {
+              setState(() => _translatedCategoryNames[name] = translated);
+            }
+          }),
+        );
+      }
+
+      await Future.wait(futures);
+    } catch (e) {
+      debugPrint('❌ _translateCategories: $e');
+    } finally {
+      if (mounted) setState(() => _isTranslatingCategories = false);
+    }
+  }
+
+  /// Stable key for a product, preferring its ID, falling back to name.
+  String _productKey(Product product) =>
+      product.id?.toString() ?? product.name;
 
   // ── Loaders ──────────────────────────────────────────────────────────────────
 
@@ -136,6 +283,9 @@ class _HomeScreenState extends State<HomeScreen> {
       debugPrint("❌ _loadAll error: $e");
     } finally {
       if (mounted) setState(() => isLoading = false);
+      // Translate freshly loaded data with the current locale
+      _lastTranslatedLocale = null; // force re-translate
+      _translateAllDynamicContent();
     }
   }
 
@@ -143,9 +293,9 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final response = await http
           .get(
-            Uri.parse('$_baseUrl/categories'),
-            headers: {'Accept': 'application/json'},
-          )
+        Uri.parse('$_baseUrl/categories'),
+        headers: {'Accept': 'application/json'},
+      )
           .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
@@ -198,10 +348,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final cid =
           categoryId ??
-          (selectedCategory != null &&
+              (selectedCategory != null &&
                   _categoryNameToId.containsKey(selectedCategory)
-              ? _categoryNameToId[selectedCategory]
-              : null);
+                  ? _categoryNameToId[selectedCategory]
+                  : null);
       if (cid != null) queryParams['category_id'] = cid.toString();
 
       final uri = Uri.parse(
@@ -216,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
         final responseData = decoded['data'];
         List<dynamic> adsList =
-            responseData is Map && responseData.containsKey('data')
+        responseData is Map && responseData.containsKey('data')
             ? (responseData['data'] as List<dynamic>?) ?? []
             : responseData is List
             ? responseData
@@ -295,9 +445,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: const VendorMenu(
-        userName: "Guest User",
-        userEmail: "guest@example.com",
+      drawer: VendorMenu(
+        userName: l10n.guestUser,
+        userEmail: l10n.guestEmail,
       ),
       appBar: _buildAppBar(l10n),
       floatingActionButton: FloatingActionButton(
@@ -333,7 +483,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 16),
                     _buildSearchBar(l10n),
                     const SizedBox(height: 20),
-                    _buildCategoryGrid(),
+                    _buildCategoryGrid(l10n),
                   ],
                 ),
               ),
@@ -353,12 +503,26 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Text(
-                      "${displayedProducts.length} ${l10n.items}",
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
-                      ),
+                    Row(
+                      children: [
+                        if (_isTranslatingProducts)
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: Color(0xFFE85D22),
+                            ),
+                          ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "${displayedProducts.length} ${l10n.items}",
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -408,7 +572,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisSpacing: 12,
                   ),
                   delegate: SliverChildBuilderDelegate(
-                    (ctx, i) => _buildProductCard(displayedProducts[i], l10n),
+                        (ctx, i) => _buildProductCard(displayedProducts[i], l10n),
                     childCount: displayedProducts.length,
                   ),
                 ),
@@ -437,20 +601,20 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: [
         _buildLanguageDropdown(),
         const SizedBox(width: 16),
-        const Row(
+        Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.person_outline, color: Colors.black87, size: 20),
-            SizedBox(width: 4),
+            const Icon(Icons.person_outline, color: Colors.black87, size: 20),
+            const SizedBox(width: 4),
             Text(
-              "Vendor",
-              style: TextStyle(
+              l10n.vendor,
+              style: const TextStyle(
                 color: Colors.black87,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
           ],
         ),
       ],
@@ -460,20 +624,24 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── Language dropdown ────────────────────────────────────────────────────────
 
   Widget _buildLanguageDropdown() {
+    final currentLocale = context.watch<LanguageProvider>().locale.languageCode;
+
     return PopupMenuButton<String>(
-      initialValue: _currentLocale,
-      onSelected: (code) => setState(() => _currentLocale = code),
+      initialValue: currentLocale,
+      onSelected: (code) {
+        context.read<LanguageProvider>().setLanguage(Locale(code));
+      },
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       itemBuilder: (_) => _supportedLocales
           .map(
             (l) => PopupMenuItem<String>(
-              value: l['code'],
-              child: Text(
-                l['full']!,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-            ),
-          )
+          value: l['code'],
+          child: Text(
+            l['full']!,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+        ),
+      )
           .toList(),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -486,7 +654,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Text(
               _supportedLocales.firstWhere(
-                (l) => l['code'] == _currentLocale,
+                    (l) => l['code'] == currentLocale,
                 orElse: () => _supportedLocales.first,
               )['label']!,
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -508,7 +676,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSearchBar(AppLocalizations l10n) {
     return Row(
       children: [
-        // State picker
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
@@ -533,13 +700,13 @@ class _HomeScreenState extends State<HomeScreen> {
               items: nigeriaStates
                   .map(
                     (s) => DropdownMenuItem(
-                      value: s,
-                      child: Text(
-                        s,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  )
+                  value: s,
+                  child: Text(
+                    s == "All Nigeria" ? l10n.allNigeria : s,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              )
                   .toList(),
               onChanged: (v) {
                 if (v != null) {
@@ -551,7 +718,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(width: 8),
-        // Search field
         Expanded(
           child: Container(
             height: 48,
@@ -566,7 +732,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     controller: _searchController,
                     style: const TextStyle(fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: 'I am looking for...',
+                      hintText: l10n.iAmLookingFor,
                       hintStyle: TextStyle(
                         color: Colors.grey.shade400,
                         fontSize: 13,
@@ -607,7 +773,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ── Category grid ────────────────────────────────────────────────────────────
 
-  Widget _buildCategoryGrid() {
+  Widget _buildCategoryGrid(AppLocalizations l10n) {
     if (isLoading) {
       return const SizedBox(
         height: 80,
@@ -616,11 +782,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (categories.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 16),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
         child: Text(
-          "No categories available",
-          style: TextStyle(color: Colors.white70),
+          l10n.noCategoriesAvailable,
+          style: const TextStyle(color: Colors.white70),
         ),
       );
     }
@@ -637,9 +803,13 @@ class _HomeScreenState extends State<HomeScreen> {
       itemCount: categories.length,
       itemBuilder: (_, i) {
         final cat = categories[i];
-        final name = cat['name'].toString();
+        final originalName = cat['name'].toString();
         final slug = cat['slug']?.toString() ?? '';
         final imgPath = _categoryImages[slug];
+
+        // Use translated name if available, fall back to original
+        final displayName =
+            _translatedCategoryNames[originalName] ?? originalName;
 
         return GestureDetector(
           onTap: () => _openCategoryPage(cat),
@@ -650,17 +820,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(16),
                   child: imgPath != null
                       ? Image.asset(
-                          imgPath,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          errorBuilder: (_, __, ___) => _categoryPlaceholder(),
-                        )
+                    imgPath,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (_, __, ___) => _categoryPlaceholder(),
+                  )
                       : _categoryPlaceholder(),
                 ),
               ),
               const SizedBox(height: 5),
-              Text(
-                name,
+              // Show a tiny shimmer-like indicator while translating
+              _isTranslatingCategories && !_translatedCategoryNames.containsKey(originalName)
+                  ? Container(
+                height: 10,
+                width: 50,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              )
+                  : Text(
+                displayName,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10,
@@ -679,7 +859,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _categoryPlaceholder() => Container(
     color: Colors.white24,
-    child: const Icon(Icons.category_outlined, color: Colors.white54, size: 28),
+    child: const Icon(
+      Icons.category_outlined,
+      color: Colors.white54,
+      size: 28,
+    ),
   );
 
   // ── Product card ─────────────────────────────────────────────────────────────
@@ -692,6 +876,10 @@ class _HomeScreenState extends State<HomeScreen> {
       'cleaning',
       'fumigation',
     ].contains(product.category.toLowerCase());
+
+    final key = _productKey(product);
+    final displayName = _translatedProductNames[key] ?? product.name;
+    final displayLocation = _translatedProductLocations[key] ?? product.location;
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -727,24 +915,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: product.imageUrl.startsWith('http')
                         ? Image.network(
-                            product.imageUrl,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: Colors.grey.shade200,
-                              child: const Icon(
-                                Icons.image,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          )
+                      product.imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey.shade200,
+                        child: const Icon(
+                          Icons.image,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    )
                         : Image.asset(
-                            product.imageUrl,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                          ),
+                      product.imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
                   ),
                   if (isService)
                     Positioned(
@@ -797,7 +985,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    product.name,
+                    displayName,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
@@ -816,7 +1004,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 2),
                       Expanded(
                         child: Text(
-                          product.location,
+                          displayLocation,
                           style: const TextStyle(
                             fontSize: 10,
                             color: Colors.grey,
@@ -868,18 +1056,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _actionBtn(
-    String label,
-    IconData icon,
-    bool primary, {
-    VoidCallback? onTap,
-  }) {
+      String label,
+      IconData icon,
+      bool primary, {
+        VoidCallback? onTap,
+      }) {
     return SizedBox(
       height: 34,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          backgroundColor: primary
-              ? const Color(0xFFE85D22)
-              : Colors.transparent,
+          backgroundColor: primary ? const Color(0xFFE85D22) : Colors.transparent,
           side: BorderSide(
             color: primary ? const Color(0xFFE85D22) : Colors.grey.shade300,
           ),
@@ -912,7 +1098,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Category Products Page
+// Category Products Page  (also updated to translate product names/locations)
 // ══════════════════════════════════════════════════════════════════════════════
 
 class _CategoryProductsPage extends StatefulWidget {
@@ -936,11 +1122,91 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
   List<Product> products = [];
   bool isLoading = true;
 
+  // ── Translation state ──────────────────────────────────────────────────────
+
+  final Map<String, String> _translationCache = {};
+  final Map<String, String> _translatedNames = {};
+  final Map<String, String> _translatedLocations = {};
+  bool _isTranslating = false;
+  Locale? _lastTranslatedLocale;
+
   @override
   void initState() {
     super.initState();
     _fetchProducts();
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _translateIfNeeded();
+  }
+
+  // ── Translation ────────────────────────────────────────────────────────────
+
+  Future<void> _translateIfNeeded() async {
+    final currentLocale = context.read<LanguageProvider>().locale;
+    if (_lastTranslatedLocale == currentLocale) return;
+    _lastTranslatedLocale = currentLocale;
+
+    final targetLang = currentLocale.languageCode;
+
+    if (targetLang == 'en') {
+      setState(() {
+        _translatedNames.clear();
+        _translatedLocations.clear();
+      });
+      return;
+    }
+
+    await _translateProducts(targetLang);
+  }
+
+  Future<String?> _translateText(String text, String targetLang) async {
+    if (text.trim().isEmpty) return text;
+    final cacheKey = '$text|$targetLang';
+    if (_translationCache.containsKey(cacheKey)) {
+      return _translationCache[cacheKey];
+    }
+    try {
+      final result = await TranslationService().translateText(text, targetLang);
+      if (result != null) _translationCache[cacheKey] = result;
+      return result;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _translateProducts(String targetLang) async {
+    if (products.isEmpty) return;
+    if (mounted) setState(() => _isTranslating = true);
+
+    try {
+      final futures = <Future<void>>[];
+      for (final p in products) {
+        final key = p.id?.toString() ?? p.name;
+        futures.add(
+          _translateText(p.name, targetLang).then((t) {
+            if (t != null && mounted) setState(() => _translatedNames[key] = t);
+          }),
+        );
+        if (p.location.trim().isNotEmpty) {
+          futures.add(
+            _translateText(p.location, targetLang).then((t) {
+              if (t != null && mounted) setState(() => _translatedLocations[key] = t);
+            }),
+          );
+        }
+      }
+      await Future.wait(futures);
+    } catch (e) {
+      debugPrint('❌ _CategoryProductsPage _translateProducts: $e');
+    } finally {
+      if (mounted) setState(() => _isTranslating = false);
+    }
+  }
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
 
   Future<void> _fetchProducts() async {
     setState(() => isLoading = true);
@@ -961,7 +1227,7 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
         final responseData = decoded['data'];
         List<dynamic> adsList =
-            responseData is Map && responseData.containsKey('data')
+        responseData is Map && responseData.containsKey('data')
             ? (responseData['data'] as List?) ?? []
             : responseData is List
             ? responseData
@@ -969,7 +1235,7 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
 
         if (mounted) {
           setState(
-            () => products = adsList
+                () => products = adsList
                 .map((j) => Product.fromJson(j as Map<String, dynamic>))
                 .toList(),
           );
@@ -978,19 +1244,25 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
     } catch (e) {
       debugPrint("❌ category page error: $e");
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoading = false);
+        // Translate newly loaded products
+        _lastTranslatedLocale = null;
+        _translateIfNeeded();
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final imgPath = _categoryImages[widget.categorySlug];
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: CustomScrollView(
         slivers: [
-          // ── Hero app bar with category image ────────────────────────────
+          // ── Hero app bar ─────────────────────────────────────────────────
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
@@ -1010,23 +1282,23 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
               ),
               background: imgPath != null
                   ? Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.asset(imgPath, fit: BoxFit.cover),
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withOpacity(0.6),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(imgPath, fit: BoxFit.cover),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.6),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              )
                   : Container(color: const Color(0xFFE85D22)),
             ),
           ),
@@ -1045,9 +1317,26 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Text(
-                    "${products.length} items",
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  Row(
+                    children: [
+                      if (_isTranslating)
+                        const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: Color(0xFFE85D22),
+                          ),
+                        ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "${products.length} ${l10n.items}",
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1078,7 +1367,7 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        "No products in ${widget.categoryName} yet",
+                        l10n.noProductsInCategory(widget.categoryName),
                         style: TextStyle(color: Colors.grey.shade500),
                       ),
                     ],
@@ -1091,7 +1380,7 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (ctx, i) => _buildProductListCard(products[i]),
+                      (ctx, i) => _buildProductListCard(products[i]),
                   childCount: products.length,
                 ),
               ),
@@ -1104,6 +1393,10 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
   }
 
   Widget _buildProductListCard(Product product) {
+    final key = product.id?.toString() ?? product.name;
+    final displayName = _translatedNames[key] ?? product.name;
+    final displayLocation = _translatedLocations[key] ?? product.location;
+
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
@@ -1129,13 +1422,13 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
                   height: 85,
                   child: product.imageUrl.startsWith('http')
                       ? Image.network(
-                          product.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.grey.shade200,
-                            child: const Icon(Icons.image, color: Colors.grey),
-                          ),
-                        )
+                    product.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.grey.shade200,
+                      child: const Icon(Icons.image, color: Colors.grey),
+                    ),
+                  )
                       : Image.asset(product.imageUrl, fit: BoxFit.cover),
                 ),
               ),
@@ -1145,7 +1438,7 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      product.name,
+                      displayName,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
@@ -1164,7 +1457,7 @@ class _CategoryProductsPageState extends State<_CategoryProductsPage> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            product.location,
+                            displayLocation,
                             style: const TextStyle(
                               color: Colors.grey,
                               fontSize: 13,

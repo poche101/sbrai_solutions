@@ -1,0 +1,24 @@
+{
+  "@@locale": "ig",
+  "appTitle": "Sbrai Solutions",
+  "vendor": "Onye na-ere ahịa",
+  "iAmLookingFor": "Ana m achọ...",
+  "allNigeria": "Nigeria niile",
+  "recommendedForYou": "A tụrụ aro maka gị",
+  "items": "ihe",
+  "noItemsFound": "Achọtaghị ihe ọ bụla",
+  "service": "Ọrụ",
+  "call": "Kpọọ",
+  "chat": "Kpaa nkata",
+  "noCategoriesAvailable": "Enweghị ụdị ọ bụla",
+  "noProductsInCategory": "Enweghị ngwaahịa na {categoryName} ugbu a",
+  "@noProductsInCategory": {
+    "placeholders": {
+      "categoryName": {
+        "type": "String"
+      }
+    }
+  },
+  "guestUser": "Onye ọbịa",
+  "guestEmail": "onyeobia@example.com"
+}

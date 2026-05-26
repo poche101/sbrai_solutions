@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:sbrai_solutions/models/product_model.dart';
 import 'package:sbrai_solutions/screens/chat_screen.dart';
 import 'package:sbrai_solutions/services/chat_service.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:sbrai_solutions/l10n/app_localizations.dart';
+import 'package:sbrai_solutions/services/translation_service.dart';
+import 'package:sbrai_solutions/providers/language_provider.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final Product product;
@@ -22,6 +26,76 @@ class ProductDetailsScreen extends StatefulWidget {
 class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+
+  // --- Translation state ---
+  String? _translatedName;
+  String? _translatedDescription;
+  bool _isTranslating = false;
+  Locale? _lastTranslatedLocale;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch translation for the initial locale
+    _translateDynamicContentIfNeeded();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // When the locale changes (provider), re‑translate dynamic texts
+    _translateDynamicContentIfNeeded();
+  }
+
+  /// Check if the current locale differs from the one we already translated,
+  /// and if so, fetch the cloud translations for name & description.
+  Future<void> _translateDynamicContentIfNeeded() async {
+    final currentLocale = context.read<LanguageProvider>().locale;
+
+    // Already translated for this locale → nothing to do
+    if (_lastTranslatedLocale == currentLocale) return;
+
+    _lastTranslatedLocale = currentLocale;
+    final targetLang = currentLocale.languageCode;
+
+    // Don't translate if the target language is English (or whatever original)
+    // You can skip the API call entirely if you want, but let's be safe.
+    if (targetLang == 'en') {
+      setState(() {
+        _translatedName = null;
+        _translatedDescription = null;
+        _isTranslating = false;
+      });
+      return;
+    }
+
+    setState(() => _isTranslating = true);
+
+    try {
+      final service = TranslationService();
+      final results = await Future.wait([
+        service.translateText(widget.product.name, targetLang),
+        if (widget.product.description != null &&
+            widget.product.description!.isNotEmpty)
+          service.translateText(widget.product.description!, targetLang)
+        else
+          Future.value(null),
+      ]);
+
+      if (!mounted) return;
+      setState(() {
+        _translatedName = results[0];
+        _translatedDescription = results[1];
+        _isTranslating = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isTranslating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Translation failed. Please try again.")),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -54,19 +128,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
   }
 
-  /// Opens the ChatScreen with all required parameters.
   Future<void> _openChat(BuildContext context) async {
     final apiService = ApiService();
     final token = await apiService.getToken() ?? '';
     final userData = await apiService.getUserData();
-
     final currentUserId = int.tryParse(userData['id']?.toString() ?? '0') ?? 0;
 
-    // Safe vendor data
     final vendorName = (widget.product.vendorName?.trim().isNotEmpty == true)
         ? widget.product.vendorName!
         : 'Seller';
-
     final vendorInitial = vendorName.isNotEmpty
         ? vendorName[0].toUpperCase()
         : 'S';
@@ -86,7 +156,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           otherPartyInitial: vendorInitial,
           adTitle: widget.product.name,
           otherPartyId: vendorId,
-          service: ChatService(token), // ← Fixed: Positional argument
+          service: ChatService(token),
         ),
       ),
     );
@@ -95,6 +165,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final List<String> images = widget.product.imageUrls;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -103,14 +174,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          "Product Details",
-          style: TextStyle(
+        title: Text(
+          l10n.listingDetails,
+          style: const TextStyle(
             color: Colors.black,
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
+        // No translate icon anymore – language is handled globally
         backgroundColor: Colors.white,
         elevation: 0.5,
       ),
@@ -130,30 +202,30 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         width: double.infinity,
                         child: images.isEmpty
                             ? Container(
-                                color: Colors.grey[200],
-                                child: const Icon(
-                                  Icons.image,
-                                  size: 50,
-                                  color: Colors.grey,
-                                ),
-                              )
+                          color: Colors.grey[200],
+                          child: const Icon(
+                            Icons.image,
+                            size: 50,
+                            color: Colors.grey,
+                          ),
+                        )
                             : PageView.builder(
-                                controller: _pageController,
-                                onPageChanged: (index) =>
-                                    setState(() => _currentPage = index),
-                                itemCount: images.length,
-                                itemBuilder: (context, index) {
-                                  return images[index].startsWith('http')
-                                      ? Image.network(
-                                          images[index],
-                                          fit: BoxFit.cover,
-                                        )
-                                      : Image.asset(
-                                          images[index],
-                                          fit: BoxFit.cover,
-                                        );
-                                },
-                              ),
+                          controller: _pageController,
+                          onPageChanged: (index) =>
+                              setState(() => _currentPage = index),
+                          itemCount: images.length,
+                          itemBuilder: (context, index) {
+                            return images[index].startsWith('http')
+                                ? Image.network(
+                              images[index],
+                              fit: BoxFit.cover,
+                            )
+                                : Image.asset(
+                              images[index],
+                              fit: BoxFit.cover,
+                            );
+                          },
+                        ),
                       ),
                       if (images.length > 1 && _currentPage > 0)
                         Positioned(
@@ -179,8 +251,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Show translated name if available, otherwise original
+                        if (_isTranslating)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8.0),
+                            child: LinearProgressIndicator(),
+                          ),
                         Text(
-                          widget.product.name,
+                          _translatedName ?? widget.product.name,
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -229,21 +307,22 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     ),
                   ),
 
-                  // Description, Seller Info, Safety Tips... (rest remains unchanged)
+                  // Description
                   _buildSectionCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Description",
-                          style: TextStyle(
+                        Text(
+                          l10n.description,
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          widget.product.description ??
+                          _translatedDescription ??
+                              widget.product.description ??
                               "No description available.",
                           style: TextStyle(
                             color: Colors.grey[600],
@@ -260,9 +339,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Seller Information",
-                          style: TextStyle(
+                        Text(
+                          l10n.sellerInformation,
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -276,7 +355,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               child: Text(
                                 widget.product.vendorName?.isNotEmpty == true
                                     ? widget.product.vendorName![0]
-                                          .toUpperCase()
+                                    .toUpperCase()
                                     : "S",
                                 style: const TextStyle(
                                   color: Color(0xFFE85D22),
@@ -316,7 +395,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        "${widget.product.rating} rating",
+                                        "${widget.product.rating} ${l10n.rating}",
                                         style: const TextStyle(
                                           color: Colors.grey,
                                           fontSize: 12,
@@ -330,17 +409,17 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        const Row(
+                        Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.calendar_today_outlined,
                               size: 14,
                               color: Colors.grey,
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Text(
-                              "Member since Jan 2025",
-                              style: TextStyle(
+                              "${l10n.memberSince} Jan 2025",
+                              style: const TextStyle(
                                 color: Colors.grey,
                                 fontSize: 12,
                               ),
@@ -363,17 +442,17 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Row(
+                        Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.error_outline,
                               color: Color(0xFFD97706),
                               size: 20,
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Text(
-                              "Sbrai Safety Tips",
-                              style: TextStyle(
+                              l10n.safetyTips,
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF92400E),
                                 fontSize: 15,
@@ -382,18 +461,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        _buildSafetyBullet(
-                          "Do not pay in advance until materials are delivered to your site",
-                        ),
-                        _buildSafetyBullet(
-                          "Always inspect products before making payment",
-                        ),
-                        _buildSafetyBullet(
-                          "Meet sellers in public or safe locations",
-                        ),
-                        _buildSafetyBullet(
-                          "Report suspicious activity to Sbrai support",
-                        ),
+                        _buildSafetyBullet(l10n.safetyTip1),
+                        _buildSafetyBullet(l10n.safetyTip2),
+                        _buildSafetyBullet(l10n.safetyTip3),
+                        _buildSafetyBullet(l10n.safetyTip4),
                       ],
                     ),
                   ),
@@ -402,13 +473,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               ),
             ),
           ),
-          _buildBottomActions(context),
+          _buildBottomActions(context, l10n),
         ],
       ),
     );
   }
 
-  // Helper Widgets
+  // Helper Widgets (unchanged)
   Widget _buildSafetyBullet(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -467,7 +538,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  Widget _buildBottomActions(BuildContext context) {
+  Widget _buildBottomActions(BuildContext context, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       decoration: BoxDecoration(
@@ -485,9 +556,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 onPressed: () =>
                     _makePhoneCall(widget.product.vendorPhone ?? '0800000000'),
                 icon: const Icon(Icons.call_outlined, size: 18),
-                label: const Text(
-                  "Call Seller",
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                label: Text(
+                  l10n.call,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.black87,
@@ -510,9 +581,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   color: Colors.white,
                   size: 18,
                 ),
-                label: const Text(
-                  "Chat Now",
-                  style: TextStyle(
+                label: Text(
+                  l10n.chat,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),

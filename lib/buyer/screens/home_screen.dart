@@ -804,25 +804,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildLanguageDropdown(BuildContext context) {
     final languageProvider = Provider.of<LanguageProvider>(context);
-    final l10n = AppLocalizations.of(context)!;
+    final currentLocale = languageProvider.locale.languageCode;
 
-    final Map<String, String> languages = {
-      l10n.english: "en",
-      l10n.spanish: "es",
-      l10n.french: "fr",
-    };
-
-    String currentLangName = languages.entries
-        .firstWhere(
-          (e) => e.value == languageProvider.locale.languageCode,
-          orElse: () => languages.entries.first,
-        )
-        .key;
+    final List<Map<String, String>> supportedLocales = [
+      {'code': 'en', 'label': 'EN', 'full': 'English'},
+      {'code': 'fr', 'label': 'FR', 'full': 'Français'},
+      {'code': 'ha', 'label': 'HA', 'full': 'Hausa'},
+      {'code': 'yo', 'label': 'YO', 'full': 'Yorùbá'},
+      {'code': 'ig', 'label': 'IG', 'full': 'Igbo'},
+    ];
 
     return PopupMenuButton<String>(
-      onSelected: (value) {
-        languageProvider.setLanguage(Locale(languages[value]!));
+      initialValue: currentLocale,
+      onSelected: (code) {
+        languageProvider.setLanguage(Locale(code));
       },
+      itemBuilder: (context) => supportedLocales
+          .map((l) => PopupMenuItem<String>(
+                value: l['code'],
+                child: Text(l['full']!),
+              ))
+          .toList(),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -832,24 +834,20 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Row(
           children: [
             Text(
-              currentLangName.substring(0, 2).toUpperCase(),
+              supportedLocales.firstWhere(
+                (l) => l['code'] == currentLocale,
+                orElse: () => supportedLocales.first,
+              )['label']!,
               style: const TextStyle(
                 color: Colors.black,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const Icon(
-              Icons.keyboard_arrow_down,
-              color: Colors.black,
-              size: 14,
-            ),
+            const Icon(Icons.keyboard_arrow_down, color: Colors.black, size: 14),
           ],
         ),
       ),
-      itemBuilder: (context) => languages.keys
-          .map((l) => PopupMenuItem(value: l, child: Text(l)))
-          .toList(),
     );
   }
 

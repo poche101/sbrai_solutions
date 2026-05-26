@@ -6,8 +6,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
 import 'app_localizations_en.dart';
-import 'app_localizations_es.dart';
 import 'app_localizations_fr.dart';
+import 'app_localizations_ha.dart';
+import 'app_localizations_ig.dart';
+import 'app_localizations_yo.dart';
 
 // ignore_for_file: type=lint
 
@@ -96,8 +98,10 @@ abstract class AppLocalizations {
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
-    Locale('es'),
     Locale('fr'),
+    Locale('ha'),
+    Locale('ig'),
+    Locale('yo'),
   ];
 
   /// No description provided for @appTitle.
@@ -723,6 +727,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Required for verified badge'**
   String get businessVerificationRequired;
+
+  /// No description provided for @sellerInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'Seller Information'**
+  String get sellerInformation;
+
+  /// No description provided for @memberSince.
+  ///
+  /// In en, this message translates to:
+  /// **'Member since'**
+  String get memberSince;
+
+  /// No description provided for @safetyTips.
+  ///
+  /// In en, this message translates to:
+  /// **'Sbrai Safety Tips'**
+  String get safetyTips;
+
+  /// No description provided for @safetyTip1.
+  ///
+  /// In en, this message translates to:
+  /// **'Do not pay in advance until materials are delivered to your site'**
+  String get safetyTip1;
+
+  /// No description provided for @safetyTip2.
+  ///
+  /// In en, this message translates to:
+  /// **'Always inspect products before making payment'**
+  String get safetyTip2;
+
+  /// No description provided for @safetyTip3.
+  ///
+  /// In en, this message translates to:
+  /// **'Meet sellers in public or safe locations'**
+  String get safetyTip3;
+
+  /// No description provided for @safetyTip4.
+  ///
+  /// In en, this message translates to:
+  /// **'Report suspicious activity to Sbrai support'**
+  String get safetyTip4;
+
+  /// No description provided for @showOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Original'**
+  String get showOriginal;
+
+  /// No description provided for @translate.
+  ///
+  /// In en, this message translates to:
+  /// **'Translate'**
+  String get translate;
+
+  /// No description provided for @noCategoriesAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No categories available'**
+  String get noCategoriesAvailable;
+
+  /// No description provided for @noProductsInCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'No products in {categoryName} yet'**
+  String noProductsInCategory(String categoryName);
+
+  /// No description provided for @guestUser.
+  ///
+  /// In en, this message translates to:
+  /// **'Guest User'**
+  String get guestUser;
+
+  /// No description provided for @guestEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'guest@example.com'**
+  String get guestEmail;
 }
 
 class _AppLocalizationsDelegate
@@ -736,7 +818,7 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['en', 'es', 'fr'].contains(locale.languageCode);
+      <String>['en', 'fr', 'ha', 'ig', 'yo'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
@@ -747,10 +829,14 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   switch (locale.languageCode) {
     case 'en':
       return AppLocalizationsEn();
-    case 'es':
-      return AppLocalizationsEs();
     case 'fr':
       return AppLocalizationsFr();
+    case 'ha':
+      return AppLocalizationsHa();
+    case 'ig':
+      return AppLocalizationsIg();
+    case 'yo':
+      return AppLocalizationsYo();
   }
 
   throw FlutterError(

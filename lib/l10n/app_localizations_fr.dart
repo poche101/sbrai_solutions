@@ -243,7 +243,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get french => 'Français';
 
   @override
-  String get selectLanguage => 'Select Language';
+  String get selectLanguage => 'Choisir la langue';
 
   @override
   String get trending => 'Tendances';
@@ -319,4 +319,46 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get businessVerificationRequired => 'Requis pour le badge vérifié';
+
+  @override
+  String get sellerInformation => 'Seller Information';
+
+  @override
+  String get memberSince => 'Member since';
+
+  @override
+  String get safetyTips => 'Sbrai Safety Tips';
+
+  @override
+  String get safetyTip1 =>
+      'Do not pay in advance until materials are delivered to your site';
+
+  @override
+  String get safetyTip2 => 'Always inspect products before making payment';
+
+  @override
+  String get safetyTip3 => 'Meet sellers in public or safe locations';
+
+  @override
+  String get safetyTip4 => 'Report suspicious activity to Sbrai support';
+
+  @override
+  String get showOriginal => 'Show Original';
+
+  @override
+  String get translate => 'Translate';
+
+  @override
+  String get noCategoriesAvailable => 'Aucune catégorie disponible';
+
+  @override
+  String noProductsInCategory(String categoryName) {
+    return 'Aucun produit dans $categoryName pour le moment';
+  }
+
+  @override
+  String get guestUser => 'Utilisateur Invité';
+
+  @override
+  String get guestEmail => 'invite@example.com';
 }

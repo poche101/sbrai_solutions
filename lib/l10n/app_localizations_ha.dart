@@ -4,9 +4,9 @@ import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
 
-/// The translations for English (`en`).
-class AppLocalizationsEn extends AppLocalizations {
-  AppLocalizationsEn([String locale = 'en']) : super(locale);
+/// The translations for Hausa (`ha`).
+class AppLocalizationsHa extends AppLocalizations {
+  AppLocalizationsHa([String locale = 'ha']) : super(locale);
 
   @override
   String get appTitle => 'Sbrai Solutions';
@@ -39,7 +39,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kyc => 'KYC Verification';
 
   @override
-  String get vendor => 'Vendor';
+  String get vendor => 'Mai sayarwa';
 
   @override
   String get verified => 'Verified';
@@ -132,7 +132,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get product => 'Product';
 
   @override
-  String get service => 'Service';
+  String get service => 'Sabis';
 
   @override
   String get property => 'Property';
@@ -210,28 +210,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get secureTransactions => 'Secure your transactions';
 
   @override
-  String get call => 'Call';
+  String get call => 'Kira';
 
   @override
-  String get chat => 'Chat';
+  String get chat => 'Hira';
 
   @override
   String get view => 'View';
 
   @override
-  String get items => 'items';
+  String get items => 'abubuwa';
 
   @override
-  String get noItemsFound => 'No items found.';
+  String get noItemsFound => 'Ba a sami komai ba';
 
   @override
   String get resultsFor => 'Results for';
 
   @override
-  String get recommendedForYou => 'Recommended for You';
+  String get recommendedForYou => 'Abubuwan da aka ba da shawarar';
 
   @override
-  String get iAmLookingFor => 'I am looking for...';
+  String get iAmLookingFor => 'Ina neman...';
 
   @override
   String get english => 'English';
@@ -252,7 +252,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addedToFavorites => 'added to favorites';
 
   @override
-  String get allNigeria => 'All Nigeria';
+  String get allNigeria => 'Duk Najeriya';
 
   @override
   String get categorySharpSand => 'Sharp Sand';
@@ -349,16 +349,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get translate => 'Translate';
 
   @override
-  String get noCategoriesAvailable => 'No categories available';
+  String get noCategoriesAvailable => 'Babu rukuni da ake da su';
 
   @override
   String noProductsInCategory(String categoryName) {
-    return 'No products in $categoryName yet';
+    return 'Babu samfura a cikin $categoryName tukuna';
   }
 
   @override
-  String get guestUser => 'Guest User';
+  String get guestUser => 'Bako';
 
   @override
-  String get guestEmail => 'guest@example.com';
+  String get guestEmail => 'bako@example.com';
 }

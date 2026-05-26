@@ -103,5 +103,25 @@
   "identityVerification": "Identity Verification",
   "businessVerification": "Business Verification",
   "ninRequired": "NIN required",
-  "businessVerificationRequired": "Required for verified badge"
+  "businessVerificationRequired": "Required for verified badge",
+  "sellerInformation": "Seller Information",
+  "memberSince": "Member since",
+  "safetyTips": "Sbrai Safety Tips",
+  "safetyTip1": "Do not pay in advance until materials are delivered to your site",
+  "safetyTip2": "Always inspect products before making payment",
+  "safetyTip3": "Meet sellers in public or safe locations",
+  "safetyTip4": "Report suspicious activity to Sbrai support",
+  "showOriginal": "Show Original",
+  "translate": "Translate",
+  "noCategoriesAvailable": "No categories available",
+  "noProductsInCategory": "No products in {categoryName} yet",
+  "@noProductsInCategory": {
+    "placeholders": {
+      "categoryName": {
+        "type": "String"
+      }
+    }
+  },
+  "guestUser": "Guest User",
+  "guestEmail": "guest@example.com"
 }

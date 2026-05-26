@@ -14,7 +14,6 @@ class LanguageSelectionScreen extends StatelessWidget {
       listen: false,
     );
 
-    // 1. Initialize the localization variable
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
@@ -29,71 +28,78 @@ class LanguageSelectionScreen extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 100),
-              const Icon(Icons.language, size: 80, color: Colors.white),
-              const SizedBox(height: 20),
-              // 2. Use the variable here to fix the "unused" warning
-              Text(
-                l10n?.selectLanguage ?? 'Select Language',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                const SizedBox(height: 60),
+                const Icon(Icons.language, size: 80, color: Colors.white),
+                const SizedBox(height: 20),
+                Text(
+                  l10n?.selectLanguage ?? 'Select Language',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 40),
-              _buildLanguageButton(
-                context: context,
-                flag: '🇬🇧',
-                language: 'English',
-                locale: const Locale('en'),
-                onTap: () {
-                  languageProvider.setLanguage(const Locale('en'));
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AccountSelectionScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildLanguageButton(
-                context: context,
-                flag: '🇪🇸',
-                language: 'Español',
-                locale: const Locale('es'),
-                onTap: () {
-                  languageProvider.setLanguage(const Locale('es'));
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AccountSelectionScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildLanguageButton(
-                context: context,
-                flag: '🇫🇷',
-                language: 'Français',
-                locale: const Locale('fr'),
-                onTap: () {
-                  languageProvider.setLanguage(const Locale('fr'));
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AccountSelectionScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
+                const SizedBox(height: 40),
+                _buildLanguageButton(
+                  context: context,
+                  flag: '🇬🇧',
+                  language: 'English',
+                  locale: const Locale('en'),
+                  onTap: () {
+                    languageProvider.setLanguage(const Locale('en'));
+                    _navigateToHome(context);
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildLanguageButton(
+                  context: context,
+                  flag: '🇳🇬',
+                  language: 'Yorùbá',
+                  locale: const Locale('yo'),
+                  onTap: () {
+                    languageProvider.setLanguage(const Locale('yo'));
+                    _navigateToHome(context);
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildLanguageButton(
+                  context: context,
+                  flag: '🇫🇷',
+                  language: 'Français',
+                  locale: const Locale('fr'),
+                  onTap: () {
+                    languageProvider.setLanguage(const Locale('fr'));
+                    _navigateToHome(context);
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildLanguageButton(
+                  context: context,
+                  flag: '🇪🇸',
+                  language: 'Español',
+                  locale: const Locale('es'),
+                  onTap: () {
+                    languageProvider.setLanguage(const Locale('es'));
+                    _navigateToHome(context);
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _navigateToHome(BuildContext context) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AccountSelectionScreen(),
       ),
     );
   }

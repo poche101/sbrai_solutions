@@ -1,0 +1,24 @@
+{
+  "@@locale": "ha",
+  "appTitle": "Sbrai Solutions",
+  "vendor": "Mai sayarwa",
+  "iAmLookingFor": "Ina neman...",
+  "allNigeria": "Duk Najeriya",
+  "recommendedForYou": "Abubuwan da aka ba da shawarar",
+  "items": "abubuwa",
+  "noItemsFound": "Ba a sami komai ba",
+  "service": "Sabis",
+  "call": "Kira",
+  "chat": "Hira",
+  "noCategoriesAvailable": "Babu rukuni da ake da su",
+  "noProductsInCategory": "Babu samfura a cikin {categoryName} tukuna",
+  "@noProductsInCategory": {
+    "placeholders": {
+      "categoryName": {
+        "type": "String"
+      }
+    }
+  },
+  "guestUser": "Bako",
+  "guestEmail": "bako@example.com"
+}

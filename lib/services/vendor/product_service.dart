@@ -9,6 +9,45 @@ class ProductService {
   final ApiService _apiService = ApiService();
 
   // ─────────────────────────────────────────────────────────────
+  // CATEGORIES SECTION
+  // ─────────────────────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getCategories() async {
+    try {
+      final response = await _apiService.get('/categories', isProtected: false);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      
+      if (data['success'] == true && data['data'] is Map) {
+        final grouped = data['data'] as Map<String, dynamic>;
+        final List<Map<String, dynamic>> loaded = [];
+
+        grouped.forEach((type, list) {
+          if (list is List) {
+            for (final cat in list) {
+              final name = cat['name']?.toString() ?? '';
+              final id = cat['id'] as int?;
+              final slug = cat['slug']?.toString() ?? '';
+              if (name.isNotEmpty && id != null) {
+                loaded.add({
+                  'id': id,
+                  'name': name,
+                  'type': type,
+                  'slug': slug,
+                });
+              }
+            }
+          }
+        });
+        return loaded;
+      }
+      return [];
+    } catch (e) {
+      debugPrint("❌ getCategories error: $e");
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // FAVORITES SECTION
   // ─────────────────────────────────────────────────────────────
 

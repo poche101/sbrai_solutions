@@ -78,10 +78,10 @@
   "english": "Anglais",
   "spanish": "Espagnol",
   "french": "Français",
+  "selectLanguage": "Choisir la langue",
   "trending": "Tendances",
   "addedToFavorites": "ajouté aux favoris",
   "allNigeria": "Tout le Nigeria",
-
   "categorySharpSand": "Sable Fin",
   "categoryGranite": "Granit",
   "categoryBlocks": "Blocs",
@@ -105,5 +105,16 @@
   "identityVerification": "Vérification d'Identité",
   "businessVerification": "Vérification d'Entreprise",
   "ninRequired": "NIN requis",
-  "businessVerificationRequired": "Requis pour le badge vérifié"
+  "businessVerificationRequired": "Requis pour le badge vérifié",
+  "noCategoriesAvailable": "Aucune catégorie disponible",
+  "noProductsInCategory": "Aucun produit dans {categoryName} pour le moment",
+  "@noProductsInCategory": {
+    "placeholders": {
+      "categoryName": {
+        "type": "String"
+      }
+    }
+  },
+  "guestUser": "Utilisateur Invité",
+  "guestEmail": "invite@example.com"
 }
