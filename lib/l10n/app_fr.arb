@@ -106,6 +106,13 @@
   "businessVerification": "Vérification d'Entreprise",
   "ninRequired": "NIN requis",
   "businessVerificationRequired": "Requis pour le badge vérifié",
+  "sellerInformation": "Informations sur le Vendeur",
+  "memberSince": "Membre depuis",
+  "safetyTips": "Conseils de Sécurité Sbrai",
+  "safetyTip1": "Ne payez pas à l'avance tant que les matériaux ne sont pas livrés sur votre site",
+  "safetyTip2": "Inspectez toujours les produits avant d'effectuer le paiement",
+  "safetyTip3": "Rencontrez les vendeurs dans des lieux publics ou sûrs",
+  "safetyTip4": "Signalez toute activité suspecte au support Sbrai",
   "noCategoriesAvailable": "Aucune catégorie disponible",
   "noProductsInCategory": "Aucun produit dans {categoryName} pour le moment",
   "@noProductsInCategory": {

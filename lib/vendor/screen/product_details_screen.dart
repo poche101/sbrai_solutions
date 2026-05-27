@@ -6,8 +6,7 @@ import 'package:sbrai_solutions/services/chat_service.dart';
 import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sbrai_solutions/l10n/app_localizations.dart';
-import 'package:sbrai_solutions/services/translation_service.dart';
-import 'package:sbrai_solutions/providers/language_provider.dart';
+import 'package:sbrai_solutions/mixins/translation_mixin.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final Product product;
@@ -23,78 +22,53 @@ class ProductDetailsScreen extends StatefulWidget {
   State<ProductDetailsScreen> createState() => _ProductDetailsScreenState();
 }
 
-class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
+class _ProductDetailsScreenState extends State<ProductDetailsScreen> with TranslationMixin<ProductDetailsScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-
-  // --- Translation state ---
-  String? _translatedName;
-  String? _translatedDescription;
-  bool _isTranslating = false;
-  Locale? _lastTranslatedLocale;
+  String? _translatedVendorName;
 
   @override
   void initState() {
     super.initState();
-    // Fetch translation for the initial locale
-    _translateDynamicContentIfNeeded();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _performTranslation());
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // When the locale changes (provider), re‑translate dynamic texts
-    _translateDynamicContentIfNeeded();
+    _performTranslation();
   }
 
-  /// Check if the current locale differs from the one we already translated,
-  /// and if so, fetch the cloud translations for name & description.
-  Future<void> _translateDynamicContentIfNeeded() async {
-    final currentLocale = context.read<LanguageProvider>().locale;
+  Future<void> _performTranslation() async {
+    await translateIfNeeded(
+      items: [widget.product],
+      onTranslate: (targetLang) async {
+        setState(() => isTranslating = true);
+        try {
+          final productKey = widget.product.id?.toString() ?? widget.product.name;
+          final vendorName = widget.product.vendorName ?? "Sbrai Vendor";
+          
+          final results = await Future.wait([
+            translateText(widget.product.name, targetLang),
+            if (widget.product.description?.isNotEmpty ?? false)
+              translateText(widget.product.description!, targetLang)
+            else
+              Future.value(null),
+            translateText(vendorName, targetLang),
+          ]);
 
-    // Already translated for this locale → nothing to do
-    if (_lastTranslatedLocale == currentLocale) return;
-
-    _lastTranslatedLocale = currentLocale;
-    final targetLang = currentLocale.languageCode;
-
-    // Don't translate if the target language is English (or whatever original)
-    // You can skip the API call entirely if you want, but let's be safe.
-    if (targetLang == 'en') {
-      setState(() {
-        _translatedName = null;
-        _translatedDescription = null;
-        _isTranslating = false;
-      });
-      return;
-    }
-
-    setState(() => _isTranslating = true);
-
-    try {
-      final service = TranslationService();
-      final results = await Future.wait([
-        service.translateText(widget.product.name, targetLang),
-        if (widget.product.description != null &&
-            widget.product.description!.isNotEmpty)
-          service.translateText(widget.product.description!, targetLang)
-        else
-          Future.value(null),
-      ]);
-
-      if (!mounted) return;
-      setState(() {
-        _translatedName = results[0];
-        _translatedDescription = results[1];
-        _isTranslating = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isTranslating = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Translation failed. Please try again.")),
-      );
-    }
+          if (mounted) {
+            setState(() {
+              if (results[0] != null) translatedNames[productKey] = results[0]!;
+              if (results[1] != null) translatedDescriptions[productKey] = results[1]!;
+              _translatedVendorName = results[2];
+            });
+          }
+        } finally {
+          if (mounted) setState(() => isTranslating = false);
+        }
+      },
+    );
   }
 
   @override
@@ -166,6 +140,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Widget build(BuildContext context) {
     final List<String> images = widget.product.imageUrls;
     final l10n = AppLocalizations.of(context)!;
+    final productKey = widget.product.id?.toString() ?? widget.product.name;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -182,7 +157,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        // No translate icon anymore – language is handled globally
         backgroundColor: Colors.white,
         elevation: 0.5,
       ),
@@ -251,14 +225,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Show translated name if available, otherwise original
-                        if (_isTranslating)
+                        if (isTranslating)
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 8.0),
-                            child: LinearProgressIndicator(),
+                            child: LinearProgressIndicator(minHeight: 2, color: Color(0xFFE85D22)),
                           ),
                         Text(
-                          _translatedName ?? widget.product.name,
+                          translatedNames[productKey] ?? widget.product.name,
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -321,7 +294,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _translatedDescription ??
+                          translatedDescriptions[productKey] ??
                               widget.product.description ??
                               "No description available.",
                           style: TextStyle(
@@ -371,8 +344,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                   Row(
                                     children: [
                                       Text(
-                                        widget.product.vendorName ??
-                                            "Sbrai Vendor",
+                                        _translatedVendorName ?? widget.product.vendorName ?? "Sbrai Vendor",
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 15,
@@ -479,7 +451,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  // Helper Widgets (unchanged)
   Widget _buildSafetyBullet(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
