@@ -16,8 +16,10 @@ class TranslationService {
     if (trimmedText.isEmpty) return text;
 
     try {
-      debugPrint("🔍 [Flutter] Requesting Translation for: '$trimmedText' to '$targetLanguageCode'");
-      
+      debugPrint(
+        "🔍 [Flutter] Requesting Translation for: '$trimmedText' to '$targetLanguageCode'",
+      );
+
       final response = await _apiService.post('/translate', {
         'text': trimmedText,
         'target_language': targetLanguageCode,
@@ -25,14 +27,16 @@ class TranslationService {
 
       final data = jsonDecode(response.body);
       debugPrint("🔍 [Flutter] Laravel Response Body: ${response.body}");
-      
+
       final result = data['translated_text'];
-      
+
       // Check if the result is identical to the input (often happens if target_lang == source_lang)
       if (result != null && result.trim() == trimmedText) {
-        debugPrint("ℹ️ [Flutter] Translation result is identical to original. (Target was: $targetLanguageCode)");
+        debugPrint(
+          "ℹ️ [Flutter] Translation result is identical to original. (Target was: $targetLanguageCode)",
+        );
       }
-      
+
       return result ?? text;
     } catch (e) {
       debugPrint("❌ [Flutter] Translation Error: $e");
@@ -51,7 +55,7 @@ class TranslationService {
 
       final data = jsonDecode(response.body);
       debugPrint("🔍 [Flutter] Language Detection Response: ${response.body}");
-      
+
       return data['language'] ?? 'en';
     } catch (e) {
       debugPrint("❌ [Flutter] Detection Error: $e");

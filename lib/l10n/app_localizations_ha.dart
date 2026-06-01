@@ -12,202 +12,202 @@ class AppLocalizationsHa extends AppLocalizations {
   String get appTitle => 'Sbrai Solutions';
 
   @override
-  String get home => 'Home';
+  String get home => 'Gida';
 
   @override
-  String get profile => 'Profile';
+  String get profile => 'Bayani';
 
   @override
-  String get settings => 'Settings';
+  String get settings => 'Saituna';
 
   @override
-  String get logout => 'Logout';
+  String get logout => 'Fita';
 
   @override
-  String get postAd => 'Post Ad';
+  String get postAd => 'Sanya Talla';
 
   @override
   String get dashboard => 'Dashboard';
 
   @override
-  String get favorites => 'Favorites';
+  String get favorites => 'Abubuwan Da aka Fi So';
 
   @override
-  String get messages => 'Messages';
+  String get messages => 'Sakonnin';
 
   @override
-  String get kyc => 'KYC Verification';
+  String get kyc => 'Tabbatar da KYC';
 
   @override
   String get vendor => 'Mai sayarwa';
 
   @override
-  String get verified => 'Verified';
+  String get verified => 'An tabbatar';
 
   @override
-  String get notVerified => 'Not Verified';
+  String get notVerified => 'Ba a tabbatar ba';
 
   @override
-  String get joined => 'Joined';
+  String get joined => 'Ya shiga';
 
   @override
-  String get rating => 'rating';
+  String get rating => 'ƙima';
 
   @override
-  String get step => 'Step';
+  String get step => 'Mataki';
 
   @override
-  String get ofText => 'of';
+  String get ofText => 'na';
 
   @override
-  String get postAdTitle => 'Post an Ad';
+  String get postAdTitle => 'Sanya Talla';
 
   @override
-  String get selectCategory => 'Select Category';
+  String get selectCategory => 'Zaɓi Rukunin';
 
   @override
-  String get uploadPhotos => 'Upload Photos';
+  String get uploadPhotos => 'Sanya Hotuna';
 
   @override
-  String get listingDetails => 'Listing Details';
+  String get listingDetails => 'Cikakken Bayani';
 
   @override
-  String get next => 'Next';
+  String get next => 'Na gaba';
 
   @override
-  String get back => 'Back';
+  String get back => 'Baya';
 
   @override
-  String get publish => 'Publish Ad Now';
+  String get publish => 'Sanya Talla Yanzu';
 
   @override
-  String get publishing => 'Publishing...';
+  String get publishing => 'Ana sanyawa...';
 
   @override
-  String get adPublished => 'Ad Published Successfully!';
+  String get adPublished => 'An Sanya Talla cikin Nasara!';
 
   @override
-  String get addPhotos => 'Add up to 5 photos';
+  String get addPhotos => 'Ƙara har hotuna 5';
 
   @override
-  String get addPhoto => 'Add';
+  String get addPhoto => 'Ƙara';
 
   @override
-  String get adTitle => 'Ad Title';
+  String get adTitle => 'Taken Talla';
 
   @override
-  String get description => 'Description';
+  String get description => 'Bayanin Samfura';
 
   @override
-  String get price => 'Price';
+  String get price => 'Farashi';
 
   @override
-  String get unit => 'Unit';
+  String get unit => 'Raka\'a';
 
   @override
-  String get location => 'Location';
+  String get location => 'Wuri';
 
   @override
-  String get bedrooms => 'Bedrooms';
+  String get bedrooms => 'Dakunan barci';
 
   @override
-  String get size => 'Size (Sqft)';
+  String get size => 'Girma (Sqft)';
 
   @override
-  String get listingType => 'Listing Type';
+  String get listingType => 'Nau\'in Talla';
 
   @override
-  String get category => 'Category';
+  String get category => 'Rukunin';
 
   @override
-  String get propertyType => 'Property Type';
+  String get propertyType => 'Nau\'in Kaya';
 
   @override
-  String get forRent => 'For Rent';
+  String get forRent => 'Na Haya';
 
   @override
-  String get forSale => 'For Sale';
+  String get forSale => 'Na Siyarwa';
 
   @override
-  String get product => 'Product';
+  String get product => 'Samfuri';
 
   @override
   String get service => 'Sabis';
 
   @override
-  String get property => 'Property';
+  String get property => 'Kaya';
 
   @override
-  String get email => 'Email';
+  String get email => 'Imel';
 
   @override
-  String get phone => 'Phone';
+  String get phone => 'Waya';
 
   @override
-  String get businessName => 'Business Name';
+  String get businessName => 'Sunan Kasuwanci';
 
   @override
-  String get businessAddress => 'Business Address';
+  String get businessAddress => 'Adireshin Kasuwanci';
 
   @override
-  String get accountInfo => 'Account Information';
+  String get accountInfo => 'Bayanin Asusun';
 
   @override
-  String get yourStats => 'Your Statistics';
+  String get yourStats => 'Ƙididdigar Ku';
 
   @override
-  String get activeListings => 'Active Listings';
+  String get activeListings => 'Tallace-tallacen da ke Aiki';
 
   @override
-  String get totalViews => 'Total Views';
+  String get totalViews => 'Jimillar Dubawa';
 
   @override
-  String get chats => 'Chats';
+  String get chats => 'Tattaunawa';
 
   @override
-  String get editProfile => 'Edit Profile';
+  String get editProfile => 'Gyara Bayani';
 
   @override
-  String get saveChanges => 'Save Changes';
+  String get saveChanges => 'Ajiye Canje-canje';
 
   @override
-  String get cancel => 'Cancel';
+  String get cancel => 'Soke';
 
   @override
-  String get fullName => 'Full Name';
+  String get fullName => 'Cikakken Suna';
 
   @override
-  String get ninVerification => 'NIN Verification';
+  String get ninVerification => 'Tabbatar da NIN';
 
   @override
-  String get enterNin => 'Enter your 11-digit NIN';
+  String get enterNin => 'Shigar da NIN dinka mai lambobi 11';
 
   @override
-  String get verifyNin => 'Verify NIN';
+  String get verifyNin => 'Tabbatar da NIN';
 
   @override
-  String get identityVerified => 'Identity verified successfully!';
+  String get identityVerified => 'An tabbatar da asali cikin nasara!';
 
   @override
-  String get verificationProgress => 'Verification Progress';
+  String get verificationProgress => 'Ci gaban Tabbatarwa';
 
   @override
-  String get secureAccount => 'Secure your account';
+  String get secureAccount => 'Amintar da asusunka';
 
   @override
-  String get whyVerify => 'Why verify your account?';
+  String get whyVerify => 'Me yasa za a tabbatar da asusunka?';
 
   @override
-  String get buildTrust => 'Build trust with buyers and sellers';
+  String get buildTrust => 'Gina amana tsakanin masu saya da masu sayarwa';
 
   @override
-  String get accessPremium => 'Access premium features';
+  String get accessPremium => 'Samun damar amfani da manyan fasaloli';
 
   @override
-  String get verifiedBadge => 'Get the verified badge';
+  String get verifiedBadge => 'Sami lambar tabbatarwa';
 
   @override
-  String get secureTransactions => 'Secure your transactions';
+  String get secureTransactions => 'Amintar da ma\'amalolinku';
 
   @override
   String get call => 'Kira';
@@ -216,7 +216,7 @@ class AppLocalizationsHa extends AppLocalizations {
   String get chat => 'Hira';
 
   @override
-  String get view => 'View';
+  String get view => 'Duba';
 
   @override
   String get items => 'abubuwa';
@@ -225,7 +225,7 @@ class AppLocalizationsHa extends AppLocalizations {
   String get noItemsFound => 'Ba a sami komai ba';
 
   @override
-  String get resultsFor => 'Results for';
+  String get resultsFor => 'Sakamako na';
 
   @override
   String get recommendedForYou => 'Abubuwan da aka ba da shawarar';
@@ -234,22 +234,22 @@ class AppLocalizationsHa extends AppLocalizations {
   String get iAmLookingFor => 'Ina neman...';
 
   @override
-  String get english => 'English';
+  String get english => 'Turanci';
 
   @override
-  String get spanish => 'Spanish';
+  String get spanish => 'Sifaniyanci';
 
   @override
-  String get french => 'French';
+  String get french => 'Faransanci';
 
   @override
-  String get selectLanguage => 'Select Language';
+  String get selectLanguage => 'Zaɓi Harshe';
 
   @override
-  String get trending => 'Trending';
+  String get trending => 'Abubuwan Yayi';
 
   @override
-  String get addedToFavorites => 'added to favorites';
+  String get addedToFavorites => 'an ƙara zuwa abubuwan da aka fi so';
 
   @override
   String get allNigeria => 'Duk Najeriya';
@@ -303,50 +303,51 @@ class AppLocalizationsHa extends AppLocalizations {
   String get categoryLand => 'Land';
 
   @override
-  String get emailVerification => 'Email Verification';
+  String get emailVerification => 'Tabbatar da Imel';
 
   @override
-  String get phoneVerification => 'Phone Verification';
+  String get phoneVerification => 'Tabbatar da Waya';
 
   @override
-  String get identityVerification => 'Identity Verification';
+  String get identityVerification => 'Tabbatar da Asali';
 
   @override
-  String get businessVerification => 'Business Verification';
+  String get businessVerification => 'Tabbatar da Kasuwanci';
 
   @override
-  String get ninRequired => 'NIN required';
+  String get ninRequired => 'Ana buƙatar NIN';
 
   @override
-  String get businessVerificationRequired => 'Required for verified badge';
+  String get businessVerificationRequired => 'Ana buƙata don lambar tabbatarwa';
 
   @override
-  String get sellerInformation => 'Seller Information';
+  String get sellerInformation => 'Bayanin Mai Sayarwa';
 
   @override
-  String get memberSince => 'Member since';
+  String get memberSince => 'Memba tun';
 
   @override
-  String get safetyTips => 'Sbrai Safety Tips';
+  String get safetyTips => 'Shawarwarin Tsaro na Sbrai';
 
   @override
-  String get safetyTip1 =>
-      'Do not pay in advance until materials are delivered to your site';
+  String get safetyTip1 => 'Kada ku biya kafin a kawo kayan aikinku';
 
   @override
-  String get safetyTip2 => 'Always inspect products before making payment';
+  String get safetyTip2 => 'Koyaushe ku bincika kayayyaki kafin yin biya';
 
   @override
-  String get safetyTip3 => 'Meet sellers in public or safe locations';
+  String get safetyTip3 =>
+      'Haɗu da masu sayarwa a wuraren da jama\'a suke ko wurare masu aminci';
 
   @override
-  String get safetyTip4 => 'Report suspicious activity to Sbrai support';
+  String get safetyTip4 =>
+      'Kai rahoton ayyukan da ba a amince da su ba ga goyon bayan Sbrai';
 
   @override
-  String get showOriginal => 'Show Original';
+  String get showOriginal => 'Nuna Na Asali';
 
   @override
-  String get translate => 'Translate';
+  String get translate => 'Fassara';
 
   @override
   String get noCategoriesAvailable => 'Babu rukuni da ake da su';

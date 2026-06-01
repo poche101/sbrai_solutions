@@ -51,7 +51,7 @@ class AppLocalizationsIg extends AppLocalizations {
   String get joined => 'Joined';
 
   @override
-  String get rating => 'rating';
+  String get rating => 'ọkwa';
 
   @override
   String get step => 'Step';
@@ -69,7 +69,7 @@ class AppLocalizationsIg extends AppLocalizations {
   String get uploadPhotos => 'Upload Photos';
 
   @override
-  String get listingDetails => 'Listing Details';
+  String get listingDetails => 'Nkọwa nke Ndepụta';
 
   @override
   String get next => 'Next';
@@ -96,7 +96,7 @@ class AppLocalizationsIg extends AppLocalizations {
   String get adTitle => 'Ad Title';
 
   @override
-  String get description => 'Description';
+  String get description => 'Nkọwa';
 
   @override
   String get price => 'Price';
@@ -225,7 +225,7 @@ class AppLocalizationsIg extends AppLocalizations {
   String get noItemsFound => 'Achọtaghị ihe ọ bụla';
 
   @override
-  String get resultsFor => 'Results for';
+  String get resultsFor => 'Nsonaazụ maka';
 
   @override
   String get recommendedForYou => 'A tụrụ aro maka gị';
@@ -321,26 +321,26 @@ class AppLocalizationsIg extends AppLocalizations {
   String get businessVerificationRequired => 'Required for verified badge';
 
   @override
-  String get sellerInformation => 'Seller Information';
+  String get sellerInformation => 'Ozi Onye Na-ere Ahịa';
 
   @override
-  String get memberSince => 'Member since';
+  String get memberSince => 'Onye otu kemgbe';
 
   @override
-  String get safetyTips => 'Sbrai Safety Tips';
+  String get safetyTips => 'Ndụmọdụ Nchebe Sbrai';
 
   @override
-  String get safetyTip1 =>
-      'Do not pay in advance until materials are delivered to your site';
+  String get safetyTip1 => 'Akwụla ụgwọ n\'ihu tupu ebubata ngwa ahịa gị';
 
   @override
-  String get safetyTip2 => 'Always inspect products before making payment';
+  String get safetyTip2 => 'Nyochaa ngwa ahịa mgbe niile tupu ị kwụọ ụgwọ';
 
   @override
-  String get safetyTip3 => 'Meet sellers in public or safe locations';
+  String get safetyTip3 =>
+      'Zute ndị na-ere ahịa n\'ebe ọha na eze ma ọ bụ ebe nchekwa';
 
   @override
-  String get safetyTip4 => 'Report suspicious activity to Sbrai support';
+  String get safetyTip4 => 'Kpesa ihe enyo ọ bụla n\'aka nkwado Sbrai';
 
   @override
   String get showOriginal => 'Show Original';

@@ -9,8 +9,10 @@ import 'package:path/path.dart';
 
 class ApiService {
   static const String baseUrl = "https://sbraisolutions.com/api/v1";
-  static const String _tokenKey = 'auth_token';
 
+  static const String _buyerTokenKey = 'auth_token';
+  static const String _vendorTokenKey = 'vendor_auth_token';
+  static const String _idKey = 'user_id';
   static const String _nameKey = 'user_name';
   static const String _emailKey = 'user_email';
   static const String _photoKey = 'user_photo';
@@ -21,7 +23,13 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+    // serverClientId is required to get an idToken that the backend can verify.
+    // Get this from Firebase Console → your project → Authentication →
+    // Sign-in method → Google → Web SDK configuration → Web client ID.
+    // serverClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+  );
 
   // ---------------------------------------------------------------------------
   // USER DATA MANAGEMENT
@@ -29,7 +37,6 @@ class ApiService {
 
   Future<void> saveUserData(Map<String, dynamic> userData) async {
     final prefs = await SharedPreferences.getInstance();
-
     await prefs.setString(
       _nameKey,
       userData['full_name'] ?? userData['name'] ?? '',
@@ -37,16 +44,17 @@ class ApiService {
     await prefs.setString(_emailKey, userData['email'] ?? '');
     await prefs.setString(_phoneKey, userData['phone']?.toString() ?? '');
     await prefs.setString(_addressKey, userData['address'] ?? '');
-
+    final id = userData['id']?.toString() ?? '';
+    if (id.isNotEmpty) await prefs.setString(_idKey, id);
     final String? photoUrl = userData['photo'] ?? userData['profile_photo'];
     if (photoUrl != null) await prefs.setString(_photoKey, photoUrl);
-
-    debugPrint("👤 User profile data cached.");
+    debugPrint("👤 User data cached (id: $id).");
   }
 
   Future<Map<String, String?>> getUserData() async {
     final prefs = await SharedPreferences.getInstance();
     return {
+      'id': prefs.getString(_idKey),
       'name': prefs.getString(_nameKey),
       'email': prefs.getString(_emailKey),
       'photo': prefs.getString(_photoKey),
@@ -57,132 +65,166 @@ class ApiService {
 
   Future<void> saveToken(String token, {required String userType}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
-    debugPrint("🔐 Auth token saved for $userType.");
+    final key = userType == 'vendor' ? _vendorTokenKey : _buyerTokenKey;
+    await prefs.setString(key, token);
+    debugPrint("🔐 Token saved for $userType.");
   }
 
-  Future<String?> getToken() async {
+  Future<String?> getToken({String? userType}) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    if (userType == 'vendor') return prefs.getString(_vendorTokenKey);
+    if (userType == 'buyer') return prefs.getString(_buyerTokenKey);
+    final vendor = prefs.getString(_vendorTokenKey);
+    if (vendor != null && vendor.isNotEmpty) return vendor;
+    final buyer = prefs.getString(_buyerTokenKey);
+    if (buyer != null && buyer.isNotEmpty) return buyer;
+    return null;
   }
 
-  Future<void> clearToken() async {
+  Future<void> clearToken({String? userType}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
+    if (userType == 'vendor') {
+      await prefs.remove(_vendorTokenKey);
+      debugPrint("🔐 Vendor token cleared.");
+      return;
+    }
+    if (userType == 'buyer') {
+      await prefs.remove(_buyerTokenKey);
+      debugPrint("🔐 Buyer token cleared.");
+      return;
+    }
+    await prefs.remove(_vendorTokenKey);
+    await prefs.remove(_buyerTokenKey);
+    await prefs.remove(_idKey);
     await prefs.remove(_nameKey);
     await prefs.remove(_emailKey);
     await prefs.remove(_photoKey);
     await prefs.remove(_phoneKey);
     await prefs.remove(_addressKey);
-    debugPrint("🔐 Local auth and user data cleared.");
+    debugPrint("🔐 All auth data cleared.");
   }
 
   // ---------------------------------------------------------------------------
   // AUTH
   // ---------------------------------------------------------------------------
 
-  Future<http.Response> registerBuyer(Map<String, dynamic> data) async {
-    return await post(
-      'auth/register/buyer',
-      data,
-      isProtected: false,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> registerBuyer(Map<String, dynamic> data) async =>
+      await post(
+        'auth/register/buyer',
+        data,
+        isProtected: false,
+        userType: 'buyer',
+      );
 
-  Future<http.Response> registerVendor(Map<String, dynamic> data) async {
-    return await post(
-      'auth/register/vendor',
-      data,
-      isProtected: false,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> registerVendor(Map<String, dynamic> data) async =>
+      await post(
+        'auth/register/vendor',
+        data,
+        isProtected: false,
+        userType: 'vendor',
+      );
 
-  Future<http.Response> loginBuyer(Map<String, dynamic> data) async {
-    return await post(
-      'auth/login/buyer',
-      data,
-      isProtected: false,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> loginBuyer(Map<String, dynamic> data) async =>
+      await post(
+        'auth/login/buyer',
+        data,
+        isProtected: false,
+        userType: 'buyer',
+      );
 
-  Future<http.Response> loginVendor(Map<String, dynamic> data) async {
-    return await post(
-      'auth/login/vendor',
-      data,
-      isProtected: false,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> loginVendor(Map<String, dynamic> data) async =>
+      await post(
+        'auth/login/vendor',
+        data,
+        isProtected: false,
+        userType: 'vendor',
+      );
 
-  Future<void> logout() async {
+  Future<void> logout({String? userType}) async {
     try {
       await post(
         'auth/logout',
         {},
         isProtected: true,
-        userType: 'buyer',
+        userType: userType ?? 'buyer',
       ).timeout(const Duration(seconds: 5));
     } catch (e) {
       debugPrint("⚠️ Logout API call failed (ignored): $e");
     } finally {
       await _googleSignIn.signOut();
-      await clearToken();
+      await clearToken(userType: userType);
     }
   }
 
-  Future<http.Response> getMe() async {
-    return await get('auth/me', isProtected: true, userType: 'buyer');
-  }
+  Future<http.Response> getMe() async =>
+      await get('auth/me', isProtected: true, userType: 'buyer');
 
-  Future<http.Response> saveFcmToken(String fcmToken) async {
-    return await post(
-      'auth/fcm-token',
-      {'fcm_token': fcmToken},
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> saveFcmToken(String fcmToken) async => await post(
+    'auth/fcm-token',
+    {'fcm_token': fcmToken},
+    isProtected: true,
+    userType: 'buyer',
+  );
 
   // ---------------------------------------------------------------------------
   // SOCIAL AUTH
   // ---------------------------------------------------------------------------
 
-  Future<http.Response?> signInWithGoogle() async {
+  /// Signs in with Google and posts the ID token to the backend.
+  /// [userType] — 'buyer' or 'vendor' — is sent to the backend so it knows
+  /// which role to assign to a newly created account.
+  Future<http.Response?> signInWithGoogle({String userType = 'buyer'}) async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return null;
+      if (googleUser == null) return null; // user cancelled
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
-      final String? token = googleAuth.accessToken;
-      if (token == null) throw "Failed to retrieve Google access token.";
 
-      return await socialLogin('google', token);
+      // Backend (SocialAuthController) validates id_token via Socialite.
+      // accessToken is a Google API token — NOT the same thing.
+      final String? idToken = googleAuth.idToken;
+      if (idToken == null) {
+        // idToken is null when serverClientId is missing from GoogleSignIn().
+        // Uncomment and set serverClientId at the top of this file.
+        throw "Google idToken is null. Make sure serverClientId is set in GoogleSignIn().";
+      }
+
+      return await socialLogin('google', idToken, userType: userType);
     } catch (e) {
       debugPrint("❌ Google Sign-In error: $e");
       rethrow;
     }
   }
 
-  Future<http.Response> socialLogin(String provider, String accessToken) async {
+  /// Posts the provider token to the backend and saves the returned token.
+  Future<http.Response> socialLogin(
+    String provider,
+    String idToken, {
+    String userType = 'buyer',
+  }) async {
     try {
       final response = await post(
         'auth/social/$provider',
-        {'access_token': accessToken},
+        {
+          'id_token': idToken, // backend expects id_token
+          'user_type': userType, // backend requires user_type
+        },
         isProtected: false,
-        userType: 'buyer',
+        userType: userType,
       );
 
       final responseData = jsonDecode(response.body);
-      if (response.statusCode == 200 && responseData['success'] == true) {
-        await saveToken(
-          responseData['data']['access_token'],
-          userType: 'buyer',
-        );
-        if (responseData['data']['user'] != null) {
+
+      // Backend returns { status: true, data: { token, user } }
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          responseData['status'] == true) {
+        final token = responseData['data']?['token']?.toString();
+        if (token != null) {
+          await saveToken(token, userType: userType);
+          debugPrint("🔐 Social login token saved for $userType.");
+        }
+        if (responseData['data']?['user'] != null) {
           await saveUserData(responseData['data']['user']);
         }
       }
@@ -197,50 +239,50 @@ class ApiService {
   // BUYER PROFILE
   // ---------------------------------------------------------------------------
 
-  Future<http.Response> getBuyerProfile() async {
-    return await get('buyers/profile', isProtected: true, userType: 'buyer');
-  }
+  Future<http.Response> getBuyerProfile() async =>
+      await get('buyers/profile', isProtected: true, userType: 'buyer');
 
-  Future<http.Response> updateBuyerProfile(Map<String, dynamic> data) async {
-    return await put(
-      'buyers/profile/update',
-      data,
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> updateBuyerProfile(Map<String, dynamic> data) async =>
+      await put(
+        'buyers/profile/update',
+        data,
+        isProtected: true,
+        userType: 'buyer',
+      );
 
-  /// Laravel route: POST api/v1/buyers/profile/upload-photo
-  Future<http.Response> uploadBuyerPhoto(File imageFile) async {
-    return await postMultipart(
-      'buyers/profile/upload-photo',
-      {},
-      filePath: imageFile.path,
-      fileField: 'profile_photo',
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> uploadBuyerPhoto(File imageFile) async =>
+      await postMultipart(
+        'buyers/profile/upload-photo',
+        {},
+        filePath: imageFile.path,
+        fileField: 'profile_photo',
+        isProtected: true,
+        userType: 'buyer',
+      );
 
   // ---------------------------------------------------------------------------
   // FAVORITES
   // ---------------------------------------------------------------------------
 
-  Future<http.Response> getFavorites() async {
-    return await get('buyers/favorites', isProtected: true, userType: 'buyer');
-  }
+  Future<http.Response> getFavorites() async =>
+      await get('buyers/favorites', isProtected: true, userType: 'buyer');
 
-  Future<http.Response> removeFavorite(int adId) async {
-    return await delete(
-      'buyers/favorites/$adId',
+  /// Toggles favorite — adds if not favorited, removes if already favorited.
+  Future<http.Response> toggleFavorite(int adId) async {
+    debugPrint("⭐ Toggling favorite for ad ID: $adId");
+    return await post(
+      'buyers/ads/$adId/favorite',
+      {},
       isProtected: true,
       userType: 'buyer',
     );
   }
 
-  Future<http.Response> toggleFavorite(int adId) async {
+  /// Remove favorite — uses the same toggle endpoint.
+  Future<http.Response> removeFavorite(int adId) async {
+    debugPrint("🗑️ Removing favorite for ad ID: $adId");
     return await post(
-      'ads/$adId/favorite',
+      'buyers/ads/$adId/favorite',
       {},
       isProtected: true,
       userType: 'buyer',
@@ -248,7 +290,7 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
-  // ADS (public)
+  // ADS
   // ---------------------------------------------------------------------------
 
   Future<http.Response> getAds({Map<String, String>? queryParams}) async {
@@ -258,74 +300,48 @@ class ApiService {
     return await get(endpoint, isProtected: false, userType: 'buyer');
   }
 
-  Future<http.Response> getAd(int id) async {
-    return await get('ads/$id', isProtected: false, userType: 'buyer');
-  }
+  Future<http.Response> getAd(int id) async =>
+      await get('ads/$id', isProtected: false, userType: 'buyer');
 
-  Future<http.Response> recordAdView(int adId) async {
-    return await post(
-      'ads/$adId/view',
-      {},
-      isProtected: false,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> recordAdView(int adId) async =>
+      await post('ads/$adId/view', {}, isProtected: false, userType: 'buyer');
 
   // ---------------------------------------------------------------------------
   // CATEGORIES
   // ---------------------------------------------------------------------------
 
-  Future<http.Response> getCategories() async {
-    return await get('categories', isProtected: false, userType: 'buyer');
-  }
+  Future<http.Response> getCategories() async =>
+      await get('categories', isProtected: false, userType: 'buyer');
 
-  Future<http.Response> getCategoriesByType(String type) async {
-    return await get('categories/$type', isProtected: false, userType: 'buyer');
-  }
+  Future<http.Response> getCategoriesByType(String type) async =>
+      await get('categories/$type', isProtected: false, userType: 'buyer');
 
   // ---------------------------------------------------------------------------
   // KYC
   // ---------------------------------------------------------------------------
 
-  Future<http.Response> getKycStatus() async {
-    return await get('kyc/status', isProtected: true, userType: 'buyer');
-  }
+  Future<http.Response> getKycStatus() async =>
+      await get('kyc/status', isProtected: true, userType: 'buyer');
 
-  Future<http.Response> sendEmailOtp() async {
-    return await post(
-      'kyc/email/send',
-      {},
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> sendEmailOtp() async =>
+      await post('kyc/email/send', {}, isProtected: true, userType: 'buyer');
 
-  Future<http.Response> verifyEmail(String code) async {
-    return await post(
-      'kyc/email/verify',
-      {'code': code},
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> verifyEmail(String code) async => await post(
+    'kyc/email/verify',
+    {'code': code},
+    isProtected: true,
+    userType: 'buyer',
+  );
 
-  Future<http.Response> sendPhoneOtp() async {
-    return await post(
-      'kyc/phone/send',
-      {},
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> sendPhoneOtp() async =>
+      await post('kyc/phone/send', {}, isProtected: true, userType: 'buyer');
 
-  Future<http.Response> verifyPhone(String otp) async {
-    return await post(
-      'kyc/phone/verify',
-      {'code': otp},
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> verifyPhone(String otp) async => await post(
+    'kyc/phone/verify',
+    {'code': otp},
+    isProtected: true,
+    userType: 'buyer',
+  );
 
   Future<http.Response> verifyIdentity({
     required String nin,
@@ -353,42 +369,31 @@ class ApiService {
   // CHATS
   // ---------------------------------------------------------------------------
 
-  Future<http.Response> getChats() async {
-    return await get('chats', isProtected: true, userType: 'buyer');
-  }
+  Future<http.Response> getChats() async =>
+      await get('chats', isProtected: true, userType: 'buyer');
 
-  Future<http.Response> startChat(Map<String, dynamic> data) async {
-    return await post('chats', data, isProtected: true, userType: 'buyer');
-  }
+  Future<http.Response> startChat(Map<String, dynamic> data) async =>
+      await post('chats', data, isProtected: true, userType: 'buyer');
 
-  Future<http.Response> getChatMessages(int chatId) async {
-    return await get(
-      'chats/$chatId/messages',
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> getChatMessages(int chatId) async =>
+      await get('chats/$chatId/messages', isProtected: true, userType: 'buyer');
 
   Future<http.Response> sendChatMessage(
     int chatId,
     Map<String, dynamic> data,
-  ) async {
-    return await post(
-      'chats/$chatId/messages',
-      data,
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  ) async => await post(
+    'chats/$chatId/messages',
+    data,
+    isProtected: true,
+    userType: 'buyer',
+  );
 
-  Future<http.Response> markChatRead(int chatId) async {
-    return await post(
-      'chats/$chatId/read',
-      {},
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> markChatRead(int chatId) async => await post(
+    'chats/$chatId/read',
+    {},
+    isProtected: true,
+    userType: 'buyer',
+  );
 
   // ---------------------------------------------------------------------------
   // CALLS
@@ -397,176 +402,143 @@ class ApiService {
   Future<http.Response> getCallToken({
     required String channelName,
     required int uid,
-  }) async {
-    return await post(
-      'calls/token',
-      {'channel_name': channelName, 'uid': uid},
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  }) async => await post(
+    'calls/token',
+    {'channel_name': channelName, 'uid': uid},
+    isProtected: true,
+    userType: 'buyer',
+  );
 
   Future<http.Response> initiateCall({
     required int receiverId,
     required String channelName,
     required String callerName,
     required String callType,
-  }) async {
-    return await post(
-      'calls/initiate',
-      {
-        'receiver_id': receiverId,
-        'channel_name': channelName,
-        'caller_name': callerName,
-        'call_type': callType,
-      },
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  }) async => await post(
+    'calls/initiate',
+    {
+      'receiver_id': receiverId,
+      'channel_name': channelName,
+      'caller_name': callerName,
+      'call_type': callType,
+    },
+    isProtected: true,
+    userType: 'buyer',
+  );
 
   Future<http.Response> endCall({
     required int receiverId,
     required String channelName,
-  }) async {
-    return await post(
-      'calls/end',
-      {'receiver_id': receiverId, 'channel_name': channelName},
-      isProtected: true,
-      userType: 'buyer',
-    );
-  }
+  }) async => await post(
+    'calls/end',
+    {'receiver_id': receiverId, 'channel_name': channelName},
+    isProtected: true,
+    userType: 'buyer',
+  );
 
   // ---------------------------------------------------------------------------
   // VENDOR
   // ---------------------------------------------------------------------------
 
-  Future<http.Response> getVendorDashboard() async {
-    return await get('vendor/dashboard', isProtected: true, userType: 'vendor');
-  }
+  Future<http.Response> getVendorDashboard() async =>
+      await get('vendor/dashboard', isProtected: true, userType: 'vendor');
 
-  Future<http.Response> getVendorAnalytics() async {
-    return await get('vendor/analytics', isProtected: true, userType: 'vendor');
-  }
+  Future<http.Response> getVendorAnalytics() async =>
+      await get('vendor/analytics', isProtected: true, userType: 'vendor');
 
-  Future<http.Response> getVendorProfile() async {
-    return await get('vendor/profile', isProtected: true, userType: 'vendor');
-  }
+  Future<http.Response> getVendorProfile() async =>
+      await get('vendor/profile', isProtected: true, userType: 'vendor');
 
-  Future<http.Response> updateVendorProfile(Map<String, dynamic> data) async {
-    return await patch(
-      'vendor/profile',
-      data,
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> updateVendorProfile(Map<String, dynamic> data) async =>
+      await patch(
+        'vendor/profile',
+        data,
+        isProtected: true,
+        userType: 'vendor',
+      );
 
-  /// Laravel route: POST api/v1/vendor/profile/photo
-  Future<http.Response> uploadVendorPhoto(File imageFile) async {
-    return await postMultipart(
-      'vendor/profile/photo',
-      {},
-      filePath: imageFile.path,
-      fileField: 'photo',
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> uploadVendorPhoto(File imageFile) async =>
+      await postMultipart(
+        'vendor/profile/photo',
+        {},
+        filePath: imageFile.path,
+        fileField: 'photo',
+        isProtected: true,
+        userType: 'vendor',
+      );
 
-  Future<http.Response> uploadVendorLogo(File imageFile) async {
-    return await postMultipart(
-      'vendor/profile/logo',
-      {},
-      filePath: imageFile.path,
-      fileField: 'logo',
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> uploadVendorLogo(File imageFile) async =>
+      await postMultipart(
+        'vendor/profile/logo',
+        {},
+        filePath: imageFile.path,
+        fileField: 'logo',
+        isProtected: true,
+        userType: 'vendor',
+      );
 
-  Future<http.Response> getVoucher() async {
-    return await get('vendor/voucher', isProtected: true, userType: 'vendor');
-  }
+  Future<http.Response> getVoucher() async =>
+      await get('vendor/voucher', isProtected: true, userType: 'vendor');
 
-  Future<http.Response> voucherTopUp(Map<String, dynamic> data) async {
-    return await post(
-      'vendor/voucher/topup',
-      data,
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> voucherTopUp(Map<String, dynamic> data) async =>
+      await post(
+        'vendor/voucher/topup',
+        data,
+        isProtected: true,
+        userType: 'vendor',
+      );
 
-  Future<http.Response> voucherSpend(Map<String, dynamic> data) async {
-    return await post(
-      'vendor/voucher/spend',
-      data,
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> voucherSpend(Map<String, dynamic> data) async =>
+      await post(
+        'vendor/voucher/spend',
+        data,
+        isProtected: true,
+        userType: 'vendor',
+      );
 
-  Future<http.Response> getVoucherTransactions() async {
-    return await get(
-      'vendor/voucher/transactions',
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> getVoucherTransactions() async => await get(
+    'vendor/voucher/transactions',
+    isProtected: true,
+    userType: 'vendor',
+  );
 
-  Future<http.Response> getVendorSettings() async {
-    return await get('vendor/settings', isProtected: true, userType: 'vendor');
-  }
+  Future<http.Response> getVendorSettings() async =>
+      await get('vendor/settings', isProtected: true, userType: 'vendor');
 
-  Future<http.Response> updateVendorSettings(Map<String, dynamic> data) async {
-    return await patch(
-      'vendor/settings',
-      data,
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> updateVendorSettings(Map<String, dynamic> data) async =>
+      await patch(
+        'vendor/settings',
+        data,
+        isProtected: true,
+        userType: 'vendor',
+      );
 
-  Future<http.Response> getVendorSettingsOptions() async {
-    return await get(
-      'vendor/settings/options',
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> getVendorSettingsOptions() async => await get(
+    'vendor/settings/options',
+    isProtected: true,
+    userType: 'vendor',
+  );
 
-  Future<http.Response> changeVendorPassword(Map<String, dynamic> data) async {
-    return await post(
-      'vendor/settings/change-password',
-      data,
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> changeVendorPassword(Map<String, dynamic> data) async =>
+      await post(
+        'vendor/settings/change-password',
+        data,
+        isProtected: true,
+        userType: 'vendor',
+      );
 
-  Future<http.Response> deleteVendorAccount() async {
-    return await delete(
-      'vendor/settings/account',
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> deleteVendorAccount() async => await delete(
+    'vendor/settings/account',
+    isProtected: true,
+    userType: 'vendor',
+  );
 
-  Future<http.Response> getMyAds() async {
-    return await get('vendor/ads/my', isProtected: true, userType: 'vendor');
-  }
+  Future<http.Response> getMyAds() async =>
+      await get('vendor/ads/my', isProtected: true, userType: 'vendor');
 
-  Future<http.Response> createAd(Map<String, dynamic> data) async {
-    return await post(
-      'vendor/ads',
-      data,
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> createAd(Map<String, dynamic> data) async =>
+      await post('vendor/ads', data, isProtected: true, userType: 'vendor');
 
-  /// Laravel route: POST api/v1/vendor/ads/{id}
   Future<http.Response> updateAd(
     int id,
     Map<String, String> fields, {
@@ -590,33 +562,18 @@ class ApiService {
     );
   }
 
-  Future<http.Response> deleteAd(int id) async {
-    return await delete(
-      'vendor/ads/$id',
-      isProtected: true,
-      userType: 'vendor',
-    );
-  }
+  Future<http.Response> deleteAd(int id) async =>
+      await delete('vendor/ads/$id', isProtected: true, userType: 'vendor');
 
   // ---------------------------------------------------------------------------
   // TRANSLATIONS
   // ---------------------------------------------------------------------------
 
-  Future<http.Response> getLocales() async {
-    return await get(
-      'translations/locales',
-      isProtected: false,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> getLocales() async =>
+      await get('translations/locales', isProtected: false, userType: 'buyer');
 
-  Future<http.Response> getTranslations(String locale) async {
-    return await get(
-      'translations/$locale',
-      isProtected: false,
-      userType: 'buyer',
-    );
-  }
+  Future<http.Response> getTranslations(String locale) async =>
+      await get('translations/$locale', isProtected: false, userType: 'buyer');
 
   // ---------------------------------------------------------------------------
   // CORE HTTP METHODS
@@ -629,12 +586,15 @@ class ApiService {
   }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
       debugPrint("🚀 GET [$userType]: $url");
       final response = await http
           .get(url, headers: headers)
           .timeout(const Duration(seconds: 15));
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } on ApiException {
       rethrow;
     } catch (e) {
@@ -650,13 +610,15 @@ class ApiService {
   }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
-      debugPrint("🚀 POST: $url");
-      debugPrint("🔑 Token being sent: ${headers['Authorization']}");
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
+      debugPrint("🚀 POST [$userType]: $url");
       final response = await http
           .post(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } on ApiException {
       rethrow;
     } catch (e) {
@@ -672,12 +634,15 @@ class ApiService {
   }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
       debugPrint("🚀 PUT [$userType]: $url");
       final response = await http
           .put(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } on ApiException {
       rethrow;
     } catch (e) {
@@ -689,16 +654,19 @@ class ApiService {
     String endpoint,
     Map<String, dynamic> data, {
     bool isProtected = true,
-    required String userType,
+    String? userType,
   }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
       debugPrint("🚀 PATCH [$userType]: $url");
       final response = await http
           .patch(url, headers: headers, body: jsonEncode(data))
           .timeout(const Duration(seconds: 15));
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } on ApiException {
       rethrow;
     } catch (e) {
@@ -716,17 +684,15 @@ class ApiService {
   }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
-
-      // Remove Content-Type so MultipartRequest can set its own boundary
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
       headers.remove('Content-Type');
       headers['Accept'] = 'application/json';
-
-      final request = http.MultipartRequest('POST', url);
-      request.headers.addAll(headers);
-
+      final request = http.MultipartRequest('POST', url)
+        ..headers.addAll(headers);
       data.forEach((key, value) => request.fields[key] = value);
-
       request.files.add(
         await http.MultipartFile.fromPath(
           fileField,
@@ -734,15 +700,12 @@ class ApiService {
           filename: basename(filePath),
         ),
       );
-
-      debugPrint("🚀 UPLOAD ATTEMPT: POST $url");
-
+      debugPrint("🚀 UPLOAD [$userType]: $url");
       final streamed = await request.send().timeout(
         const Duration(seconds: 30),
       );
-
       final response = await http.Response.fromStream(streamed);
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } on ApiException {
       rethrow;
     } catch (e) {
@@ -757,12 +720,15 @@ class ApiService {
   }) async {
     try {
       final url = _buildUrl(endpoint);
-      final headers = await _getHeaders(protected: isProtected);
+      final headers = await _getHeaders(
+        protected: isProtected,
+        userType: userType,
+      );
       debugPrint("🚀 DELETE [$userType]: $url");
       final response = await http
           .delete(url, headers: headers)
           .timeout(const Duration(seconds: 15));
-      return _handleResponse(response);
+      return _handleResponse(response, userType: userType);
     } on ApiException {
       rethrow;
     } catch (e) {
@@ -774,18 +740,23 @@ class ApiService {
   // PRIVATE HELPERS
   // ---------------------------------------------------------------------------
 
-  Future<Map<String, String>> _getHeaders({bool protected = false}) async {
+  Future<Map<String, String>> _getHeaders({
+    bool protected = false,
+    String? userType,
+  }) async {
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
     if (protected) {
-      final token = await getToken();
+      final token = await getToken(userType: userType);
       debugPrint(
-        "🔑 Auth token from storage: ${token ?? 'NULL — not logged in'}",
+        "🔑 Token for $userType: ${token != null ? '[present]' : 'NULL'}",
       );
-      if (token != null) {
+      if (token != null && token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
+      } else {
+        debugPrint("⚠️ No token for userType: $userType");
       }
     }
     return headers;
@@ -796,39 +767,27 @@ class ApiService {
     return Uri.parse('$baseUrl/$clean');
   }
 
-  /// Handles HTTP responses.
-  ///
-  /// Throws [ApiException] with a clean user-facing message on errors.
-  /// Using a typed exception prevents _processError from re-wrapping it.
-  http.Response _handleResponse(http.Response response) {
-    debugPrint("📥 STATUS ${response.statusCode}: ${response.body}");
-
-    if (response.statusCode >= 200 && response.statusCode < 300) {
+  http.Response _handleResponse(http.Response response, {String? userType}) {
+    debugPrint("📥 STATUS ${response.statusCode}: ${response.request?.url}");
+    if (response.statusCode >= 200 && response.statusCode < 300)
       return response;
-    }
 
-    // Safely decode — 500s may return HTML, not JSON
     dynamic decoded;
     try {
       decoded = jsonDecode(response.body);
     } catch (_) {
-      // Non-JSON response (HTML error page, nginx 502, etc.)
-      debugPrint("⚠️ Non-JSON error response (${response.statusCode})");
       throw ApiException(
         "Server error (${response.statusCode}). Please try again.",
       );
     }
 
-    // 401 Unauthenticated — clear token and prompt re-login
-    // Exception: wrong password returns 401 but should NOT clear the token
     if (response.statusCode == 401 &&
         decoded is Map &&
         decoded['message'] != 'Incorrect email or password.') {
-      clearToken();
+      clearToken(userType: userType);
       throw ApiException("Session expired. Please sign in again.");
     }
 
-    // 422 Validation errors — extract and join field messages
     if (response.statusCode == 422 &&
         decoded is Map &&
         decoded['errors'] != null) {
@@ -840,7 +799,6 @@ class ApiService {
       throw ApiException(buffer.toString().trim());
     }
 
-    // Any other error with a message field
     if (decoded is Map && decoded.containsKey('message')) {
       throw ApiException(
         decoded['message']?.toString() ?? "An error occurred.",
@@ -852,21 +810,15 @@ class ApiService {
     );
   }
 
-  /// Converts low-level exceptions (network, timeout) into clean strings.
-  /// Does NOT re-wrap [ApiException] — those pass through as-is via rethrow
-  /// in each HTTP method above.
   String _processError(dynamic e, String method, String endpoint) {
     debugPrint("❌ $method ERROR [$endpoint]: $e");
     if (e is SocketException) return "No internet connection.";
     if (e is TimeoutException) return "Connection timed out.";
-    // Unwrap any stray Exception wrappers
     final msg = e.toString().replaceFirst('Exception: ', '');
     return msg.isNotEmpty ? msg : "An unexpected error occurred.";
   }
 }
 
-/// Typed exception used internally by [ApiService._handleResponse].
-/// Prevents _processError from re-wrapping server error messages.
 class ApiException implements Exception {
   final String message;
   const ApiException(this.message);

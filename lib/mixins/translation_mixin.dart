@@ -9,9 +9,11 @@ mixin TranslationMixin<T extends StatefulWidget> on State<T> {
   final Map<String, String> translatedNames = {};
   final Map<String, String> translatedLocations = {};
   final Map<String, String> translatedDescriptions = {};
-  
+
   bool isTranslating = false;
-  Locale? _lastTranslatedLocale;
+
+  // ── Use a string instead of a Locale object so equality is value-based ──
+  String? _lastTranslatedLang;
 
   /// Checks if translation is needed based on locale change.
   /// Call this in didChangeDependencies() or after data is fetched.
@@ -20,12 +22,20 @@ mixin TranslationMixin<T extends StatefulWidget> on State<T> {
     required Future<void> Function(String targetLang) onTranslate,
   }) async {
     if (!mounted) return;
-    
-    final currentLocale = context.read<LanguageProvider>().locale;
-    if (_lastTranslatedLocale == currentLocale) return;
-    
-    _lastTranslatedLocale = currentLocale;
-    final targetLang = currentLocale.languageCode;
+
+    final targetLang = context.read<LanguageProvider>().locale.languageCode;
+
+    // Skip only if the language is unchanged AND we have already translated
+    // at least one item — this prevents skipping on first load.
+    final alreadyDone =
+        _lastTranslatedLang == targetLang &&
+        (translatedNames.isNotEmpty ||
+            translatedLocations.isNotEmpty ||
+            translatedDescriptions.isNotEmpty);
+
+    if (alreadyDone) return;
+
+    _lastTranslatedLang = targetLang;
 
     if (targetLang == 'en') {
       if (mounted) {
@@ -44,7 +54,7 @@ mixin TranslationMixin<T extends StatefulWidget> on State<T> {
   /// Helper to translate a single string with caching.
   Future<String?> translateText(String text, String targetLang) async {
     if (text.trim().isEmpty) return text;
-    
+
     final cacheKey = '$text|$targetLang';
     if (_translationCache.containsKey(cacheKey)) {
       return _translationCache[cacheKey];
@@ -61,9 +71,13 @@ mixin TranslationMixin<T extends StatefulWidget> on State<T> {
       return null;
     }
   }
-  
+
   /// Forces a re-translation (useful after new data is loaded).
+  /// Clears translated maps so new data gets freshly translated.
   void invalidateTranslation() {
-    _lastTranslatedLocale = null;
+    _lastTranslatedLang = null;
+    translatedNames.clear();
+    translatedLocations.clear();
+    translatedDescriptions.clear();
   }
 }

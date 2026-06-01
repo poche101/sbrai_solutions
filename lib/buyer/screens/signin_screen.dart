@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'signup_page.dart';
 import 'home_screen.dart';
 import 'package:sbrai_solutions/account_selection_screen.dart';
@@ -13,10 +15,20 @@ class SigninScreen extends StatefulWidget {
 }
 
 class _SigninScreenState extends State<SigninScreen> {
+  static const _emailKey = 'buyer_saved_email';
+  static const _passwordKey = 'buyer_saved_password';
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _rememberMe = false;
   final ApiService _apiService = ApiService();
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
 
   @override
   void dispose() {
@@ -25,8 +37,46 @@ class _SigninScreenState extends State<SigninScreen> {
     super.dispose();
   }
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
+  // ── Saved credentials ──────────────────────────────────────────────────────
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString(_emailKey);
+    final savedPassword = prefs.getString(_passwordKey);
+    if (savedEmail != null && savedEmail.isNotEmpty) {
+      setState(() {
+        _emailController.text = savedEmail;
+        _passwordController.text = savedPassword ?? '';
+        _rememberMe = true;
+      });
+    }
+  }
 
+  Future<void> _saveCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_rememberMe) {
+      await prefs.setString(_emailKey, _emailController.text.trim());
+      await prefs.setString(_passwordKey, _passwordController.text);
+    } else {
+      await prefs.remove(_emailKey);
+      await prefs.remove(_passwordKey);
+    }
+  }
+
+  // ── FCM ────────────────────────────────────────────────────────────────────
+  Future<void> _saveFcmToken() async {
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await _apiService.saveFcmToken(fcmToken);
+        debugPrint('✅ Buyer FCM token saved');
+      }
+    } catch (e) {
+      // Non-fatal — calls/notifications just won't work until next login
+      debugPrint('⚠️ FCM token save failed: $e');
+    }
+  }
+
+  // ── Navigation ─────────────────────────────────────────────────────────────
   void _navigateToHome() {
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
@@ -39,8 +89,7 @@ class _SigninScreenState extends State<SigninScreen> {
     });
   }
 
-  // ── Toasts / Snackbars ─────────────────────────────────────────────────────
-
+  // ── Toasts ─────────────────────────────────────────────────────────────────
   void _showCustomToast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -101,41 +150,34 @@ class _SigninScreenState extends State<SigninScreen> {
   }
 
   // ── Login ──────────────────────────────────────────────────────────────────
-
   Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
-
     if (email.isEmpty || password.isEmpty) {
       _showErrorSnackBar('Please enter both email and password');
       return;
     }
-
     setState(() => _isLoading = true);
-
     try {
-      // Route: POST /api/v1/auth/login/buyer
       final response = await _apiService.loginBuyer({
         'email': email,
         'password': password,
       });
-
       final Map<String, dynamic> responseData = jsonDecode(response.body);
-
       if (response.statusCode == 200 && responseData['success'] == true) {
-        // Token key returned by AuthController — 'access_token'
         final token =
             responseData['data']['access_token'] ??
             responseData['data']['token'];
-
         if (token != null) {
           await _apiService.saveToken(token, userType: 'buyer');
         }
-
         if (responseData['data']['user'] != null) {
           await _apiService.saveUserData(responseData['data']['user']);
         }
-
+        // Save credentials if remember me is checked
+        await _saveCredentials();
+        // Save FCM token for push notifications and calls
+        await _saveFcmToken();
         if (!mounted) return;
         _showCustomToast(responseData['message'] ?? 'Signed in successfully');
         _navigateToHome();
@@ -150,24 +192,26 @@ class _SigninScreenState extends State<SigninScreen> {
   }
 
   // ── Social Login ───────────────────────────────────────────────────────────
-
+  // ── Social Login ───────────────────────────────────────────────────────────
   Future<void> _handleSocialLogin(String provider) async {
     setState(() => _isLoading = true);
-
     try {
       if (provider == 'google') {
-        // Uses ApiService.signInWithGoogle() which handles the Google Sign-In
-        // flow and posts to POST /api/v1/auth/social/google internally.
-        final response = await _apiService.signInWithGoogle();
-
-        if (response == null) {
-          // User cancelled the Google sign-in dialog
-          return;
-        }
+        final response = await _apiService.signInWithGoogle(userType: 'buyer');
+        if (response == null) return;
 
         final responseData = jsonDecode(response.body);
 
-        if (response.statusCode == 200 && responseData['success'] == true) {
+        // Backend returns 'status: true' not 'success: true'
+        if ((response.statusCode == 200 || response.statusCode == 201) &&
+            responseData['status'] == true) {
+          // Token is already saved inside signInWithGoogle → socialLogin
+          // Just save user data if present
+          if (responseData['data']?['user'] != null) {
+            await _apiService.saveUserData(responseData['data']['user']);
+          }
+
+          await _saveFcmToken();
           if (!mounted) return;
           _showCustomToast(responseData['message'] ?? 'Signed in with Google');
           _navigateToHome();
@@ -175,7 +219,6 @@ class _SigninScreenState extends State<SigninScreen> {
           throw responseData['message'] ?? 'Google sign-in failed';
         }
       } else if (provider == 'facebook') {
-        // Facebook login not yet implemented — show friendly message
         _showErrorSnackBar('Facebook login is coming soon');
       }
     } catch (e) {
@@ -186,7 +229,6 @@ class _SigninScreenState extends State<SigninScreen> {
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -231,7 +273,6 @@ class _SigninScreenState extends State<SigninScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
                 const Text(
                   'Welcome Back',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
@@ -241,7 +282,6 @@ class _SigninScreenState extends State<SigninScreen> {
                   style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
                 const SizedBox(height: 32),
-
                 // Social buttons
                 _buildSocialButton(
                   'Continue with Google',
@@ -254,9 +294,7 @@ class _SigninScreenState extends State<SigninScreen> {
                   'assets/icons/facebook.png',
                   onTap: () => _handleSocialLogin('facebook'),
                 ),
-
                 const SizedBox(height: 24),
-
                 // Divider
                 const Row(
                   children: [
@@ -276,7 +314,6 @@ class _SigninScreenState extends State<SigninScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-
                 // Email field
                 _buildInputLabel('Email Address'),
                 TextField(
@@ -285,7 +322,6 @@ class _SigninScreenState extends State<SigninScreen> {
                   decoration: _inputDecoration('Email Address'),
                 ),
                 const SizedBox(height: 20),
-
                 // Password field
                 _buildInputLabel('Password'),
                 TextField(
@@ -293,23 +329,28 @@ class _SigninScreenState extends State<SigninScreen> {
                   obscureText: true,
                   decoration: _inputDecoration('Password'),
                 ),
-
-                // Forgot password
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      // TODO: navigate to ForgotPasswordScreen
-                    },
-                    child: const Text(
-                      'Forgot Password?',
-                      style: TextStyle(color: Color(0xFFFF6B35), fontSize: 13),
+                const SizedBox(height: 8),
+                // Remember Me Row (Forgot Password Button Removed)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: _rememberMe,
+                          activeColor: const Color(0xFFFF6B35),
+                          onChanged: (val) =>
+                              setState(() => _rememberMe = val ?? false),
+                        ),
+                        const Text(
+                          'Remember me',
+                          style: TextStyle(fontSize: 13, color: Colors.black87),
+                        ),
+                      ],
                     ),
-                  ),
+                  ],
                 ),
-
                 const SizedBox(height: 16),
-
                 // Sign In button
                 SizedBox(
                   width: double.infinity,
@@ -339,9 +380,7 @@ class _SigninScreenState extends State<SigninScreen> {
                           ),
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
                 // Sign up link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -365,7 +404,6 @@ class _SigninScreenState extends State<SigninScreen> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 12),
               ],
             ),
@@ -376,7 +414,6 @@ class _SigninScreenState extends State<SigninScreen> {
   }
 
   // ── Sub-widgets ────────────────────────────────────────────────────────────
-
   Widget _buildSocialButton(
     String text,
     String assetPath, {
@@ -386,7 +423,6 @@ class _SigninScreenState extends State<SigninScreen> {
     final Color brandColor = isGoogle
         ? const Color(0xFF9A052D)
         : const Color(0xFF1877F2);
-
     return Container(
       width: double.infinity,
       height: 50,

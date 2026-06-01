@@ -16,7 +16,7 @@ class ProductService {
     try {
       final response = await _apiService.get('/categories', isProtected: false);
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      
+
       if (data['success'] == true && data['data'] is Map) {
         final grouped = data['data'] as Map<String, dynamic>;
         final List<Map<String, dynamic>> loaded = [];
@@ -51,16 +51,48 @@ class ProductService {
   // FAVORITES SECTION
   // ─────────────────────────────────────────────────────────────
 
-  Future<Map<String, dynamic>> toggleFavorite(int productId) async {
+  // ─────────────────────────────────────────────────────────────
+  // FAVORITES SECTION
+  // ─────────────────────────────────────────────────────────────
+
+  // ─────────────────────────────────────────────────────────────
+  // FAVORITES SECTION
+  // ─────────────────────────────────────────────────────────────
+
+  Future<void> toggleFavorite(int adId) async {
     try {
-      final response = await _apiService.post(
-        '/ads/$productId/favorite',
-        {},
-        isProtected: true,
+      final token = await _apiService.getToken();
+
+      if (token == null) {
+        throw Exception('No authentication token found. Please login again.');
+      }
+
+      final url = Uri.parse(
+        'https://sbraisolutions.com/api/v1/buyers/ads/$adId/favorite',
       );
-      return jsonDecode(response.body);
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint('✅ Favorite toggled successfully for ad #$adId');
+        // You can parse response if backend returns new status
+      } else if (response.statusCode == 401) {
+        throw Exception('Session expired. Please login again.');
+      } else {
+        debugPrint(
+          '❌ Toggle failed: ${response.statusCode} - ${response.body}',
+        );
+        throw Exception('Failed to toggle favorite: ${response.statusCode}');
+      }
     } catch (e) {
-      debugPrint('❌ Toggle favorite error: $e');
+      debugPrint('❌ toggleFavorite error: $e');
       rethrow;
     }
   }
@@ -241,12 +273,12 @@ class ProductService {
 
     request.fields.addAll(fields);
 
-    // Attach images with 'photos[]' field name (as expected by backend)
+    // ✅ Backend expects 'images[]' (matches StoreAdRequest validation)
     for (int i = 0; i < images.length && i < 5; i++) {
       final file = images[i];
       request.files.add(
         await http.MultipartFile.fromPath(
-          'photos[]',
+          'images[]',
           file.path,
           filename: path.basename(file.path),
         ),

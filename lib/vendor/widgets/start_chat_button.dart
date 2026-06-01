@@ -13,7 +13,6 @@ class StartChatButton extends StatefulWidget {
   final String adTitle;
   final int vendorId;
   final String vendorName;
-  final String authToken;
   final int currentUserId;
 
   const StartChatButton({
@@ -22,7 +21,6 @@ class StartChatButton extends StatefulWidget {
     required this.adTitle,
     required this.vendorId,
     required this.vendorName,
-    required this.authToken,
     required this.currentUserId,
   });
 
@@ -36,13 +34,14 @@ class _StartChatButtonState extends State<StartChatButton> {
   Future<void> _openChat() async {
     setState(() => _isLoading = true);
 
-    final service = ChatService(widget.authToken);
+    // Token is lazy-loaded from SharedPreferences inside ChatService.
+    final service = ChatService(currentUserId: widget.currentUserId);
 
     try {
-      // Opens or creates a thread for this ad
+      // Opens or creates a thread for this ad.
       final thread = await service.startChat(
         adId: widget.adId,
-        message: 'Hi, I\'m interested in ${widget.adTitle}',
+        message: "Hi, I'm interested in ${widget.adTitle}",
       );
 
       if (!mounted) return;
@@ -52,7 +51,6 @@ class _StartChatButtonState extends State<StartChatButton> {
         MaterialPageRoute(
           builder: (_) => ChatScreen(
             chatId: thread.id,
-            authToken: widget.authToken,
             currentUserId: widget.currentUserId,
             otherPartyName: widget.vendorName,
             otherPartyInitial: widget.vendorName.isNotEmpty

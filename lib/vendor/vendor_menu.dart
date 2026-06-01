@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/services/vendor/vendor_auth_service.dart';
 import 'screen/profile_screen.dart';
@@ -33,6 +34,7 @@ class _VendorMenuState extends State<VendorMenu> {
   bool _isVerified = false;
   String? _businessName;
   String? _profilePhotoUrl;
+  int _unreadMessages = 0; // ← New: Unread message count
 
   @override
   void initState() {
@@ -65,11 +67,77 @@ class _VendorMenuState extends State<VendorMenu> {
     } finally {
       if (mounted) setState(() => _isLoadingProfile = false);
     }
+
+    // Load unread messages count
+    await _loadUnreadMessages();
+  }
+
+  Future<void> _loadUnreadMessages() async {
+    try {
+      final apiService = ApiService();
+
+      final response = await apiService.get('/chats', userType: 'vendor');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        List<dynamic> chats = [];
+
+        // 🚀 SAFELY HANDLE TYPE CHECKS:
+        if (data['data'] is List) {
+          chats = data['data'];
+        } else if (data['data'] is Map) {
+          final Map<String, dynamic> dataMap = data['data'];
+
+          // Print keys to your debug console so you can see exactly what the backend sent
+          debugPrint(
+            '🔑 API data map contains these keys: ${dataMap.keys.toList()}',
+          );
+
+          if (dataMap['chats'] is List) {
+            // Case A: Custom wrapper payload (e.g., {"chats": [...]})
+            chats = dataMap['chats'];
+          } else if (dataMap['data'] is List) {
+            // Case B: Laravel Standard API Paginator (e.g., {"data": [...]})
+            chats = dataMap['data'];
+          } else {
+            // Case C: Print the raw nested map to completely eliminate guessing
+            debugPrint('⚠️ Map structure unrecognized. Content: $dataMap');
+          }
+        } else {
+          debugPrint(
+            'Unexpected JSON structure format: ${data['data'].runtimeType}',
+          );
+        }
+
+        int totalUnread = 0;
+        for (var chat in chats) {
+          if (chat is Map) {
+            // Check for explicit count keys from backend (common in chat listings)
+            if (chat['unread_count'] != null) {
+              totalUnread += int.tryParse(chat['unread_count'].toString()) ?? 0;
+            }
+            // Fallback: manually filter embedded message list if provided
+            else if (chat['messages'] != null && chat['messages'] is List) {
+              final List<dynamic> messages = chat['messages'];
+              totalUnread += messages
+                  .where((m) => m['is_read'] == false || m['read_at'] == null)
+                  .length;
+            }
+          }
+        }
+
+        if (mounted) {
+          setState(() => _unreadMessages = totalUnread);
+        }
+      }
+    } catch (e) {
+      debugPrint('Unread messages fetch failed: $e');
+      if (mounted) setState(() => _unreadMessages = 0);
+    }
   }
 
   Future<void> _navigateToMessages() async {
     final apiService = ApiService();
-    final token = await apiService.getToken() ?? '';
     final userData = await apiService.getUserData();
     final currentUserId = int.tryParse(userData['id']?.toString() ?? '0') ?? 0;
 
@@ -80,14 +148,13 @@ class _VendorMenuState extends State<VendorMenu> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => MessageScreen(
-          threads: [],
-          authToken: token,
-          currentUserId: currentUserId,
-          isVendor: true,
-        ),
+        builder: (context) =>
+            MessageScreen(currentUserId: currentUserId, isVendor: true),
       ),
-    );
+    ).then((_) {
+      // Refresh unread count when returning from messages
+      _loadUnreadMessages();
+    });
   }
 
   Future<void> _handleLogout() async {
@@ -269,7 +336,8 @@ class _VendorMenuState extends State<VendorMenu> {
                       ),
                     );
                   }),
-                  _buildMenuItem(
+                  _buildMenuItemWithBadge(
+                    // ← Updated with badge
                     Icons.chat_bubble_outline,
                     'Messages',
                     _navigateToMessages,
@@ -356,6 +424,57 @@ class _VendorMenuState extends State<VendorMenu> {
           ),
         ],
       ),
+    );
+  }
+
+  // Updated method to support badge for Messages
+  Widget _buildMenuItemWithBadge(
+    IconData icon,
+    String title,
+    VoidCallback onTap,
+  ) {
+    return ListTile(
+      leading: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon, color: Colors.black45, size: 22),
+          if (_unreadMessages > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                child: Center(
+                  child: Text(
+                    _unreadMessages > 99 ? '99+' : _unreadMessages.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.black87,
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      onTap: onTap,
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
     );
   }
 

@@ -11,7 +11,6 @@ import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:sbrai_solutions/buyer/screens/signin_screen.dart';
 import 'package:sbrai_solutions/buyer_service/profile_service.dart';
 import 'package:sbrai_solutions/models/buyer/user_profile_model.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class BuyersMenu extends StatefulWidget {
   final bool isDesktop;
@@ -46,8 +45,6 @@ class _BuyersMenuState extends State<BuyersMenu> {
   String? _displayPhoto;
   String _joinedLabel = '---';
 
-  String _authToken = '';
-
   @override
   void initState() {
     super.initState();
@@ -59,16 +56,6 @@ class _BuyersMenuState extends State<BuyersMenu> {
         : 'Sign in to sync data';
     _displayPhoto = widget.userPhotoUrl;
     _fetchProfile();
-    _loadToken();
-  }
-
-  Future<void> _loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _authToken = prefs.getString('auth_token') ?? '';
-      });
-    }
   }
 
   Future<void> _fetchProfile() async {
@@ -133,22 +120,14 @@ class _BuyersMenuState extends State<BuyersMenu> {
     }
   }
 
-  // Updated: Uses the already loaded _authToken
   Future<void> _navigateToMessages() async {
-    String token = _authToken;
+    final userData = await _apiService.getUserData();
+    final currentUserId = int.tryParse(userData['id']?.toString() ?? '0') ?? 0;
 
-    // Fallback if token is empty
-    if (token.isEmpty) {
-      token = await _apiService.getToken() ?? '';
-    }
-
-    if (token.isEmpty) {
+    if (currentUserId == 0) {
       _showToast("Please login to access messages", isError: true);
       return;
     }
-
-    final userData = await _apiService.getUserData();
-    final currentUserId = int.tryParse(userData['id']?.toString() ?? '0') ?? 0;
 
     if (!mounted) return;
 
@@ -157,12 +136,8 @@ class _BuyersMenuState extends State<BuyersMenu> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => MessageScreen(
-          threads: [], // You can load real threads later
-          authToken: token,
-          currentUserId: currentUserId,
-          isVendor: false, // Buyer side
-        ),
+        builder: (context) =>
+            MessageScreen(currentUserId: currentUserId, isVendor: false),
       ),
     );
   }
@@ -187,6 +162,12 @@ class _BuyersMenuState extends State<BuyersMenu> {
   void _navigateTo(Widget screen) {
     Navigator.pop(context);
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  }
+
+  // ✅ Added Named Route navigation helper to resolve the Provider tree issue
+  void _navigateToNamed(String routeName) {
+    Navigator.pop(context);
+    Navigator.pushNamed(context, routeName);
   }
 
   void _showToast(String message, {bool isError = false}) {
@@ -266,9 +247,9 @@ class _BuyersMenuState extends State<BuyersMenu> {
                 _buildMenuItem(
                   Icons.favorite_outline,
                   "Favorites",
-                  onTap: () => _navigateTo(const FavoriteScreen()),
+                  // ✅ Updated to use the named route defined in main.dart
+                  onTap: () => _navigateToNamed('/favorites'),
                 ),
-
                 _buildMenuItem(
                   Icons.chat_bubble_outline,
                   "Messages",

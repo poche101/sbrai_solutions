@@ -321,26 +321,28 @@ class AppLocalizationsFr extends AppLocalizations {
   String get businessVerificationRequired => 'Requis pour le badge vérifié';
 
   @override
-  String get sellerInformation => 'Seller Information';
+  String get sellerInformation => 'Informations sur le Vendeur';
 
   @override
-  String get memberSince => 'Member since';
+  String get memberSince => 'Membre depuis';
 
   @override
-  String get safetyTips => 'Sbrai Safety Tips';
+  String get safetyTips => 'Conseils de Sécurité Sbrai';
 
   @override
   String get safetyTip1 =>
-      'Do not pay in advance until materials are delivered to your site';
+      'Ne payez pas à l\'avance tant que les matériaux ne sont pas livrés sur votre site';
 
   @override
-  String get safetyTip2 => 'Always inspect products before making payment';
+  String get safetyTip2 =>
+      'Inspectez toujours les produits avant d\'effectuer le paiement';
 
   @override
-  String get safetyTip3 => 'Meet sellers in public or safe locations';
+  String get safetyTip3 =>
+      'Rencontrez les vendeurs dans des lieux publics ou sûrs';
 
   @override
-  String get safetyTip4 => 'Report suspicious activity to Sbrai support';
+  String get safetyTip4 => 'Signalez toute activité suspecte au support Sbrai';
 
   @override
   String get showOriginal => 'Show Original';

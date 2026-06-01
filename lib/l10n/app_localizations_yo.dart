@@ -186,7 +186,7 @@ class AppLocalizationsYo extends AppLocalizations {
   String get verifyNin => 'Ṣayẹ̀wò NIN';
 
   @override
-  String get identityVerified => 'Ìmọ̀ nipa rẹ ti fìdí múlẹ̀ ni àṣeyọrí!';
+  String get identityVerified => 'Ìmọ̀ nipa rẹ ti fìdí mú lẹ́ ni àṣeyọrí!';
 
   @override
   String get verificationProgress => 'Ìtẹ̀síwájú Ìmọ̀';
@@ -321,26 +321,26 @@ class AppLocalizationsYo extends AppLocalizations {
   String get businessVerificationRequired => 'Gba àmì ìfìdímúlẹ̀';
 
   @override
-  String get sellerInformation => 'Seller Information';
+  String get sellerInformation => 'Ìròyìn Olùtà';
 
   @override
-  String get memberSince => 'Member since';
+  String get memberSince => 'Omo egbé láti';
 
   @override
-  String get safetyTips => 'Sbrai Safety Tips';
+  String get safetyTips => 'Ìmọ̀ràn Àbò Sbrai';
 
   @override
   String get safetyTip1 =>
-      'Do not pay in advance until materials are delivered to your site';
+      'Má ṣe san owó síwájú títí tí ohun èlò yóò fi dé ojú iṣẹ́ rẹ';
 
   @override
-  String get safetyTip2 => 'Always inspect products before making payment';
+  String get safetyTip2 => 'Máa ṣàyẹ̀wò ọjà nígbà gbogbo kí o tó san owó';
 
   @override
-  String get safetyTip3 => 'Meet sellers in public or safe locations';
+  String get safetyTip3 => 'Pàdé àwọn olùtà ní ojú pópó tàbí ibi tí àbò wà';
 
   @override
-  String get safetyTip4 => 'Report suspicious activity to Sbrai support';
+  String get safetyTip4 => 'Fìsùn ohun tó bá jọ èrú fún ẹgbẹ́ Sbrai';
 
   @override
   String get showOriginal => 'Show Original';

@@ -1,10 +1,10 @@
-// ─────────────────────────────────────────────────────────────
-//  screens/chat_screen.dart
-// ─────────────────────────────────────────────────────────────
+// lib/screens/chat_screen.dart
 
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 import 'package:sbrai_solutions/models/chat_model.dart';
 import 'package:sbrai_solutions/services/chat_service.dart';
 import '../widgets/message_bubble.dart';
@@ -13,24 +13,22 @@ import 'package:sbrai_solutions/screens/call_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final int chatId;
-  final String authToken;
   final int currentUserId;
   final String otherPartyName;
   final String otherPartyInitial;
   final String adTitle;
   final int otherPartyId;
-  final ChatService service;
+  final ChatService? service;
 
   const ChatScreen({
     super.key,
     required this.chatId,
-    required this.authToken,
     required this.currentUserId,
     required this.otherPartyName,
     required this.otherPartyInitial,
     required this.adTitle,
     required this.otherPartyId,
-    required this.service,
+    this.service,
   });
 
   @override
@@ -39,6 +37,13 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   static const _orange = Color(0xFFE85D22);
+
+  // ── Pusher credentials — must match PUSHER_APP_KEY / PUSHER_APP_CLUSTER in .env
+  static const _pusherKey = 'your_pusher_app_key'; // ← replace
+  static const _pusherCluster = 'mt1'; // ← replace if different
+
+  late final ChatService _service;
+  PusherChannelsFlutter? _pusher;
 
   final List<ChatMessageModel> _messages = [];
   final TextEditingController _controller = TextEditingController();
@@ -52,19 +57,25 @@ class _ChatScreenState extends State<ChatScreen> {
   int _currentPage = 1;
   bool _hasMore = true;
 
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
   @override
   void initState() {
     super.initState();
-    // ✅ guard: don't load if chatId is invalid
+    _service =
+        widget.service ?? ChatService(currentUserId: widget.currentUserId);
+
     if (widget.chatId > 0) {
       _loadMessages();
       _markRead();
+      _initPusher();
     } else {
       setState(() {
         _isLoading = false;
         _error = 'Invalid chat session. Please go back and try again.';
       });
     }
+
     _scrollController.addListener(_onScroll);
   }
 
@@ -72,8 +83,85 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _controller.dispose();
     _scrollController.dispose();
+    _disconnectPusher();
     super.dispose();
   }
+
+  // ── Pusher ─────────────────────────────────────────────────────────────────
+
+  Future<void> _initPusher() async {
+    try {
+      _pusher = PusherChannelsFlutter.getInstance();
+
+      await _pusher!.init(
+        apiKey: _pusherKey,
+        cluster: _pusherCluster,
+        onError: (message, code, error) {
+          debugPrint('⚠️ Pusher error [$code]: $message');
+        },
+        onConnectionStateChange: (current, previous) {
+          debugPrint('🔌 Pusher: $previous → $current');
+        },
+      );
+
+      await _pusher!.connect();
+
+      // Subscribe to this chat's private channel
+      // Channel name must match what Laravel broadcasts on:
+      // broadcast()->on('private-chat.' . $chat->id)
+      await _pusher!.subscribe(
+        channelName: 'private-chat.${widget.chatId}',
+        onEvent: _onPusherEvent,
+        onSubscriptionError: (message, error) {
+          debugPrint('⚠️ Pusher subscription error: $message');
+        },
+      );
+
+      debugPrint('✅ Pusher subscribed to private-chat.${widget.chatId}');
+    } catch (e) {
+      // Non-fatal — chat still works via manual reload
+      debugPrint('⚠️ Pusher init failed (non-fatal): $e');
+    }
+  }
+
+  void _onPusherEvent(PusherEvent event) {
+    try {
+      if (event.eventName == 'App\\Events\\MessageSent') {
+        final payload = jsonDecode(event.data ?? '{}') as Map<String, dynamic>;
+
+        // The broadcasted payload wraps the message under 'message'
+        final msgData = payload['message'] as Map<String, dynamic>? ?? payload;
+        final incoming = ChatMessageModel.fromJson(msgData);
+
+        // Ignore messages sent by the current user (already added optimistically)
+        if (incoming.senderId == widget.currentUserId) return;
+
+        if (mounted) {
+          setState(() => _messages.add(incoming));
+          _scrollToBottom();
+          _markRead();
+        }
+      }
+
+      if (event.eventName == 'App\\Events\\MessageRead') {
+        // Optional: update read receipts UI here if needed
+        debugPrint('📖 MessageRead event received');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Pusher event parse error: $e');
+    }
+  }
+
+  Future<void> _disconnectPusher() async {
+    try {
+      await _pusher?.unsubscribe(channelName: 'private-chat.${widget.chatId}');
+      await _pusher?.disconnect();
+    } catch (e) {
+      debugPrint('⚠️ Pusher disconnect error: $e');
+    }
+  }
+
+  // ── Scroll ─────────────────────────────────────────────────────────────────
 
   void _onScroll() {
     if (_scrollController.position.pixels <=
@@ -84,11 +172,20 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _markRead() async {
-    try {
-      await widget.service.markRead(widget.chatId);
-    } catch (_) {}
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (_scrollController.hasClients &&
+          _scrollController.position.hasContentDimensions) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
+
+  // ── Data ───────────────────────────────────────────────────────────────────
 
   Future<void> _loadMessages() async {
     setState(() {
@@ -96,7 +193,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _error = null;
     });
     try {
-      final result = await widget.service.getMessages(widget.chatId, page: 1);
+      final result = await _service.getMessages(widget.chatId, page: 1);
       if (mounted) {
         setState(() {
           _messages
@@ -111,8 +208,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          // ✅ cleaner error message — strip exception prefix
-          _error = e.toString().replaceFirst('ChatApiException', '').trim();
+          _error = _friendlyError(e);
           _isLoading = false;
         });
       }
@@ -123,7 +219,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!_hasMore || _isLoadingMore) return;
     setState(() => _isLoadingMore = true);
     try {
-      final result = await widget.service.getMessages(
+      final result = await _service.getMessages(
         widget.chatId,
         page: _currentPage + 1,
       );
@@ -139,6 +235,14 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) setState(() => _isLoadingMore = false);
     }
   }
+
+  Future<void> _markRead() async {
+    try {
+      await _service.markRead(widget.chatId);
+    } catch (_) {}
+  }
+
+  // ── Send ───────────────────────────────────────────────────────────────────
 
   Future<void> _sendText() async {
     final text = _controller.text.trim();
@@ -158,10 +262,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
-      final sent = await widget.service.sendMessage(
-        widget.chatId,
-        message: text,
-      );
+      final sent = await _service.sendMessage(widget.chatId, message: text);
       if (mounted) {
         final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
         if (idx != -1) setState(() => _messages[idx] = sent);
@@ -197,7 +298,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
-      final sent = await widget.service.sendMessage(
+      final sent = await _service.sendMessage(
         widget.chatId,
         image: File(picked.path),
       );
@@ -215,19 +316,20 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // ── Call ───────────────────────────────────────────────────────────────────
+
   Future<void> _startCall(CallType callType) async {
     final channelName =
         'chat_${widget.chatId}_${DateTime.now().millisecondsSinceEpoch}';
-    // ✅ use actual currentUserId instead of hardcoded 1
     final uid = widget.currentUserId;
 
     try {
-      final tokenResp = await widget.service.getCallToken(
+      final tokenResp = await _service.getCallToken(
         channelName: channelName,
         uid: uid,
       );
 
-      await widget.service.initiateCall(
+      await _service.initiateCall(
         receiverId: widget.otherPartyId,
         channelName: channelName,
         callerName: widget.otherPartyName,
@@ -243,12 +345,13 @@ class _ChatScreenState extends State<ChatScreen> {
             session: CallSession(
               channelName: tokenResp.channelName,
               token: tokenResp.token,
+              appId: tokenResp.appId, // ← add this
               uid: uid,
               callType: callType,
               callerName: widget.otherPartyName,
               receiverId: widget.otherPartyId,
             ),
-            service: widget.service,
+            service: _service,
           ),
         ),
       );
@@ -256,18 +359,13 @@ class _ChatScreenState extends State<ChatScreen> {
       _showError('Could not start call. Please try again.');
     }
   }
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 150), () {
-      if (_scrollController.hasClients &&
-          _scrollController.position.hasContentDimensions) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+  String _friendlyError(Object e) {
+    return e
+        .toString()
+        .replaceFirst(RegExp(r'ChatApiException\(\d+\):\s*'), '')
+        .trim();
   }
 
   void _showError(String msg) {
@@ -285,6 +383,16 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+
+  bool _isDifferentDay(String? a, String? b) {
+    if (a == null || b == null) return false;
+    final da = DateTime.tryParse(a)?.toLocal();
+    final db = DateTime.tryParse(b)?.toLocal();
+    if (da == null || db == null) return false;
+    return da.year != db.year || da.month != db.month || da.day != db.day;
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -311,6 +419,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
     );
   }
+
+  // ── AppBar ─────────────────────────────────────────────────────────────────
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
@@ -350,7 +460,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                // ✅ show ad title under name in appbar
                 if (widget.adTitle.isNotEmpty)
                   Text(
                     widget.adTitle,
@@ -381,6 +490,8 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  // ── Ad banner ──────────────────────────────────────────────────────────────
+
   Widget _buildAdBar() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -405,6 +516,8 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+
+  // ── Message list ───────────────────────────────────────────────────────────
 
   Widget _buildMessageList() {
     if (_messages.isEmpty) {
@@ -439,8 +552,6 @@ class _ChatScreenState extends State<ChatScreen> {
       itemBuilder: (context, index) {
         final msg = _messages[index];
         final isMe = msg.senderId == widget.currentUserId;
-
-        // ✅ date separator between messages on different days
         final showDate =
             index == 0 ||
             _isDifferentDay(_messages[index - 1].createdAt, msg.createdAt);
@@ -455,21 +566,13 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  bool _isDifferentDay(String? a, String? b) {
-    if (a == null || b == null) return false;
-    final da = DateTime.tryParse(a)?.toLocal();
-    final db = DateTime.tryParse(b)?.toLocal();
-    if (da == null || db == null) return false;
-    return da.year != db.year || da.month != db.month || da.day != db.day;
-  }
-
   Widget _buildDateSeparator(String? iso) {
     if (iso == null) return const SizedBox.shrink();
     final dt = DateTime.tryParse(iso)?.toLocal();
     if (dt == null) return const SizedBox.shrink();
 
     final now = DateTime.now();
-    String label;
+    final String label;
     if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
       label = 'Today';
     } else if (dt.year == now.year &&
@@ -501,6 +604,8 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+
+  // ── Error state ────────────────────────────────────────────────────────────
 
   Widget _buildError() {
     return Center(

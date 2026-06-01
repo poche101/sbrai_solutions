@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:sbrai_solutions/models/product_model.dart';
 import 'package:sbrai_solutions/screens/chat_screen.dart';
 import 'package:sbrai_solutions/services/chat_service.dart';
@@ -15,14 +14,15 @@ class ProductDetailsScreen extends StatefulWidget {
   const ProductDetailsScreen({
     super.key,
     required this.product,
-    required this.userName,
+    this.userName = '',
   });
 
   @override
   State<ProductDetailsScreen> createState() => _ProductDetailsScreenState();
 }
 
-class _ProductDetailsScreenState extends State<ProductDetailsScreen> with TranslationMixin<ProductDetailsScreen> {
+class _ProductDetailsScreenState extends State<ProductDetailsScreen>
+    with TranslationMixin<ProductDetailsScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   String? _translatedVendorName;
@@ -39,15 +39,24 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
     _performTranslation();
   }
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  // ── Translation ────────────────────────────────────────────────────────────
+
   Future<void> _performTranslation() async {
     await translateIfNeeded(
       items: [widget.product],
       onTranslate: (targetLang) async {
         setState(() => isTranslating = true);
         try {
-          final productKey = widget.product.id?.toString() ?? widget.product.name;
-          final vendorName = widget.product.vendorName ?? "Sbrai Vendor";
-          
+          final productKey =
+              widget.product.id?.toString() ?? widget.product.name;
+          final vendorName = widget.product.vendorName ?? 'Sbrai Vendor';
+
           final results = await Future.wait([
             translateText(widget.product.name, targetLang),
             if (widget.product.description?.isNotEmpty ?? false)
@@ -60,7 +69,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
           if (mounted) {
             setState(() {
               if (results[0] != null) translatedNames[productKey] = results[0]!;
-              if (results[1] != null) translatedDescriptions[productKey] = results[1]!;
+              if (results[1] != null)
+                translatedDescriptions[productKey] = results[1]!;
               _translatedVendorName = results[2];
             });
           }
@@ -71,11 +81,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
     );
   }
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
+  // ── Actions ────────────────────────────────────────────────────────────────
 
   void _nextPage() {
     if (_currentPage < widget.product.imageUrls.length - 1) {
@@ -95,17 +101,37 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
     }
   }
 
-  void _makePhoneCall(String phoneNumber) async {
-    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
-    if (await canLaunchUrl(launchUri)) {
-      await launchUrl(launchUri);
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final uri = Uri(scheme: 'tel', path: phoneNumber);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Cannot call $phoneNumber')));
+      }
     }
   }
 
+  /// Opens ChatScreen.
+  /// Reads currentUserId from ApiService user data cache.
+  /// Token is lazy-loaded inside ChatService — no manual fetch needed.
+  /// Opens ChatScreen.
+  /// Reads currentUserId and authToken from ApiService user data cache.
   Future<void> _openChat(BuildContext context) async {
     final apiService = ApiService();
-    final token = await apiService.getToken() ?? '';
-    final userData = await apiService.getUserData();
+
+    // 1. Fetch user data and token in parallel to avoid multiple async delays
+    final results = await Future.wait([
+      apiService.getUserData(),
+      apiService.getToken(),
+    ]);
+
+    final userData = results[0] as Map<String, dynamic>? ?? {};
+    final token = results[1] as String?;
+    final validToken = token ?? '';
+
     final currentUserId = int.tryParse(userData['id']?.toString() ?? '0') ?? 0;
 
     final vendorName = (widget.product.vendorName?.trim().isNotEmpty == true)
@@ -117,6 +143,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
     final vendorId = widget.product.vendorId ?? 0;
     final chatId = widget.product.chatId ?? 0;
 
+    // 2. Guard check: Ensure the widget is still mounted before navigating
+    // after asynchronous delays.
     if (!context.mounted) return;
 
     Navigator.push(
@@ -124,21 +152,21 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           chatId: chatId,
-          authToken: token,
           currentUserId: currentUserId,
           otherPartyName: vendorName,
           otherPartyInitial: vendorInitial,
           adTitle: widget.product.name,
           otherPartyId: vendorId,
-          service: ChatService(token),
+          service: ChatService(currentUserId: currentUserId),
         ),
       ),
     );
   }
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final List<String> images = widget.product.imageUrls;
+    final images = widget.product.imageUrls;
     final l10n = AppLocalizations.of(context)!;
     final productKey = widget.product.id?.toString() ?? widget.product.name;
 
@@ -167,7 +195,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Image Carousel
+                  // ── Image carousel ───────────────────────────────────────
                   Stack(
                     alignment: Alignment.center,
                     children: [
@@ -176,30 +204,50 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                         width: double.infinity,
                         child: images.isEmpty
                             ? Container(
-                          color: Colors.grey[200],
-                          child: const Icon(
-                            Icons.image,
-                            size: 50,
-                            color: Colors.grey,
-                          ),
-                        )
+                                color: Colors.grey[200],
+                                child: const Icon(
+                                  Icons.image,
+                                  size: 50,
+                                  color: Colors.grey,
+                                ),
+                              )
                             : PageView.builder(
-                          controller: _pageController,
-                          onPageChanged: (index) =>
-                              setState(() => _currentPage = index),
-                          itemCount: images.length,
-                          itemBuilder: (context, index) {
-                            return images[index].startsWith('http')
-                                ? Image.network(
-                              images[index],
-                              fit: BoxFit.cover,
-                            )
-                                : Image.asset(
-                              images[index],
-                              fit: BoxFit.cover,
-                            );
-                          },
-                        ),
+                                controller: _pageController,
+                                onPageChanged: (index) =>
+                                    setState(() => _currentPage = index),
+                                itemCount: images.length,
+                                itemBuilder: (context, index) {
+                                  final url = images[index];
+                                  return url.startsWith('http')
+                                      ? Image.network(
+                                          url,
+                                          fit: BoxFit.cover,
+                                          loadingBuilder: (_, child, progress) {
+                                            if (progress == null) return child;
+                                            return Container(
+                                              color: Colors.grey[100],
+                                              child: const Center(
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: Color(0xFFE85D22),
+                                                    ),
+                                              ),
+                                            );
+                                          },
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
+                                                color: Colors.grey[200],
+                                                child: const Icon(
+                                                  Icons.image,
+                                                  size: 50,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                        )
+                                      : Image.asset(url, fit: BoxFit.cover);
+                                },
+                              ),
                       ),
                       if (images.length > 1 && _currentPage > 0)
                         Positioned(
@@ -217,10 +265,35 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                             onPressed: _nextPage,
                           ),
                         ),
+                      // Page indicator dots
+                      if (images.length > 1)
+                        Positioned(
+                          bottom: 10,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: List.generate(
+                              images.length,
+                              (i) => AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 3,
+                                ),
+                                width: i == _currentPage ? 16 : 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: i == _currentPage
+                                      ? const Color(0xFFE85D22)
+                                      : Colors.white.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
 
-                  // Name / Price / Location
+                  // ── Name / Price / Location ──────────────────────────────
                   _buildSectionCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,7 +301,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                         if (isTranslating)
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 8.0),
-                            child: LinearProgressIndicator(minHeight: 2, color: Color(0xFFE85D22)),
+                            child: LinearProgressIndicator(
+                              minHeight: 2,
+                              color: Color(0xFFE85D22),
+                            ),
                           ),
                         Text(
                           translatedNames[productKey] ?? widget.product.name,
@@ -241,21 +317,23 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                         Row(
                           children: [
                             Text(
-                              "₦${widget.product.price.toStringAsFixed(0)}",
+                              '₦${_formatPrice(widget.product.price)}',
                               style: const TextStyle(
                                 fontSize: 22,
                                 color: Color(0xFFE85D22),
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              "${widget.product.id ?? ''}",
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 14,
+                            if (widget.product.priceUnit != null) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                '/ ${widget.product.priceUnit}',
+                                style: const TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 14,
+                                ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -280,7 +358,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                     ),
                   ),
 
-                  // Description
+                  // ── Description ──────────────────────────────────────────
                   _buildSectionCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -296,7 +374,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                         Text(
                           translatedDescriptions[productKey] ??
                               widget.product.description ??
-                              "No description available.",
+                              'No description available.',
                           style: TextStyle(
                             color: Colors.grey[600],
                             height: 1.5,
@@ -307,7 +385,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                     ),
                   ),
 
-                  // Seller Information
+                  // ── Seller information ───────────────────────────────────
                   _buildSectionCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -328,8 +406,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                               child: Text(
                                 widget.product.vendorName?.isNotEmpty == true
                                     ? widget.product.vendorName![0]
-                                    .toUpperCase()
-                                    : "S",
+                                          .toUpperCase()
+                                    : 'S',
                                 style: const TextStyle(
                                   color: Color(0xFFE85D22),
                                   fontWeight: FontWeight.bold,
@@ -343,11 +421,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                                 children: [
                                   Row(
                                     children: [
-                                      Text(
-                                        _translatedVendorName ?? widget.product.vendorName ?? "Sbrai Vendor",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15,
+                                      Expanded(
+                                        child: Text(
+                                          _translatedVendorName ??
+                                              widget.product.vendorName ??
+                                              'Sbrai Vendor',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                       const SizedBox(width: 4),
@@ -367,7 +450,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        "${widget.product.rating} ${l10n.rating}",
+                                        '${widget.product.rating} ${l10n.rating}',
                                         style: const TextStyle(
                                           color: Colors.grey,
                                           fontSize: 12,
@@ -390,7 +473,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              "${l10n.memberSince} Jan 2025",
+                              '${l10n.memberSince} Jan 2025',
                               style: const TextStyle(
                                 color: Colors.grey,
                                 fontSize: 12,
@@ -402,7 +485,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                     ),
                   ),
 
-                  // Safety Tips
+                  // ── Safety tips ──────────────────────────────────────────
                   Container(
                     margin: const EdgeInsets.all(12),
                     padding: const EdgeInsets.all(16),
@@ -440,16 +523,21 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 20),
                 ],
               ),
             ),
           ),
+
+          // ── Bottom actions ───────────────────────────────────────────────
           _buildBottomActions(context, l10n),
         ],
       ),
     );
   }
+
+  // ── Helper widgets ─────────────────────────────────────────────────────────
 
   Widget _buildSafetyBullet(String text) {
     return Padding(
@@ -458,7 +546,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            "• ",
+            '• ',
             style: TextStyle(
               color: Color(0xFF92400E),
               fontWeight: FontWeight.bold,
@@ -520,6 +608,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
       ),
       child: Row(
         children: [
+          // Call button
           Expanded(
             child: SizedBox(
               height: 50,
@@ -542,6 +631,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
             ),
           ),
           const SizedBox(width: 12),
+          // Chat button
           Expanded(
             child: SizedBox(
               height: 50,
@@ -572,5 +662,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> with Transl
         ],
       ),
     );
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  String _formatPrice(dynamic price) {
+    if (price == null) return '0';
+    final num p = price is num ? price : num.tryParse(price.toString()) ?? 0;
+    if (p >= 1000000) return '${(p / 1000000).toStringAsFixed(1)}M';
+    if (p >= 1000) return '${(p / 1000).toStringAsFixed(0)}K';
+    return p.toStringAsFixed(0);
   }
 }

@@ -26,8 +26,6 @@
     <string>$(FLUTTER_BUILD_NUMBER)</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
-
-    <!-- ── Google Sign-In URL Scheme (existing) ───────────────────── -->
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
@@ -39,7 +37,6 @@
             </array>
         </dict>
     </array>
-
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
@@ -80,24 +77,14 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
-
-    <!-- ── Camera ──────────────────────────────────────────────────── -->
     <key>NSCameraUsageDescription</key>
     <string>This app requires access to your camera to take photos for ad listings and for video calls.</string>
-
-    <!-- ── Microphone ──────────────────────────────────────────────── -->
     <key>NSMicrophoneUsageDescription</key>
-    <string>This app requires access to your microphone for audio and video calls, and to record video descriptions for your ads.</string>
-
-    <!-- ── Photo Library (read) ────────────────────────────────────── -->
+    <string>This app requires access to your microphone for audio and video calls.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>This app requires access to your photo library to upload images for ad listings and to send photos in chat.</string>
-
-    <!-- ── Photo Library (write / save) ───────────────────────────── -->
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>This app needs permission to save images to your photo library.</string>
-
-    <!-- ── Local Network (Agora peer-to-peer calls) ────────────────── -->
     <key>NSLocalNetworkUsageDescription</key>
     <string>This app uses the local network to improve audio and video call quality.</string>
     <key>NSBonjourServices</key>
@@ -105,8 +92,6 @@
         <string>_agora-rtc._udp</string>
         <string>_agora-rtc._tcp</string>
     </array>
-
-    <!-- ── Background Modes (keep calls alive when app is backgrounded) -->
     <key>UIBackgroundModes</key>
     <array>
         <string>audio</string>
@@ -114,14 +99,10 @@
         <string>fetch</string>
         <string>remote-notification</string>
     </array>
-
-    <!-- ── App Transport Security ──────────────────────────────────── -->
-    <!-- Remove NSAllowsArbitraryLoads once your API is on HTTPS -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
-
 </dict>
 </plist>

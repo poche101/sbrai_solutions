@@ -1,18 +1,14 @@
 // ─────────────────────────────────────────────────────────────
 //  screens/call_screen.dart
-//  Audio / Video call screen using Agora
-//  Requires: agora_rtc_engine package in pubspec.yaml
+//  Audio / Video call screen using Agora RTC Engine
 // ─────────────────────────────────────────────────────────────
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:sbrai_solutions/models/chat_model.dart';
 import '../services/chat_service.dart';
-
-/// NOTE: This screen provides the full call UI and handles
-/// Agora lifecycle. Add `agora_rtc_engine: ^6.x.x` to pubspec.yaml
-/// and import the actual SDK. The AgoraRTC calls below are
-/// annotated with [AGORA] so you can swap them in directly.
 
 class CallScreen extends StatefulWidget {
   final CallSession session;
@@ -28,67 +24,123 @@ class _CallScreenState extends State<CallScreen> {
   static const _orange = Color(0xFFE85D22);
   static const _darkBg = Color(0xFF1A1A2E);
 
+  RtcEngine? _engine;
+  int? _remoteUid;
+
   bool _isMuted = false;
   bool _isSpeakerOn = true;
   bool _isCameraOff = false;
   bool _callConnected = false;
   bool _isEnding = false;
+  String? _errorMessage;
   Duration _callDuration = Duration.zero;
   Timer? _durationTimer;
-
-  // [AGORA] RtcEngine? _engine;
-  // [AGORA] int? _remoteUid;
 
   @override
   void initState() {
     super.initState();
-    _initCall();
+    // Defer to ensure the widget tree is fully built before requesting
+    // permissions — prevents MethodChannel crashes on some Android devices
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initCall();
+    });
   }
 
   @override
   void dispose() {
     _durationTimer?.cancel();
-    // [AGORA] _engine?.leaveChannel();
-    // [AGORA] _engine?.release();
+    _engine?.leaveChannel();
+    _engine?.release();
     super.dispose();
   }
 
-  Future<void> _initCall() async {
-    // ── [AGORA] Initialize Agora Engine ──────────────────────────
-    // _engine = createAgoraRtcEngine();
-    // await _engine!.initialize(RtcEngineContext(appId: 'YOUR_AGORA_APP_ID'));
-    //
-    // _engine!.registerEventHandler(RtcEngineEventHandler(
-    //   onJoinChannelSuccess: (connection, elapsed) {
-    //     setState(() => _callConnected = true);
-    //     _startTimer();
-    //   },
-    //   onUserJoined: (connection, remoteUid, elapsed) {
-    //     setState(() => _remoteUid = remoteUid);
-    //   },
-    //   onUserOffline: (connection, remoteUid, reason) {
-    //     setState(() => _remoteUid = null);
-    //     _endCall();
-    //   },
-    // ));
-    //
-    // if (widget.session.callType == CallType.video) {
-    //   await _engine!.enableVideo();
-    // }
-    //
-    // await _engine!.joinChannel(
-    //   token: widget.session.token,
-    //   channelId: widget.session.channelName,
-    //   uid: widget.session.uid,
-    //   options: const ChannelMediaOptions(),
-    // );
-    // ─────────────────────────────────────────────────────────────
+  // ── Agora init ─────────────────────────────────────────────────────────────
 
-    // Simulated connection for UI testing (remove when Agora is integrated)
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      setState(() => _callConnected = true);
-      _startTimer();
+  Future<void> _initCall() async {
+    // ── Step 1: Request permissions ────────────────────────────────────────
+    try {
+      final micStatus = await Permission.microphone.request();
+
+      if (!mounted) return;
+
+      if (widget.session.callType == CallType.video) {
+        await Permission.camera.request();
+        if (!mounted) return;
+      }
+
+      if (!micStatus.isGranted) {
+        setState(() => _errorMessage = 'Microphone permission denied.');
+        return;
+      }
+    } catch (e) {
+      debugPrint('❌ Permission request error: $e');
+      if (mounted) {
+        setState(() => _errorMessage = 'Could not request permissions: $e');
+      }
+      return;
+    }
+
+    // ── Step 2: Initialise Agora engine ────────────────────────────────────
+    try {
+      _engine = createAgoraRtcEngine();
+
+      // Use appId from the session (returned by AgoraController@generateToken)
+      await _engine!.initialize(
+        RtcEngineContext(
+          appId: widget.session.appId,
+          channelProfile: ChannelProfileType.channelProfileCommunication,
+        ),
+      );
+
+      _engine!.registerEventHandler(
+        RtcEngineEventHandler(
+          onJoinChannelSuccess: (connection, elapsed) {
+            debugPrint('✅ Joined channel: ${connection.channelId}');
+            if (mounted) {
+              setState(() => _callConnected = true);
+              _startTimer();
+            }
+          },
+          onUserJoined: (connection, remoteUid, elapsed) {
+            debugPrint('👤 Remote user joined: $remoteUid');
+            if (mounted) setState(() => _remoteUid = remoteUid);
+          },
+          onUserOffline: (connection, remoteUid, reason) {
+            debugPrint('👤 Remote user left: $remoteUid');
+            if (mounted) setState(() => _remoteUid = null);
+            _endCall();
+          },
+          onError: (err, msg) {
+            debugPrint('❌ Agora error: $err — $msg');
+            if (mounted) setState(() => _errorMessage = 'Call error: $msg');
+          },
+        ),
+      );
+
+      if (widget.session.callType == CallType.video) {
+        await _engine!.enableVideo();
+        await _engine!.startPreview();
+      } else {
+        await _engine!.enableAudio();
+      }
+
+      await _engine!.setEnableSpeakerphone(_isSpeakerOn);
+
+      await _engine!.joinChannel(
+        token: widget.session.token,
+        channelId: widget.session.channelName,
+        uid: widget.session.uid,
+        options: ChannelMediaOptions(
+          clientRoleType: ClientRoleType.clientRoleBroadcaster,
+          publishMicrophoneTrack: true,
+          publishCameraTrack: widget.session.callType == CallType.video,
+        ),
+      );
+    } catch (e) {
+      debugPrint('❌ Agora init error: $e');
+      if (mounted) {
+        setState(() => _errorMessage = 'Could not start call: $e');
+      }
     }
   }
 
@@ -99,6 +151,8 @@ class _CallScreenState extends State<CallScreen> {
       }
     });
   }
+
+  // ── Call controls ──────────────────────────────────────────────────────────
 
   Future<void> _endCall() async {
     if (_isEnding) return;
@@ -111,28 +165,27 @@ class _CallScreenState extends State<CallScreen> {
       );
     } catch (_) {}
 
-    // [AGORA] await _engine?.leaveChannel();
-
+    await _engine?.leaveChannel();
     if (mounted) Navigator.pop(context);
   }
 
   void _toggleMute() {
     setState(() => _isMuted = !_isMuted);
-    // [AGORA] _engine?.muteLocalAudioStream(_isMuted);
+    _engine?.muteLocalAudioStream(_isMuted);
   }
 
   void _toggleSpeaker() {
     setState(() => _isSpeakerOn = !_isSpeakerOn);
-    // [AGORA] _engine?.setEnableSpeakerphone(_isSpeakerOn);
+    _engine?.setEnableSpeakerphone(_isSpeakerOn);
   }
 
   void _toggleCamera() {
     setState(() => _isCameraOff = !_isCameraOff);
-    // [AGORA] _engine?.muteLocalVideoStream(_isCameraOff);
+    _engine?.muteLocalVideoStream(_isCameraOff);
   }
 
   void _switchCamera() {
-    // [AGORA] _engine?.switchCamera();
+    _engine?.switchCamera();
   }
 
   String _formatDuration(Duration d) {
@@ -141,17 +194,54 @@ class _CallScreenState extends State<CallScreen> {
     return '$m:$s';
   }
 
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final isVideo = widget.session.callType == CallType.video;
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        backgroundColor: _darkBg,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.call_end, color: Colors.red, size: 56),
+                const SizedBox(height: 16),
+                Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                  ),
+                  child: const Text(
+                    'Go Back',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _darkBg,
       body: Stack(
         children: [
-          // ── Video views ─────────────────────────────────────────
+          // ── Video views ───────────────────────────────────────
           if (isVideo) _buildVideoLayer(),
 
-          // ── Gradient overlay ────────────────────────────────────
+          // ── Gradient overlay ──────────────────────────────────
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -168,7 +258,7 @@ class _CallScreenState extends State<CallScreen> {
             ),
           ),
 
-          // ── Top info ────────────────────────────────────────────
+          // ── Top info ──────────────────────────────────────────
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -191,7 +281,7 @@ class _CallScreenState extends State<CallScreen> {
             ),
           ),
 
-          // ── Controls ────────────────────────────────────────────
+          // ── Controls ──────────────────────────────────────────
           Align(
             alignment: Alignment.bottomCenter,
             child: SafeArea(
@@ -200,7 +290,6 @@ class _CallScreenState extends State<CallScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Secondary controls row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -239,7 +328,6 @@ class _CallScreenState extends State<CallScreen> {
                       ],
                     ),
                     const SizedBox(height: 32),
-                    // End call button
                     GestureDetector(
                       onTap: _endCall,
                       child: Container(
@@ -284,6 +372,8 @@ class _CallScreenState extends State<CallScreen> {
       ),
     );
   }
+
+  // ── Widgets ────────────────────────────────────────────────────────────────
 
   Widget _buildStatusBadge() {
     if (!_callConnected) {
@@ -361,31 +451,55 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Widget _buildVideoLayer() {
-    // [AGORA] Replace containers below with actual AgoraVideoView widgets
     return Stack(
       children: [
-        // Remote video (full screen)
-        // [AGORA] AgoraVideoView(controller: VideoViewController.remote(...))
-        Container(color: const Color(0xFF0D0D1A)),
-
-        // Local video (picture-in-picture)
-        Positioned(
-          top: 100,
-          right: 16,
-          child: Container(
-            width: 100,
-            height: 150,
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white24),
+        // Remote video full screen
+        if (_remoteUid != null && _engine != null)
+          AgoraVideoView(
+            controller: VideoViewController.remote(
+              rtcEngine: _engine!,
+              canvas: VideoCanvas(uid: _remoteUid!),
+              connection: RtcConnection(channelId: widget.session.channelName),
             ),
-            // [AGORA] child: AgoraVideoView(controller: VideoViewController(...))
+          )
+        else
+          Container(
+            color: const Color(0xFF0D0D1A),
             child: const Center(
-              child: Icon(Icons.person, color: Colors.white54, size: 40),
+              child: Icon(Icons.person, color: Colors.white24, size: 80),
             ),
           ),
-        ),
+
+        // Local video picture-in-picture
+        if (_engine != null)
+          Positioned(
+            top: 100,
+            right: 16,
+            child: SizedBox(
+              width: 100,
+              height: 150,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _isCameraOff
+                    ? Container(
+                        color: Colors.black54,
+                        child: const Center(
+                          child: Icon(
+                            Icons.videocam_off,
+                            color: Colors.white54,
+                            size: 32,
+                          ),
+                        ),
+                      )
+                    : AgoraVideoView(
+                        controller: VideoViewController(
+                          rtcEngine: _engine!,
+                          canvas: const VideoCanvas(uid: 0),
+                        ),
+                      ),
+              ),
+            ),
+          ),
       ],
     );
   }

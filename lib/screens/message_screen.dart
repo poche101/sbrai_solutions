@@ -2,18 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/models/message_model.dart';
 import 'package:sbrai_solutions/models/chat_model.dart';
 import 'package:sbrai_solutions/screens/chat_screen.dart';
-import 'package:sbrai_solutions/services/chat_service.dart'; // ← Add this import
+import 'package:sbrai_solutions/services/chat_service.dart';
 
 class MessageScreen extends StatefulWidget {
-  final List<ChatThread> threads;
-  final String authToken;
   final int currentUserId;
   final bool isVendor;
 
   const MessageScreen({
     super.key,
-    required this.threads,
-    required this.authToken,
     required this.currentUserId,
     required this.isVendor,
   });
@@ -23,39 +19,96 @@ class MessageScreen extends StatefulWidget {
 }
 
 class _MessageScreenState extends State<MessageScreen> {
-  late List<MessageModel> _allMessages;
+  late final ChatService _service;
+
+  List<MessageModel> _allMessages = [];
   List<MessageModel> _filteredMessages = [];
   final TextEditingController _searchController = TextEditingController();
+
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
+    _service = ChatService(currentUserId: widget.currentUserId);
+    _loadThreads();
+  }
 
-    _allMessages = widget.threads
-        .map(
-          (thread) => MessageModel.fromChatThread(
-            thread,
-            currentUserId: widget.currentUserId,
-            isVendor: widget.isVendor,
-          ),
-        )
-        .toList();
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
-    _filteredMessages = _allMessages;
+  // ── Data ───────────────────────────────────────────────────────────────────
+
+  Future<void> _loadThreads() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final List<ChatThread> allThreads = [];
+      int page = 1;
+      bool hasMore = true;
+
+      while (hasMore && page <= 5) {
+        final result = await _service.getChats(page: page);
+        allThreads.addAll(result.data);
+        hasMore = result.hasMore;
+        page++;
+      }
+
+      if (mounted) {
+        final messages = allThreads
+            .map(
+              (thread) => MessageModel.fromChatThread(
+                thread,
+                currentUserId: widget.currentUserId,
+                isVendor: widget.isVendor,
+              ),
+            )
+            .toList();
+        setState(() {
+          _allMessages = messages;
+          _filteredMessages = messages;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e
+              .toString()
+              .replaceFirst(RegExp(r'ChatApiException\(\d+\):\s*'), '')
+              .trim();
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _filterMessages(String query) {
     setState(() {
-      _filteredMessages = _allMessages
-          .where(
-            (m) =>
-                m.senderName.toLowerCase().contains(query.toLowerCase()) ||
-                (m.subTitle?.toLowerCase().contains(query.toLowerCase()) ??
-                    false),
-          )
-          .toList();
+      _filteredMessages = query.isEmpty
+          ? _allMessages
+          : _allMessages
+                .where(
+                  (m) =>
+                      m.senderName.toLowerCase().contains(
+                        query.toLowerCase(),
+                      ) ||
+                      (m.subTitle?.toLowerCase().contains(
+                            query.toLowerCase(),
+                          ) ??
+                          false),
+                )
+                .toList();
     });
   }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -67,14 +120,23 @@ class _MessageScreenState extends State<MessageScreen> {
           _buildSearchBar(),
           const SizedBox(height: 10),
           Expanded(
-            child: _filteredMessages.isEmpty
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: Color(0xFFFF7043)),
+                  )
+                : _error != null
+                ? _buildError()
+                : _filteredMessages.isEmpty
                 ? _buildEmptyState()
-                : ListView.builder(
-                    itemCount: _filteredMessages.length,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemBuilder: (context, index) {
-                      return _buildMessageCard(_filteredMessages[index]);
-                    },
+                : RefreshIndicator(
+                    color: const Color(0xFFFF7043),
+                    onRefresh: _loadThreads,
+                    child: ListView.builder(
+                      itemCount: _filteredMessages.length,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemBuilder: (context, index) =>
+                          _buildMessageCard(_filteredMessages[index]),
+                    ),
                   ),
           ),
         ],
@@ -95,12 +157,18 @@ class _MessageScreenState extends State<MessageScreen> {
         'Messages',
         style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
       ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh, color: Colors.black54),
+          onPressed: _loadThreads,
+        ),
+      ],
     );
   }
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: TextField(
         controller: _searchController,
         onChanged: _filterMessages,
@@ -121,10 +189,63 @@ class _MessageScreenState extends State<MessageScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(
-      child: Text(
-        "No conversations found",
-        style: TextStyle(color: Colors.grey),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.chat_bubble_outline,
+            size: 56,
+            color: Colors.grey.shade300,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'No conversations yet',
+            style: TextStyle(
+              color: Colors.black54,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Messages will appear here',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.wifi_off_rounded, size: 56, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              _error ?? 'Failed to load messages',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadThreads,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF7043),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -140,13 +261,11 @@ class _MessageScreenState extends State<MessageScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(15),
         onTap: () {
-          // Fixed: Match the ChatScreen constructor you're using
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ChatScreen(
+              builder: (_) => ChatScreen(
                 chatId: message.thread.id,
-                authToken: widget.authToken,
                 currentUserId: widget.currentUserId,
                 otherPartyName: message.senderName,
                 otherPartyInitial: message.senderName.isNotEmpty
@@ -154,7 +273,7 @@ class _MessageScreenState extends State<MessageScreen> {
                     : '?',
                 adTitle: message.subTitle ?? message.thread.adTitle ?? '',
                 otherPartyId: message.thread.otherParticipant?.id ?? 0,
-                service: ChatService(widget.authToken),
+                service: _service,
               ),
             ),
           );
@@ -185,6 +304,13 @@ class _MessageScreenState extends State<MessageScreen> {
   }
 
   Widget _buildAvatar(MessageModel message) {
+    String? finalUrl = message.imageUrl;
+
+    // 🚀 If path is relative, prefix it with your live storage domain location
+    if (finalUrl != null && !finalUrl.startsWith('http')) {
+      finalUrl = 'https://sbraisolutions.com/storage/$finalUrl';
+    }
+
     return Container(
       width: 55,
       height: 55,
@@ -192,23 +318,19 @@ class _MessageScreenState extends State<MessageScreen> {
         color: Colors.grey.shade100,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: message.imageUrl != null
+      child: finalUrl != null && finalUrl.isNotEmpty
           ? ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(message.imageUrl!, fit: BoxFit.cover),
+              child: Image.network(
+                finalUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Center(
+                  child: Icon(Icons.broken_image, color: Colors.grey.shade400),
+                ),
+              ),
             )
           : Center(
-              child: message.isVendor
-                  ? const Icon(Icons.image_outlined, color: Colors.grey)
-                  : CircleAvatar(
-                      backgroundColor: Colors.blueGrey.shade50,
-                      child: Text(
-                        message.senderName.isNotEmpty
-                            ? message.senderName[0]
-                            : '?',
-                        style: const TextStyle(color: Colors.orange),
-                      ),
-                    ),
+              child: Icon(Icons.image_outlined, color: Colors.grey.shade400),
             ),
     );
   }

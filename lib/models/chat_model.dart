@@ -274,22 +274,47 @@ class PaginatedResponse<T> {
 }
 
 // ── Agora Call Models ──────────────────────────────────────────
+
+/// Matches the AgoraController@generateToken response:
+/// { "status": true, "token": "...", "app_id": "..." }
+///
+/// The API does NOT return channel_name or uid — those are supplied
+/// by the caller and echoed back via [channelName] and [uid] fields
+/// which are set manually in ChatService.getCallToken().
 class AgoraTokenResponse {
   final String token;
-  final String channelName;
-  final int uid;
+  final String appId;
+  final String channelName; // echoed from the request, not from the response
+  final int uid; // echoed from the request, not from the response
 
   const AgoraTokenResponse({
     required this.token,
+    required this.appId,
     required this.channelName,
     required this.uid,
   });
 
-  factory AgoraTokenResponse.fromJson(Map<String, dynamic> json) {
+  /// Pass [channelName] and [uid] from the original request since
+  /// the API response only contains 'token' and 'app_id'.
+  factory AgoraTokenResponse.fromJson(
+    Map<String, dynamic> json, {
+    required String channelName,
+    required int uid,
+  }) {
+    final token = json['token']?.toString() ?? '';
+
+    if (token.isEmpty) {
+      throw Exception(
+        'getCallToken: token missing from response. '
+        'Keys received: ${json.keys.toList()}',
+      );
+    }
+
     return AgoraTokenResponse(
-      token: json['token'],
-      channelName: json['channel_name'],
-      uid: json['uid'],
+      token: token,
+      appId: json['app_id']?.toString() ?? '',
+      channelName: channelName,
+      uid: uid,
     );
   }
 }
@@ -299,6 +324,7 @@ enum CallType { audio, video }
 class CallSession {
   final String channelName;
   final String token;
+  final String appId;
   final int uid;
   final CallType callType;
   final String callerName;
@@ -307,6 +333,7 @@ class CallSession {
   const CallSession({
     required this.channelName,
     required this.token,
+    required this.appId,
     required this.uid,
     required this.callType,
     required this.callerName,

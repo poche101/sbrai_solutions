@@ -14,7 +14,6 @@ import 'package:sbrai_solutions/screens/call_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final int chatId;
-  final String authToken;
   final int currentUserId;
   final String otherPartyName;
   final String otherPartyInitial;
@@ -25,7 +24,6 @@ class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
     required this.chatId,
-    required this.authToken,
     required this.currentUserId,
     required this.otherPartyName,
     required this.otherPartyInitial,
@@ -90,38 +88,45 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     try {
       final result = await widget.service.getMessages(widget.chatId, page: 1);
-      setState(() {
-        _messages
-          ..clear()
-          ..addAll(result.data.reversed);
-        _currentPage = 1;
-        _hasMore = result.hasMore;
-        _isLoading = false;
-      });
-      _scrollToBottom();
+      if (mounted) {
+        setState(() {
+          _messages
+            ..clear()
+            ..addAll(result.data.reversed);
+          _currentPage = 1;
+          _hasMore = result.hasMore;
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = _friendlyError(e);
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _loadMore() async {
+    if (!_hasMore || _isLoadingMore) return;
     setState(() => _isLoadingMore = true);
     try {
       final result = await widget.service.getMessages(
         widget.chatId,
         page: _currentPage + 1,
       );
-      setState(() {
-        _messages.insertAll(0, result.data.reversed);
-        _currentPage++;
-        _hasMore = result.hasMore;
-        _isLoadingMore = false;
-      });
+      if (mounted) {
+        setState(() {
+          _messages.insertAll(0, result.data.reversed);
+          _currentPage++;
+          _hasMore = result.hasMore;
+          _isLoadingMore = false;
+        });
+      }
     } catch (_) {
-      setState(() => _isLoadingMore = false);
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -147,16 +152,18 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.chatId,
         message: text,
       );
-      final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
-      if (idx != -1) {
-        setState(() => _messages[idx] = sent);
+      if (mounted) {
+        final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
+        if (idx != -1) setState(() => _messages[idx] = sent);
       }
     } catch (e) {
-      setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
-      _showError('Failed to send message');
-      _controller.text = text;
+      if (mounted) {
+        setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
+        _showError('Failed to send message');
+        _controller.text = text;
+      }
     } finally {
-      setState(() => _isSending = false);
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -184,60 +191,81 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.chatId,
         image: File(picked.path),
       );
-      final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
-      if (idx != -1) setState(() => _messages[idx] = sent);
+      if (mounted) {
+        final idx = _messages.indexWhere((m) => m.id == tempMsg.id);
+        if (idx != -1) setState(() => _messages[idx] = sent);
+      }
     } catch (e) {
-      setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
-      _showError('Failed to send image');
+      if (mounted) {
+        setState(() => _messages.removeWhere((m) => m.id == tempMsg.id));
+        _showError('Failed to send image');
+      }
     } finally {
-      setState(() => _isSending = false);
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
   Future<void> _startCall(CallType callType) async {
     final channelName =
         'chat_${widget.chatId}_${DateTime.now().millisecondsSinceEpoch}';
-    const uid = 1;
+    final uid = widget.currentUserId;
 
+    debugPrint(
+      '📞 Starting ${callType.name} call — channel: $channelName, uid: $uid',
+    );
+
+    // Step 1: get token
+    AgoraTokenResponse tokenResp;
     try {
-      final tokenResp = await widget.service.getCallToken(
+      tokenResp = await widget.service!.getCallToken(
         channelName: channelName,
         uid: uid,
       );
+      debugPrint('✅ Token received: ${tokenResp.token.substring(0, 20)}...');
+    } catch (e) {
+      debugPrint('❌ getCallToken failed: $e');
+      _showError('Could not get call token: $e');
+      return;
+    }
 
-      await widget.service.initiateCall(
+    // Step 2: notify receiver (non-fatal)
+    try {
+      await widget.service!.initiateCall(
         receiverId: widget.otherPartyId,
         channelName: channelName,
         callerName: widget.otherPartyName,
         callType: callType,
       );
-
-      if (!mounted) return;
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            session: CallSession(
-              channelName: tokenResp.channelName,
-              token: tokenResp.token,
-              uid: uid,
-              callType: callType,
-              callerName: widget.otherPartyName,
-              receiverId: widget.otherPartyId,
-            ),
-            service: widget.service,
-          ),
-        ),
-      );
+      debugPrint('✅ Call initiated to receiver: ${widget.otherPartyId}');
     } catch (e) {
-      _showError('Could not start call. Please try again.');
+      debugPrint('❌ initiateCall failed: $e');
     }
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          session: CallSession(
+            channelName: tokenResp.channelName,
+            token: tokenResp.token,
+            appId: tokenResp.appId,
+            uid: uid,
+            callType: callType,
+            callerName: widget.otherPartyName,
+            receiverId: widget.otherPartyId,
+          ),
+          service: widget.service!,
+        ),
+      ),
+    );
   }
 
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 150), () {
-      if (_scrollController.hasClients) {
+      if (_scrollController.hasClients &&
+          _scrollController.position.hasContentDimensions) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -247,6 +275,13 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  String _friendlyError(Object e) {
+    return e
+        .toString()
+        .replaceFirst(RegExp(r'ChatApiException\(\d+\):\s*'), '')
+        .trim();
+  }
+
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -254,6 +289,11 @@ class _ChatScreenState extends State<ChatScreen> {
         content: Text(msg),
         backgroundColor: Colors.red.shade700,
         behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+        ),
       ),
     );
   }
@@ -322,6 +362,12 @@ class _ChatScreenState extends State<ChatScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (widget.adTitle.isNotEmpty)
+                  Text(
+                    widget.adTitle,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                  ),
               ],
             ),
           ),
@@ -367,10 +413,26 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessageList() {
     if (_messages.isEmpty) {
-      return const Center(
-        child: Text(
-          'No messages yet',
-          style: TextStyle(color: Colors.grey, fontSize: 14),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 56,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No messages yet',
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Say hello to start the conversation!',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+            ),
+          ],
         ),
       );
     }
@@ -388,22 +450,33 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildError() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-          const SizedBox(height: 12),
-          Text(
-            _error ?? 'Failed to load messages',
-            style: const TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _loadMessages,
-            style: ElevatedButton.styleFrom(backgroundColor: _orange),
-            child: const Text('Retry', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.wifi_off_rounded, size: 56, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              _error ?? 'Failed to load messages',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadMessages,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _orange,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

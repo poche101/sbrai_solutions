@@ -208,6 +208,11 @@ class VendorAuthService {
     }
   }
 
+  /// ---------------- GET TOKEN ----------------
+  Future<String?> getToken() async {
+    return await _apiService.getToken();
+  }
+
   Future<Map<String, dynamic>> getNINDetails(String nin) async {
     try {
       final response = await _apiService.get(

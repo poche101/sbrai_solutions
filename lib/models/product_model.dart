@@ -15,6 +15,8 @@ class Product {
   final String? createdAt;
   final int? chatId;
 
+  static const String _storageBase = 'https://sbraisolutions.com/storage/';
+
   Product({
     this.id,
     required this.name,
@@ -33,39 +35,39 @@ class Product {
     this.chatId,
   });
 
-  /// Returns the first image or placeholder
-  String get imageUrl =>
-      imageUrls.isNotEmpty ? imageUrls[0] : 'assets/images/placeholder.jpg';
+  /// Returns the first image or empty string
+  String get imageUrl => imageUrls.isNotEmpty ? imageUrls[0] : '';
+
+  /// Converts raw path to full URL (if needed)
+  static String _toFullUrl(String? raw) {
+    if (raw == null || raw.isEmpty) return '';
+    if (raw.startsWith('http')) return raw;
+    return '$_storageBase$raw';
+  }
 
   factory Product.fromJson(Map<String, dynamic> json) {
-    // ── Extract images ────────────────────────────────────────────────────────
-    // API returns: "images": [ { "url": "https://...", ... }, ... ]
-    // Fallback:    "photos": [ "https://..." ] (old format)
+    // ── Extract Images ─────────────────────────────────────────────────────
     List<String> images = [];
 
     if (json['images'] != null && json['images'] is List) {
-      // ✅ New format — each item is an object with a 'url' field
       images = (json['images'] as List)
           .map((img) {
-            if (img is Map) {
-              return img['url']?.toString() ?? '';
+            if (img is Map<String, dynamic>) {
+              // Prioritize 'url' (full URL) as returned by your API
+              final url = img['url']?.toString() ?? '';
+              if (url.isNotEmpty) return url;
+
+              // Fallback to 'path'
+              final path = img['path']?.toString() ?? '';
+              return _toFullUrl(path);
             }
-            return img.toString();
+            return _toFullUrl(img.toString());
           })
           .where((url) => url.isNotEmpty)
           .toList();
-    } else if (json['photos'] != null && json['photos'] is List) {
-      // Legacy format — list of path strings
-      const String storageBaseUrl = "https://sbraisolutions.com/storage/";
-      images = (json['photos'] as List).map((photo) {
-        final photoPath = photo.toString();
-        return photoPath.startsWith('http')
-            ? photoPath
-            : storageBaseUrl + photoPath;
-      }).toList();
     }
 
-    // ── Vendor name ───────────────────────────────────────────────────────────
+    // ── Extract Display Name ───────────────────────────────────────────────
     String extractDisplayName(Map<String, dynamic> json) {
       if (json['vendor'] != null && json['vendor'] is Map) {
         final v = json['vendor'] as Map<String, dynamic>;
@@ -74,7 +76,9 @@ class Product {
             v['name']?.toString() ??
             'Sbrai Vendor';
       }
-      return json['full_name']?.toString() ?? 'Sbrai Vendor';
+      return json['full_name']?.toString() ??
+          json['name']?.toString() ??
+          'Sbrai Vendor';
     }
 
     return Product(
@@ -82,9 +86,11 @@ class Product {
           ? json['id']
           : int.tryParse(json['id']?.toString() ?? ''),
 
-      name: json['title'] != null && json['title'].toString().isNotEmpty
-          ? json['title'].toString()
-          : (json['slug'] ?? 'Unknown Product').toString().replaceAll('-', ' '),
+      // API uses 'title'
+      name:
+          json['title']?.toString().trim() ??
+          json['name']?.toString().trim() ??
+          'Untitled',
 
       location: json['location']?.toString() ?? 'Nigeria',
 
@@ -95,41 +101,42 @@ class Product {
       description: json['description']?.toString(),
 
       vendorName: json['vendor'] != null && json['vendor'] is Map
-          ? (json['vendor'] as Map)['name']?.toString() ?? 'Sbrai Vendor'
+          ? ((json['vendor'] as Map)['business_name']?.toString() ??
+                (json['vendor'] as Map)['full_name']?.toString() ??
+                (json['vendor'] as Map)['name']?.toString() ??
+                'Sbrai Vendor')
           : 'Sbrai Vendor',
 
-      vendorId:
-          json['user_id']
-              is int // ✅ API returns user_id not vendor_id
+      vendorId: json['user_id'] is int
           ? json['user_id']
           : int.tryParse(json['user_id']?.toString() ?? '0'),
 
-      chatId: json['chat_id'] is int
-          ? json['chat_id']
-          : int.tryParse(json['chat_id']?.toString() ?? '0'),
+      vendorPhone: json['vendor'] != null && json['vendor'] is Map
+          ? (json['vendor'] as Map)['phone']?.toString()
+          : null,
 
       userName: extractDisplayName(json),
 
-      vendorPhone: json['vendor'] != null && json['vendor'] is Map
-          ? (json['vendor'] as Map)['phone']?.toString()
-          : json['vendor_phone']?.toString(),
-
       rating: double.tryParse(json['rating']?.toString() ?? '0') ?? 0.0,
 
-      imageUrls: images.isNotEmpty ? images : ['assets/images/placeholder.jpg'],
+      imageUrls: images,
 
       category: json['category'] != null && json['category'] is Map
           ? (json['category'] as Map)['name']?.toString() ?? 'General'
           : json['category']?.toString() ?? 'General',
 
       createdAt: json['created_at']?.toString(),
+
+      chatId: json['chat_id'] is int
+          ? json['chat_id']
+          : int.tryParse(json['chat_id']?.toString() ?? '0'),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'name': name,
+      'title': name,
       'location': location,
       'price': price,
       'price_unit': priceUnit,

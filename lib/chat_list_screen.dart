@@ -9,14 +9,11 @@ import '../services/chat_service.dart';
 import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
-  /// Pass your auth token and current user ID here
-  final String authToken;
   final int currentUserId;
   final bool isVendor;
 
   const ChatListScreen({
     super.key,
-    required this.authToken,
     required this.currentUserId,
     required this.isVendor,
   });
@@ -41,7 +38,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   void initState() {
     super.initState();
-    _service = ChatService(widget.authToken);
+    // Token is lazy-loaded from SharedPreferences inside ChatService.
+    _service = ChatService(currentUserId: widget.currentUserId);
     _loadChats();
     _scrollController.addListener(_onScroll);
   }
@@ -68,35 +66,51 @@ class _ChatListScreenState extends State<ChatListScreen> {
     });
     try {
       final result = await _service.getChats(page: 1);
-      setState(() {
-        _threads
-          ..clear()
-          ..addAll(result.data);
-        _currentPage = 1;
-        _hasMore = result.hasMore;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _threads
+            ..clear()
+            ..addAll(result.data);
+          _currentPage = 1;
+          _hasMore = result.hasMore;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = _friendlyError(e);
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
     setState(() => _isLoadingMore = true);
     try {
       final result = await _service.getChats(page: _currentPage + 1);
-      setState(() {
-        _threads.addAll(result.data);
-        _currentPage++;
-        _hasMore = result.hasMore;
-        _isLoadingMore = false;
-      });
+      if (mounted) {
+        setState(() {
+          _threads.addAll(result.data);
+          _currentPage++;
+          _hasMore = result.hasMore;
+          _isLoadingMore = false;
+        });
+      }
     } catch (_) {
-      setState(() => _isLoadingMore = false);
+      if (mounted) setState(() => _isLoadingMore = false);
     }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  String _friendlyError(Object e) {
+    return e
+        .toString()
+        .replaceFirst(RegExp(r'ChatApiException\(\d+\):\s*'), '')
+        .trim();
   }
 
   String _formatTime(String? iso) {
@@ -116,24 +130,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
-  String _otherPartyName(ChatThread t) {
-    if (widget.isVendor) {
-      return t.buyer?.name ?? 'Buyer';
-    }
-    return t.vendor?.displayName ?? 'Vendor';
-  }
+  String _otherPartyName(ChatThread t) => widget.isVendor
+      ? (t.buyer?.name ?? 'Buyer')
+      : (t.vendor?.displayName ?? 'Vendor');
 
-  String _otherPartyInitial(ChatThread t) {
-    if (widget.isVendor) {
-      return t.buyer?.initial ?? '?';
-    }
-    return t.vendor?.initial ?? '?';
-  }
+  String _otherPartyInitial(ChatThread t) =>
+      widget.isVendor ? (t.buyer?.initial ?? '?') : (t.vendor?.initial ?? '?');
 
-  bool _isUnread(ChatThread t) {
-    if (widget.isVendor) return !t.vendorRead;
-    return !t.buyerRead;
-  }
+  bool _isUnread(ChatThread t) =>
+      widget.isVendor ? !t.vendorRead : !t.buyerRead;
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -194,12 +201,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
         MaterialPageRoute(
           builder: (_) => ChatScreen(
             chatId: thread.id,
-            authToken: widget.authToken,
             currentUserId: widget.currentUserId,
             otherPartyName: name,
             otherPartyInitial: initial,
             adTitle: thread.ad?.title ?? '',
             otherPartyId: widget.isVendor ? thread.buyerId : thread.vendorId,
+            // Reuse the same service instance — token already cached.
             service: _service,
           ),
         ),
@@ -226,6 +233,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ),
             ),
             const SizedBox(width: 12),
+
             // Content
             Expanded(
               child: Column(
@@ -318,6 +326,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           Text(
             _error ?? 'Something went wrong',
             style: const TextStyle(color: Colors.grey),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
           ElevatedButton(

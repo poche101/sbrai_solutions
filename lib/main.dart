@@ -8,9 +8,10 @@ import 'package:provider/provider.dart';
 
 // --- Internal Imports ---
 import 'package:sbrai_solutions/l10n/app_localizations.dart';
-import 'package:sbrai_solutions/l10n/fallback_localizations_delegate.dart'; // ← NEW
+import 'package:sbrai_solutions/l10n/fallback_localizations_delegate.dart';
 import 'package:sbrai_solutions/providers/language_provider.dart';
 import 'package:sbrai_solutions/services/translation_service.dart';
+import 'package:sbrai_solutions/account_selection_screen.dart'; // ← NEW
 import 'package:sbrai_solutions/vendor/screen/vendor_home_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/favorite_screen.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/buyers_terms_page.dart';
@@ -18,6 +19,7 @@ import 'package:sbrai_solutions/vendor/screen/vendor_dashboard_screen.dart';
 import 'package:sbrai_solutions/vendor/ads/products_screen.dart';
 import 'package:sbrai_solutions/screens/language_selection_screen.dart';
 import 'package:sbrai_solutions/firebase_options.dart';
+import 'package:sbrai_solutions/providers/favorite_provider.dart';
 
 // --- Background Message Handler ---
 @pragma('vm:entry-point')
@@ -49,6 +51,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         Provider(create: (_) => TranslationService()),
+        ChangeNotifierProvider(create: (_) => FavoriteProvider()),
       ],
       child: const SbraiSolutionsApp(),
     ),
@@ -67,21 +70,23 @@ class SbraiSolutionsApp extends StatelessWidget {
           title: 'Sbrai Solutions',
           theme: _buildTheme(),
 
-          // Pass the selected locale directly — fallback delegates handle the rest
           locale: languageProvider.locale,
 
           localizationsDelegates: const [
             AppLocalizations.delegate,
-            FallbackMaterialLocalizationsDelegate(),    // ← replaces GlobalMaterialLocalizations
-            FallbackCupertinoLocalizationsDelegate(),   // ← replaces GlobalCupertinoLocalizations
-            GlobalWidgetsLocalizations.delegate,        // ← keep this one
+            FallbackMaterialLocalizationsDelegate(),
+            FallbackCupertinoLocalizationsDelegate(),
+            GlobalWidgetsLocalizations.delegate,
           ],
 
           supportedLocales: AppLocalizations.supportedLocales,
 
-          home: const VendorHomeScreen(),
+          // ✅ Changed from VendorHomeScreen → AccountSelectionScreen
+          home: const AccountSelectionScreen(),
 
           routes: {
+            '/account-selection': (context) =>
+                const AccountSelectionScreen(), // ← NEW
             '/vendor-home': (context) => const VendorHomeScreen(),
             '/favorites': (context) => const FavoriteScreen(),
             '/terms': (context) => const BuyersTermsPage(),

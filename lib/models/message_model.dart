@@ -33,13 +33,34 @@ class MessageModel {
       isVendor: isVendor,
     );
 
+    // 🚀 Dynamic lookup directly from the thread's underlying map data
+    // This bypasses the strict static getter restriction on the ChatThread type.
+    String? fallbackAdImage;
+    try {
+      // If your model exposes an inner map property (commonly named: json, map, or attributes)
+      final dynamic rawData =
+          (thread as dynamic).json ?? (thread as dynamic).map;
+      if (rawData != null && rawData is Map) {
+        fallbackAdImage =
+            rawData['ad_image_url'] ??
+            rawData['ad_image'] ??
+            rawData['product_image'] ??
+            rawData['ad']?['image_url'];
+      }
+    } catch (_) {
+      // Quietly fall back if property names do not exist dynamically
+    }
+
     return MessageModel(
       senderName: otherParticipant?.name ?? 'Unknown User',
       subTitle: thread.adTitle,
       lastMessage: thread.latestMessage?.body ?? '',
       time: _formatTime(thread.updatedAt),
       unreadCount: thread.unreadCount,
-      imageUrl: otherParticipant?.avatarUrl,
+
+      // Use the dynamically discovered image, falling back to user avatar, then null
+      imageUrl: fallbackAdImage ?? otherParticipant?.avatarUrl,
+
       isVendor: otherParticipant?.isVendor ?? false,
       thread: thread,
     );

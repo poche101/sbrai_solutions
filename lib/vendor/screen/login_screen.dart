@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sbrai_solutions/vendor/screen/register_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/vendor_home_screen.dart';
-// Ensure this import path matches your project structure
 import 'package:sbrai_solutions/account_selection_screen.dart';
 import '../../services/vendor/vendor_auth_service.dart';
+import '../../buyer_service/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,6 +15,9 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const _emailKey = 'vendor_saved_email';
+  static const _passwordKey = 'vendor_saved_password';
+
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController _emailController = TextEditingController();
@@ -20,8 +25,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isPasswordVisible = false;
   bool _isLoading = false;
+  bool _rememberMe = false;
 
   final VendorAuthService _authService = VendorAuthService();
+  final ApiService _apiService = ApiService();
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
 
   @override
   void dispose() {
@@ -30,7 +45,50 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // Custom Toast implementation for consistency
+  // ── Saved credentials ──────────────────────────────────────────────────────
+
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString(_emailKey);
+    final savedPassword = prefs.getString(_passwordKey);
+
+    if (savedEmail != null && savedEmail.isNotEmpty) {
+      setState(() {
+        _emailController.text = savedEmail;
+        _passwordController.text = savedPassword ?? '';
+        _rememberMe = true;
+      });
+    }
+  }
+
+  Future<void> _saveCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_rememberMe) {
+      await prefs.setString(_emailKey, _emailController.text.trim());
+      await prefs.setString(_passwordKey, _passwordController.text);
+    } else {
+      await prefs.remove(_emailKey);
+      await prefs.remove(_passwordKey);
+    }
+  }
+
+  // ── FCM ────────────────────────────────────────────────────────────────────
+
+  Future<void> _saveFcmToken() async {
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await _apiService.saveFcmToken(fcmToken);
+        debugPrint('✅ Vendor FCM token saved');
+      }
+    } catch (e) {
+      // Non-fatal — calls/notifications just won't work until next login
+      debugPrint('⚠️ FCM token save failed: $e');
+    }
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+
   void _showSuccessToast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -78,13 +136,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Login handler
+  // ── Login ──────────────────────────────────────────────────────────────────
+
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       await _authService.login(
@@ -92,15 +149,20 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
 
+      // Save credentials if remember me is checked
+      await _saveCredentials();
+
+      // Save FCM token for push notifications and calls
+      await _saveFcmToken();
+
       if (mounted) {
         _showSuccessToast('Login successful!');
 
-        // Small delay so the user can see the success toast
         Future.delayed(const Duration(milliseconds: 1500), () {
           if (mounted) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const VendorHomeScreen()),
+              MaterialPageRoute(builder: (_) => const VendorHomeScreen()),
             );
           }
         });
@@ -116,13 +178,11 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -133,16 +193,11 @@ class _LoginScreenState extends State<LoginScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87, size: 24),
-          onPressed: () {
-            // Updated to navigate specifically to Account Selection Screen
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AccountSelectionScreen(),
-              ),
-              (route) => false,
-            );
-          },
+          onPressed: () => Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const AccountSelectionScreen()),
+            (route) => false,
+          ),
         ),
         title: const Text(
           'Sign In',
@@ -167,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       'assets/images/logo.png',
                       height: 60,
                       fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => const Icon(
+                      errorBuilder: (_, __, ___) => const Icon(
                         Icons.store,
                         color: Colors.orange,
                         size: 60,
@@ -193,27 +248,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Social Logins
               _buildSocialButton(
-                "Continue with Google",
+                'Continue with Google',
                 'assets/icons/google.png',
-                () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Google Sign In coming soon!'),
-                    ),
-                  );
-                },
+                () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Google Sign In coming soon!')),
+                ),
               ),
               const SizedBox(height: 12),
               _buildSocialButton(
-                "Continue with Facebook",
+                'Continue with Facebook',
                 'assets/icons/facebook.png',
-                () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Facebook Sign In coming soon!'),
-                    ),
-                  );
-                },
+                () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Facebook Sign In coming soon!'),
+                  ),
+                ),
               ),
 
               const SizedBox(height: 24),
@@ -225,7 +274,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
-                      "OR SIGN IN WITH EMAIL",
+                      'OR SIGN IN WITH EMAIL',
                       style: TextStyle(
                         color: Colors.grey,
                         fontSize: 11,
@@ -239,17 +288,17 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
 
               // Email Field
-              _buildLabel("Email Address"),
+              _buildLabel('Email Address'),
               _buildTextField(
                 _emailController,
-                "Enter your email",
+                'Enter your email',
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return "Email is required";
+                    return 'Email is required';
                   }
                   if (!value.contains('@') || !value.contains('.')) {
-                    return "Enter a valid email address";
+                    return 'Enter a valid email address';
                   }
                   return null;
                 },
@@ -258,17 +307,17 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 16),
 
               // Password Field
-              _buildLabel("Password"),
+              _buildLabel('Password'),
               _buildTextField(
                 _passwordController,
-                "Enter your password",
+                'Enter your password',
                 isPassword: true,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return "Password is required";
+                    return 'Password is required';
                   }
                   if (value.length < 6) {
-                    return "Password must be at least 6 characters";
+                    return 'Password must be at least 6 characters';
                   }
                   return null;
                 },
@@ -276,29 +325,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 12),
 
-              // Forgot Password Link
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Forgot Password coming soon!'),
+              // Remember Me Row (Forgot Password Button Removed)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _rememberMe,
+                        activeColor: const Color(0xFFFF7043),
+                        onChanged: (val) =>
+                            setState(() => _rememberMe = val ?? false),
                       ),
-                    );
-                  },
-                  child: const Text(
-                    'Forgot Password?',
-                    style: TextStyle(
-                      color: Color(0xFFFF7043),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
+                      const Text(
+                        'Remember me',
+                        style: TextStyle(fontSize: 13, color: Colors.black87),
+                      ),
+                    ],
                   ),
-                ),
+                ],
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
 
               // Sign In Button
               SizedBox(
@@ -346,16 +394,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.grey),
                   ),
                   GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const RegisterScreen(),
-                        ),
-                      );
-                    },
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                    ),
                     child: const Text(
-                      "Sign Up",
+                      'Sign Up',
                       style: TextStyle(
                         color: Color(0xFFFF7043),
                         fontWeight: FontWeight.bold,
@@ -371,6 +415,8 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
+  // ── Sub-widgets ────────────────────────────────────────────────────────────
 
   Widget _buildSocialButton(String text, String assetPath, VoidCallback onTap) {
     return Container(
@@ -390,9 +436,9 @@ class _LoginScreenState extends State<LoginScreen> {
               assetPath,
               height: 24,
               width: 24,
-              errorBuilder: (context, error, stackTrace) => Icon(
-                text.contains("Google") ? Icons.g_mobiledata : Icons.facebook,
-                color: text.contains("Google") ? Colors.red : Colors.blue,
+              errorBuilder: (_, __, ___) => Icon(
+                text.contains('Google') ? Icons.g_mobiledata : Icons.facebook,
+                color: text.contains('Google') ? Colors.red : Colors.blue,
               ),
             ),
             const SizedBox(width: 12),
