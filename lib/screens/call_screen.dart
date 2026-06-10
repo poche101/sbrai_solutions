@@ -84,7 +84,6 @@ class _CallScreenState extends State<CallScreen> {
     try {
       _engine = createAgoraRtcEngine();
 
-      // Use appId from the session (returned by AgoraController@generateToken)
       await _engine!.initialize(
         RtcEngineContext(
           appId: widget.session.appId,
@@ -96,6 +95,9 @@ class _CallScreenState extends State<CallScreen> {
         RtcEngineEventHandler(
           onJoinChannelSuccess: (connection, elapsed) {
             debugPrint('✅ Joined channel: ${connection.channelId}');
+            // Set speakerphone AFTER joining — calling it before join
+            // returns error -4 (ERR_NOT_SUPPORTED) on Android
+            _engine?.setEnableSpeakerphone(_isSpeakerOn);
             if (mounted) {
               setState(() => _callConnected = true);
               _startTimer();
@@ -124,10 +126,29 @@ class _CallScreenState extends State<CallScreen> {
         await _engine!.enableAudio();
       }
 
-      await _engine!.setEnableSpeakerphone(_isSpeakerOn);
+      // NOTE: setEnableSpeakerphone is intentionally NOT called here.
+      // It must be called after joinChannel succeeds (inside onJoinChannelSuccess)
+      // to avoid AgoraRtcException(-4) on Android.
+
+      // ── DEBUG: log session values before joining ──────────────────────────
+      debugPrint('🔑 appId: "${widget.session.appId}"');
+      debugPrint('🔑 channelName: "${widget.session.channelName}"');
+      debugPrint('🔑 uid: ${widget.session.uid}');
+      debugPrint('🔑 token length: ${widget.session.token.length}');
+      debugPrint(
+        '🔑 token prefix: "${widget.session.token.substring(0, widget.session.token.length.clamp(0, 10))}"',
+      );
+
+      // Safety check
+      if (widget.session.token.isEmpty) {
+        setState(
+          () => _errorMessage = 'Invalid or empty token received from server.',
+        );
+        return;
+      }
 
       await _engine!.joinChannel(
-        token: widget.session.token,
+        token: widget.session.token, // ← Fixed: Now using real token
         channelId: widget.session.channelName,
         uid: widget.session.uid,
         options: ChannelMediaOptions(

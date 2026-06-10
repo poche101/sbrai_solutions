@@ -1,10 +1,11 @@
-// lib/screens/chat_screen.dart
+// lib/vendor/screen/chat_screen.dart
 
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
+import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:sbrai_solutions/models/chat_model.dart';
 import 'package:sbrai_solutions/services/chat_service.dart';
 import '../widgets/message_bubble.dart';
@@ -38,9 +39,8 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   static const _orange = Color(0xFFE85D22);
 
-  // ── Pusher credentials — must match PUSHER_APP_KEY / PUSHER_APP_CLUSTER in .env
-  static const _pusherKey = 'your_pusher_app_key'; // ← replace
-  static const _pusherCluster = 'mt1'; // ← replace if different
+  static const _pusherKey = 'your_pusher_app_key';
+  static const _pusherCluster = 'mt1';
 
   late final ChatService _service;
   PusherChannelsFlutter? _pusher;
@@ -53,6 +53,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = true;
   bool _isSending = false;
   bool _isLoadingMore = false;
+  bool _isStartingCall = false;
   String? _error;
   int _currentPage = 1;
   bool _hasMore = true;
@@ -106,9 +107,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
       await _pusher!.connect();
 
-      // Subscribe to this chat's private channel
-      // Channel name must match what Laravel broadcasts on:
-      // broadcast()->on('private-chat.' . $chat->id)
       await _pusher!.subscribe(
         channelName: 'private-chat.${widget.chatId}',
         onEvent: _onPusherEvent,
@@ -119,7 +117,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
       debugPrint('✅ Pusher subscribed to private-chat.${widget.chatId}');
     } catch (e) {
-      // Non-fatal — chat still works via manual reload
       debugPrint('⚠️ Pusher init failed (non-fatal): $e');
     }
   }
@@ -128,23 +125,16 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       if (event.eventName == 'App\\Events\\MessageSent') {
         final payload = jsonDecode(event.data ?? '{}') as Map<String, dynamic>;
-
-        // The broadcasted payload wraps the message under 'message'
         final msgData = payload['message'] as Map<String, dynamic>? ?? payload;
         final incoming = ChatMessageModel.fromJson(msgData);
-
-        // Ignore messages sent by the current user (already added optimistically)
         if (incoming.senderId == widget.currentUserId) return;
-
         if (mounted) {
           setState(() => _messages.add(incoming));
           _scrollToBottom();
           _markRead();
         }
       }
-
       if (event.eventName == 'App\\Events\\MessageRead') {
-        // Optional: update read receipts UI here if needed
         debugPrint('📖 MessageRead event received');
       }
     } catch (e) {
@@ -318,23 +308,59 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ── Call ───────────────────────────────────────────────────────────────────
 
+  Future<int> _resolveUserId() async {
+    if (widget.currentUserId != 0) return widget.currentUserId;
+    try {
+      final userData = await ApiService().getUserData();
+      final id = int.tryParse(userData['id']?.toString() ?? '0') ?? 0;
+      debugPrint('🔍 Resolved userId from cache: $id');
+      return id;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   Future<void> _startCall(CallType callType) async {
+    if (_isStartingCall) return;
+
+    final uid = await _resolveUserId();
+    if (uid == 0) {
+      _showError('Could not identify user. Please log out and log in again.');
+      return;
+    }
+
+    if (mounted) setState(() => _isStartingCall = true);
+
     final channelName =
         'chat_${widget.chatId}_${DateTime.now().millisecondsSinceEpoch}';
-    final uid = widget.currentUserId;
+
+    debugPrint(
+      '📞 Starting ${callType.name} call — channel: $channelName, uid: $uid, receiver: ${widget.otherPartyId}',
+    );
 
     try {
       final tokenResp = await _service.getCallToken(
         channelName: channelName,
         uid: uid,
       );
+      debugPrint('✅ tokenResp.token length: ${tokenResp.token.length}');
+      debugPrint('✅ tokenResp.appId: "${tokenResp.appId}"');
+      debugPrint('✅ tokenResp.channelName: "${tokenResp.channelName}"');
+      debugPrint('🔑 local channelName: "$channelName"');
+      debugPrint('🔑 token channelName: "${tokenResp.channelName}"');
+      debugPrint('🔑 uid passed to token server: $uid');
 
-      await _service.initiateCall(
-        receiverId: widget.otherPartyId,
-        channelName: channelName,
-        callerName: widget.otherPartyName,
-        callType: callType,
-      );
+      try {
+        await _service.initiateCall(
+          receiverId: widget.otherPartyId,
+          channelName: channelName,
+          callerName: widget.otherPartyName,
+          callType: callType,
+        );
+        debugPrint('✅ initiateCall ok — receiver: ${widget.otherPartyId}');
+      } catch (e) {
+        debugPrint('⚠️ initiateCall failed (non-fatal): $e');
+      }
 
       if (!mounted) return;
 
@@ -343,9 +369,9 @@ class _ChatScreenState extends State<ChatScreen> {
         MaterialPageRoute(
           builder: (_) => CallScreen(
             session: CallSession(
-              channelName: tokenResp.channelName,
+              channelName: channelName,
               token: tokenResp.token,
-              appId: tokenResp.appId, // ← add this
+              appId: tokenResp.appId,
               uid: uid,
               callType: callType,
               callerName: widget.otherPartyName,
@@ -355,10 +381,21 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
       );
-    } catch (e) {
-      _showError('Could not start call. Please try again.');
+    } catch (e, stack) {
+      debugPrint('❌ _startCall error: $e');
+      debugPrint('❌ stack: $stack');
+      if (mounted) {
+        _showError(
+          e is ChatApiException
+              ? e.message
+              : 'Could not start call. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isStartingCall = false);
     }
   }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   String _friendlyError(Object e) {
@@ -473,19 +510,40 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.phone_outlined, color: Colors.black),
+          icon: Icon(
+            Icons.phone_outlined,
+            color: _isStartingCall ? Colors.grey.shade400 : Colors.black,
+          ),
           tooltip: 'Voice call',
-          onPressed: () => _startCall(CallType.audio),
+          onPressed: _isStartingCall ? null : () => _startCall(CallType.audio),
         ),
         IconButton(
-          icon: const Icon(Icons.videocam_outlined, color: Colors.black),
+          icon: Icon(
+            Icons.videocam_outlined,
+            color: _isStartingCall ? Colors.grey.shade400 : Colors.black,
+          ),
           tooltip: 'Video call',
-          onPressed: () => _startCall(CallType.video),
+          onPressed: _isStartingCall ? null : () => _startCall(CallType.video),
         ),
-        IconButton(
-          icon: const Icon(Icons.more_vert, color: Colors.black),
-          onPressed: () {},
-        ),
+        if (_isStartingCall)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _orange,
+                ),
+              ),
+            ),
+          )
+        else
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.black),
+            onPressed: () {},
+          ),
       ],
     );
   }

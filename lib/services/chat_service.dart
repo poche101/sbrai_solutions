@@ -248,20 +248,52 @@ class ChatService {
     _throwIfError(response);
   }
 
+  // ── startCall — moved INSIDE the class so getCallToken resolves correctly ──
+  /// Fetches token + creates [CallSession] in one call.
+  Future<CallSession> startCall({
+    required int receiverId,
+    required String channelName,
+    required int uid,
+    required CallType callType,
+    required String callerName,
+  }) async {
+    try {
+      final tokenResponse = await getCallToken(
+        channelName: channelName,
+        uid: uid,
+      );
+
+      debugPrint(
+        '✅ Token fetched successfully. Length: ${tokenResponse.token.length}',
+      );
+
+      return CallSession(
+        channelName: channelName,
+        token: tokenResponse.token,
+        appId: tokenResponse.appId,
+        uid: uid,
+        callType: callType,
+        callerName: callerName,
+        receiverId: receiverId,
+      );
+    } catch (e) {
+      debugPrint('❌ Failed to start call: $e');
+      rethrow;
+    }
+  }
+
   // ── Private helpers ────────────────────────────────────────────────────────
 
   void _throwIfError(http.Response response) {
     if (response.statusCode < 400) return;
 
     // Detect Laravel's "Unauthenticated." message regardless of status code.
-    // Some Laravel setups return 500 instead of 401 for missing tokens.
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       final message = body['message']?.toString() ?? '';
 
       if (response.statusCode == 401 ||
           message.toLowerCase() == 'unauthenticated.') {
-        // Evict cached token so the next attempt re-reads from SharedPreferences.
         invalidateToken();
         throw const ChatApiException(
           'Session expired. Please log in again.',

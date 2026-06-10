@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -71,7 +72,6 @@ class _SigninScreenState extends State<SigninScreen> {
         debugPrint('✅ Buyer FCM token saved');
       }
     } catch (e) {
-      // Non-fatal — calls/notifications just won't work until next login
       debugPrint('⚠️ FCM token save failed: $e');
     }
   }
@@ -174,9 +174,7 @@ class _SigninScreenState extends State<SigninScreen> {
         if (responseData['data']['user'] != null) {
           await _apiService.saveUserData(responseData['data']['user']);
         }
-        // Save credentials if remember me is checked
         await _saveCredentials();
-        // Save FCM token for push notifications and calls
         await _saveFcmToken();
         if (!mounted) return;
         _showCustomToast(responseData['message'] ?? 'Signed in successfully');
@@ -191,42 +189,413 @@ class _SigninScreenState extends State<SigninScreen> {
     }
   }
 
-  // ── Social Login ───────────────────────────────────────────────────────────
+  // ── Forgot Password ────────────────────────────────────────────────────────
+
+  void _showForgotPasswordDialog() {
+    final TextEditingController forgotEmailController = TextEditingController(
+      text: _emailController.text.trim(),
+    );
+    bool isSending = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: !isSending,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Forgot Password',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Enter the email address linked to your account and we\'ll send you a password reset link.',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: forgotEmailController,
+                    keyboardType: TextInputType.emailAddress,
+                    enabled: !isSending,
+                    decoration: InputDecoration(
+                      labelText: 'Email Address',
+                      hintText: 'you@example.com',
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      filled: true,
+                      fillColor: const Color(0xFFEDF2F9),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSending ? null : () => Navigator.pop(context),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: isSending
+                      ? null
+                      : () async {
+                          final email = forgotEmailController.text.trim();
+                          if (email.isEmpty) {
+                            _showErrorSnackBar('Please enter your email');
+                            return;
+                          }
+                          if (!RegExp(
+                            r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$',
+                          ).hasMatch(email)) {
+                            _showErrorSnackBar(
+                              'Please enter a valid email address',
+                            );
+                            return;
+                          }
+                          setDialogState(() => isSending = true);
+                          try {
+                            await _apiService.forgotPassword(email);
+                            if (context.mounted) Navigator.pop(context);
+                            _showForgotPasswordSuccessDialog(email);
+                          } catch (e) {
+                            setDialogState(() => isSending = false);
+                            _showErrorSnackBar(e.toString());
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6B35),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: isSending
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text('Send Reset Link'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showForgotPasswordSuccessDialog(String email) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B35).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.mark_email_read_outlined,
+                  color: Color(0xFFFF6B35),
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Check Your Email',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'If an account exists for $email, a password reset link has been sent. Check your inbox and spam folder.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Back to Sign In',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _showResetPasswordDialog(email);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B35),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 0,
+              ),
+              child: const Text('Enter Reset Token'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showResetPasswordDialog(String email) {
+    final TextEditingController tokenController = TextEditingController();
+    final TextEditingController newPasswordController = TextEditingController();
+    final TextEditingController confirmPasswordController =
+        TextEditingController();
+    bool isResetting = false;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Reset Password',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Paste the reset token from your email, then enter your new password.',
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: tokenController,
+                      enabled: !isResetting,
+                      decoration: InputDecoration(
+                        labelText: 'Reset Token',
+                        hintText: 'Paste token from email',
+                        prefixIcon: const Icon(Icons.vpn_key_outlined),
+                        filled: true,
+                        fillColor: const Color(0xFFEDF2F9),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: newPasswordController,
+                      obscureText: obscureNew,
+                      enabled: !isResetting,
+                      decoration: InputDecoration(
+                        labelText: 'New Password',
+                        hintText: 'At least 8 characters',
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureNew
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                          ),
+                          onPressed: () =>
+                              setDialogState(() => obscureNew = !obscureNew),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFEDF2F9),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: confirmPasswordController,
+                      obscureText: obscureConfirm,
+                      enabled: !isResetting,
+                      decoration: InputDecoration(
+                        labelText: 'Confirm Password',
+                        hintText: 'Repeat new password',
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureConfirm
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                          ),
+                          onPressed: () => setDialogState(
+                            () => obscureConfirm = !obscureConfirm,
+                          ),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFEDF2F9),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isResetting ? null : () => Navigator.pop(context),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: isResetting
+                      ? null
+                      : () async {
+                          final token = tokenController.text.trim();
+                          final newPassword = newPasswordController.text;
+                          final confirmPassword =
+                              confirmPasswordController.text;
+
+                          if (token.isEmpty) {
+                            _showErrorSnackBar('Please enter the reset token');
+                            return;
+                          }
+                          if (newPassword.length < 8) {
+                            _showErrorSnackBar(
+                              'Password must be at least 8 characters',
+                            );
+                            return;
+                          }
+                          if (newPassword != confirmPassword) {
+                            _showErrorSnackBar('Passwords do not match');
+                            return;
+                          }
+
+                          setDialogState(() => isResetting = true);
+                          try {
+                            final response = await _apiService.resetPassword(
+                              token: token,
+                              email: email,
+                              password: newPassword,
+                              passwordConfirmation: confirmPassword,
+                            );
+                            final data = jsonDecode(response.body);
+                            if (context.mounted) Navigator.pop(context);
+                            if (data['success'] == true) {
+                              _showCustomToast(
+                                'Password reset successfully. Please sign in.',
+                              );
+                            } else {
+                              _showErrorSnackBar(
+                                data['message'] ??
+                                    'Reset failed. Please try again.',
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isResetting = false);
+                            _showErrorSnackBar(e.toString());
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6B35),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: isResetting
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text('Reset Password'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   // ── Social Login ───────────────────────────────────────────────────────────
   Future<void> _handleSocialLogin(String provider) async {
     setState(() => _isLoading = true);
     try {
+      http.Response? response;
+
       if (provider == 'google') {
-        final response = await _apiService.signInWithGoogle(userType: 'buyer');
-        if (response == null) return;
-
-        final responseData = jsonDecode(response.body);
-
-        // Backend returns 'status: true' not 'success: true'
-        if ((response.statusCode == 200 || response.statusCode == 201) &&
-            responseData['status'] == true) {
-          // Token is already saved inside signInWithGoogle → socialLogin
-          // Just save user data if present
-          if (responseData['data']?['user'] != null) {
-            await _apiService.saveUserData(responseData['data']['user']);
-          }
-
-          await _saveFcmToken();
-          if (!mounted) return;
-          _showCustomToast(responseData['message'] ?? 'Signed in with Google');
-          _navigateToHome();
-        } else {
-          throw responseData['message'] ?? 'Google sign-in failed';
-        }
+        response = await _apiService.signInWithGoogle(userType: 'buyer');
       } else if (provider == 'facebook') {
-        _showErrorSnackBar('Facebook login is coming soon');
+        response = await _apiService.signInWithFacebook(userType: 'buyer');
+      }
+
+      // User cancelled the native sign-in sheet
+      if (response == null) return;
+
+      final responseData = jsonDecode(response.body);
+
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          responseData['status'] == true) {
+        // Token is already saved inside signInWithGoogle/signInWithFacebook
+        if (responseData['data']?['user'] != null) {
+          await _apiService.saveUserData(responseData['data']['user']);
+        }
+        await _saveFcmToken();
+        if (!mounted) return;
+        _showCustomToast(
+          responseData['message'] ??
+              'Signed in with ${_providerName(provider)}',
+        );
+        _navigateToHome();
+      } else {
+        throw responseData['message'] ??
+            '${_providerName(provider)} sign-in failed';
       }
     } catch (e) {
-      _showErrorSnackBar('Social login error: ${e.toString()}');
+      if (mounted) _showErrorSnackBar(e.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  String _providerName(String provider) =>
+      provider[0].toUpperCase() + provider.substring(1);
 
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
@@ -262,7 +631,6 @@ class _SigninScreenState extends State<SigninScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Logo
                 Image.asset(
                   'assets/images/logo.png',
                   height: 50,
@@ -282,7 +650,6 @@ class _SigninScreenState extends State<SigninScreen> {
                   style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
                 const SizedBox(height: 32),
-                // Social buttons
                 _buildSocialButton(
                   'Continue with Google',
                   'assets/icons/google.png',
@@ -295,7 +662,6 @@ class _SigninScreenState extends State<SigninScreen> {
                   onTap: () => _handleSocialLogin('facebook'),
                 ),
                 const SizedBox(height: 24),
-                // Divider
                 const Row(
                   children: [
                     Expanded(child: Divider(color: Colors.black12)),
@@ -314,7 +680,6 @@ class _SigninScreenState extends State<SigninScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                // Email field
                 _buildInputLabel('Email Address'),
                 TextField(
                   controller: _emailController,
@@ -322,7 +687,6 @@ class _SigninScreenState extends State<SigninScreen> {
                   decoration: _inputDecoration('Email Address'),
                 ),
                 const SizedBox(height: 20),
-                // Password field
                 _buildInputLabel('Password'),
                 TextField(
                   controller: _passwordController,
@@ -330,9 +694,8 @@ class _SigninScreenState extends State<SigninScreen> {
                   decoration: _inputDecoration('Password'),
                 ),
                 const SizedBox(height: 8),
-                // Remember Me Row (Forgot Password Button Removed)
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
                       children: [
@@ -348,10 +711,20 @@ class _SigninScreenState extends State<SigninScreen> {
                         ),
                       ],
                     ),
+                    GestureDetector(
+                      onTap: _showForgotPasswordDialog,
+                      child: const Text(
+                        'Forgot Password?',
+                        style: TextStyle(
+                          color: Color(0xFFFF6B35),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                // Sign In button
                 SizedBox(
                   width: double.infinity,
                   height: 52,
@@ -381,7 +754,6 @@ class _SigninScreenState extends State<SigninScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                // Sign up link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

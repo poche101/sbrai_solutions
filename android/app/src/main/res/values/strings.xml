@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Sbrai Hub</string>
+    <string name="facebook_app_id">1925652658114001</string>
+    <string name="fb_login_protocol_scheme">fb1925652658114001</string>
+    <string name="facebook_client_token">144d778c0e30f4325aabdd008a42109b</string>
+</resources>

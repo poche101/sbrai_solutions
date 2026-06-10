@@ -1,11 +1,12 @@
 // ─────────────────────────────────────────────────────────────
-//  screens/chat_screen.dart
+//  screens/chat_screen.dart  (vendor)
 //  Real-time chat screen connected to the Laravel API
 // ─────────────────────────────────────────────────────────────
 
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:sbrai_solutions/buyer_service/api_service.dart';
 import 'package:sbrai_solutions/models/chat_model.dart';
 import 'package:sbrai_solutions/services/chat_service.dart';
 import 'package:sbrai_solutions/vendor/widgets/message_bubble.dart';
@@ -47,6 +48,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = true;
   bool _isSending = false;
   bool _isLoadingMore = false;
+  bool _isStartingCall = false;
   String? _error;
   int _currentPage = 1;
   bool _hasMore = true;
@@ -66,6 +68,46 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (_scrollController.hasClients &&
+          _scrollController.position.hasContentDimensions) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  String _friendlyError(Object e) {
+    return e
+        .toString()
+        .replaceFirst(RegExp(r'ChatApiException\(\d+\):\s*'), '')
+        .trim();
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+        ),
+      ),
+    );
+  }
+
+  // ── Scroll ─────────────────────────────────────────────────────────────────
+
   void _onScroll() {
     if (_scrollController.position.pixels <=
             _scrollController.position.minScrollExtent + 100 &&
@@ -74,6 +116,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _loadMore();
     }
   }
+
+  // ── Data ───────────────────────────────────────────────────────────────────
 
   Future<void> _markRead() async {
     try {
@@ -129,6 +173,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) setState(() => _isLoadingMore = false);
     }
   }
+
+  // ── Send ───────────────────────────────────────────────────────────────────
 
   Future<void> _sendText() async {
     final text = _controller.text.trim();
@@ -205,98 +251,100 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _startCall(CallType callType) async {
-    final channelName =
-        'chat_${widget.chatId}_${DateTime.now().millisecondsSinceEpoch}';
-    final uid = widget.currentUserId;
+  // ── Call ───────────────────────────────────────────────────────────────────
 
-    debugPrint(
-      '📞 Starting ${callType.name} call — channel: $channelName, uid: $uid',
-    );
-
-    // Step 1: get token
-    AgoraTokenResponse tokenResp;
+  Future<int> _resolveUserId() async {
+    if (widget.currentUserId != 0) return widget.currentUserId;
     try {
-      tokenResp = await widget.service!.getCallToken(
-        channelName: channelName,
-        uid: uid,
-      );
-      debugPrint('✅ Token received: ${tokenResp.token.substring(0, 20)}...');
-    } catch (e) {
-      debugPrint('❌ getCallToken failed: $e');
-      _showError('Could not get call token: $e');
+      final userData = await ApiService().getUserData();
+      final id = int.tryParse(userData['id']?.toString() ?? '0') ?? 0;
+      debugPrint('🔍 Resolved userId from cache: $id');
+      return id;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<void> _startCall(CallType callType) async {
+    if (_isStartingCall) return;
+
+    final uid = await _resolveUserId();
+    if (uid == 0) {
+      _showError('Could not identify user. Please log out and log in again.');
       return;
     }
 
-    // Step 2: notify receiver (non-fatal)
-    try {
-      await widget.service!.initiateCall(
-        receiverId: widget.otherPartyId,
-        channelName: channelName,
-        callerName: widget.otherPartyName,
-        callType: callType,
-      );
-      debugPrint('✅ Call initiated to receiver: ${widget.otherPartyId}');
-    } catch (e) {
-      debugPrint('❌ initiateCall failed: $e');
-    }
+    if (mounted) setState(() => _isStartingCall = true);
 
-    if (!mounted) return;
+    final channelName =
+        'chat_${widget.chatId}_${DateTime.now().millisecondsSinceEpoch}';
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CallScreen(
-          session: CallSession(
-            channelName: tokenResp.channelName,
-            token: tokenResp.token,
-            appId: tokenResp.appId,
-            uid: uid,
-            callType: callType,
-            callerName: widget.otherPartyName,
-            receiverId: widget.otherPartyId,
-          ),
-          service: widget.service!,
-        ),
-      ),
+    debugPrint(
+      '📞 Starting ${callType.name} call — channel: $channelName, uid: $uid, receiver: ${widget.otherPartyId}',
     );
-  }
 
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 150), () {
-      if (_scrollController.hasClients &&
-          _scrollController.position.hasContentDimensions) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+    try {
+      // Fetch token
+      final tokenResp = await widget.service.getCallToken(
+        channelName: channelName,
+        uid: uid,
+      );
+
+      debugPrint('✅ Token received successfully!');
+      debugPrint('✅ Token length: ${tokenResp.token.length}');
+      debugPrint(
+        '✅ Token prefix: ${tokenResp.token.substring(0, tokenResp.token.length.clamp(0, 15))}...',
+      );
+
+      // Initiate call (non-fatal)
+      try {
+        await widget.service.initiateCall(
+          receiverId: widget.otherPartyId,
+          channelName: channelName,
+          callerName: widget.otherPartyName,
+          callType: callType,
+        );
+        debugPrint('✅ initiateCall sent successfully');
+      } catch (e) {
+        debugPrint('⚠️ initiateCall failed (non-fatal): $e');
+      }
+
+      if (!mounted) return;
+
+      // Navigate to CallScreen with real token
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            session: CallSession(
+              channelName: channelName,
+              token: tokenResp.token, // ← This must now contain real token
+              appId: tokenResp.appId,
+              uid: uid,
+              callType: callType,
+              callerName: widget.otherPartyName,
+              receiverId: widget.otherPartyId,
+            ),
+            service: widget.service,
+          ),
+        ),
+      );
+    } catch (e, stack) {
+      debugPrint('❌ _startCall error: $e');
+      debugPrint('❌ stack: $stack');
+      if (mounted) {
+        _showError(
+          e is ChatApiException
+              ? e.message
+              : 'Could not start call. Please try again.',
         );
       }
-    });
+    } finally {
+      if (mounted) setState(() => _isStartingCall = false);
+    }
   }
 
-  String _friendlyError(Object e) {
-    return e
-        .toString()
-        .replaceFirst(RegExp(r'ChatApiException\(\d+\):\s*'), '')
-        .trim();
-  }
-
-  void _showError(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: Colors.red.shade700,
-        behavior: SnackBarBehavior.floating,
-        action: SnackBarAction(
-          label: 'Dismiss',
-          textColor: Colors.white,
-          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
-        ),
-      ),
-    );
-  }
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -324,6 +372,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  // ... (All your other methods remain unchanged: _buildAppBar, _buildAdBar, _buildMessageList, _buildError)
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: Colors.white,
@@ -375,17 +424,40 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.phone_outlined, color: Colors.black),
-          onPressed: () => _startCall(CallType.audio),
+          icon: Icon(
+            Icons.phone_outlined,
+            color: _isStartingCall ? Colors.grey.shade400 : Colors.black,
+          ),
+          tooltip: 'Voice call',
+          onPressed: _isStartingCall ? null : () => _startCall(CallType.audio),
         ),
         IconButton(
-          icon: const Icon(Icons.videocam_outlined, color: Colors.black),
-          onPressed: () => _startCall(CallType.video),
+          icon: Icon(
+            Icons.videocam_outlined,
+            color: _isStartingCall ? Colors.grey.shade400 : Colors.black,
+          ),
+          tooltip: 'Video call',
+          onPressed: _isStartingCall ? null : () => _startCall(CallType.video),
         ),
-        IconButton(
-          icon: const Icon(Icons.more_vert, color: Colors.black),
-          onPressed: () {},
-        ),
+        if (_isStartingCall)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _orange,
+                ),
+              ),
+            ),
+          )
+        else
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.black),
+            onPressed: () {},
+          ),
       ],
     );
   }

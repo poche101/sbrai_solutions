@@ -94,20 +94,16 @@ class _SignupPageState extends State<SignupPage> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _apiService.post(
-        'register',
-        {
-          'name': _nameController.text.trim(),
-          'email': _emailController.text.trim(),
-          'phone': _phoneController.text.trim(),
-          'address': _addressController.text.trim(),
-          'password': _passwordController.text,
-          'password_confirmation': _confirmPasswordController.text,
-        },
-        userType:
-            'buyer', // Add the required userType here (e.g., 'buyer' or 'vendor')
-        isProtected: false,
-      );
+      // ✅ Fixed: use registerBuyer() which hits auth/register/buyer correctly.
+      // Address is excluded — backend doesn't accept it at registration;
+      // buyers can add it later from their profile screen.
+      final response = await _apiService.registerBuyer({
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'password': _passwordController.text,
+        'password_confirmation': _confirmPasswordController.text,
+      });
 
       final responseData = jsonDecode(response.body);
 
@@ -119,9 +115,9 @@ class _SignupPageState extends State<SignupPage> {
 
         // Save token if returned
         if (responseData['data'] != null &&
-            responseData['data']['access_token'] != null) {
+            responseData['data']['token'] != null) {
           await _apiService.saveToken(
-            responseData['data']['access_token'],
+            responseData['data']['token'],
             userType: 'buyer',
           );
         }

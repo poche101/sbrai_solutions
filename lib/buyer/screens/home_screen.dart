@@ -7,7 +7,7 @@ import 'package:sbrai_solutions/models/product_model.dart';
 import 'package:sbrai_solutions/buyer/widgets/buyers_menu.dart';
 import 'package:sbrai_solutions/services/vendor/product_service.dart';
 import 'package:sbrai_solutions/services/chat_service.dart';
-import 'package:sbrai_solutions/vendor/screen/chat_screen.dart';
+import 'package:sbrai_solutions/screens/chat_screen.dart';
 import 'package:sbrai_solutions/vendor/screen/product_details_screen.dart';
 import 'package:sbrai_solutions/providers/language_provider.dart';
 import 'package:sbrai_solutions/l10n/app_localizations.dart';

@@ -1,113 +1,117 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/settings_model.dart';
+import 'api_service.dart';
 
 class SettingsService {
-  // Ensure this trailing slash isn't causing double-slashes in your Uri.parse
-  final String baseUrl = "https://sbraisolutions.com/api/v1";
+  final String _baseUrl = "https://sbraisolutions.com/api/v1";
+  final ApiService _apiService = ApiService();
 
-  Future<bool> updateNotificationSettings(
-    SettingsModel settings,
-    String token,
-  ) async {
-    final url = Uri.parse('$baseUrl/buyers/notifications/settings');
-    String? fcmToken;
-
-    // 1. Improved FCM handling with a timeout to prevent hanging
+  // ── GET /api/v1/settings/notifications ────────────────────────────────────
+  // Controller returns: { success: true, data: { notif_new_listings: true, ... } }
+  Future<SettingsModel?> fetchSettings() async {
     try {
-      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-        fcmToken = await FirebaseMessaging.instance.getToken().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => null,
-        );
-      }
-    } catch (e) {
-      debugPrint("FCM Token fetch failed: $e");
-    }
-
-    try {
-      // 2. Flattening the payload. Laravel often expects the settings
-      // at the top level or under a 'preferences' key.
-      // We'll keep your structure but ensure it's valid JSON.
-      final response = await http
-          .post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-            body: jsonEncode({
-              'fcm_token': fcmToken ?? 'no_token',
-              ...settings
-                  .toJson(), // Spreading the keys at top level is safer for Laravel validation
-            }),
-          )
-          .timeout(
-            const Duration(seconds: 15),
-          ); // Add a timeout to trigger 'catch' on slow networks
-
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        debugPrint("Server rejected settings: ${response.body}");
+      final token = await _apiService.getToken(userType: 'buyer');
+      if (token == null) {
+        debugPrint("⚠️ No buyer token found for fetchSettings");
+        return null;
       }
 
-      return response.statusCode == 200 || response.statusCode == 201;
-    } on SocketException catch (e) {
-      debugPrint("No Internet connection or server down: $e");
-      return false;
-    } on HttpException catch (e) {
-      debugPrint("Could not find the protocol/route: $e");
-      return false;
-    } catch (e) {
-      debugPrint("Network Error in SettingsService: $e");
-      return false;
-    }
-  }
-
-  Future<SettingsModel?> fetchSettings(String token) async {
-    final url = Uri.parse('$baseUrl/buyers/notifications/settings');
-
-    try {
       final response = await http
           .get(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
+            Uri.parse('$_baseUrl/settings/notifications'),
+            headers: _headers(token),
           )
           .timeout(const Duration(seconds: 10));
 
+      debugPrint("📥 fetchSettings STATUS: ${response.statusCode}");
+      debugPrint("📥 fetchSettings BODY: ${response.body}");
+
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
 
-        // Robust parsing to handle Laravel Resource wrappers
-        dynamic targetData = responseData.containsKey('data')
-            ? responseData['data']
-            : responseData;
-
-        if (targetData is Map<String, dynamic>) {
-          // Check if nested in 'preferences' or 'settings'
-          if (targetData.containsKey('preferences')) {
-            return SettingsModel.fromJson(
-              targetData['preferences'] as Map<String, dynamic>,
-            );
-          } else if (targetData.containsKey('settings')) {
-            return SettingsModel.fromJson(
-              targetData['settings'] as Map<String, dynamic>,
-            );
-          }
-          return SettingsModel.fromJson(targetData);
+        // Controller always returns { success: true, data: { ... } }
+        if (body['success'] == true && body['data'] is Map<String, dynamic>) {
+          return SettingsModel.fromJson(body['data'] as Map<String, dynamic>);
         }
+
+        debugPrint("⚠️ fetchSettings: unexpected shape — ${response.body}");
       }
+
+      // 401 = token expired, 422 = validation, anything else = server error
+      debugPrint(
+        "⚠️ fetchSettings failed [${response.statusCode}]: ${response.body}",
+      );
       return null;
     } catch (e) {
-      debugPrint("Error fetching settings: $e");
+      debugPrint("❌ fetchSettings exception: $e");
       return null;
     }
   }
+
+  // ── PATCH /api/v1/settings/notifications ──────────────────────────────────
+  // Controller validates 7 optional boolean fields and returns the updated data.
+  // Sending only the changed field is enough (partial update via 'sometimes' rule).
+  // Returns the fresh SettingsModel from the server so the UI stays in sync.
+  Future<SettingsModel?> updateNotificationSettings(
+    SettingsModel settings,
+  ) async {
+    try {
+      final token = await _apiService.getToken(userType: 'buyer');
+      if (token == null) {
+        debugPrint("⚠️ No buyer token found for updateNotificationSettings");
+        return null;
+      }
+
+      // toJson() maps Dart field names → the 7 backend column names the
+      // controller expects: notif_*, privacy_*
+      final body = jsonEncode(settings.toJson());
+      debugPrint("📤 updateSettings BODY: $body");
+
+      final response = await http
+          .patch(
+            Uri.parse('$_baseUrl/settings/notifications'),
+            headers: _headers(token),
+            body: body,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      debugPrint("📥 updateSettings STATUS: ${response.statusCode}");
+      debugPrint("📥 updateSettings BODY: ${response.body}");
+
+      final responseBody = jsonDecode(response.body) as Map<String, dynamic>;
+
+      // 200 → success, controller returns updated data
+      if (response.statusCode == 200 && responseBody['success'] == true) {
+        // Return the server-confirmed model so the UI reflects what was saved
+        if (responseBody['data'] is Map<String, dynamic>) {
+          return SettingsModel.fromJson(
+            responseBody['data'] as Map<String, dynamic>,
+          );
+        }
+      }
+
+      // 422 → controller returned "No valid settings provided"
+      if (response.statusCode == 422) {
+        debugPrint("⚠️ updateSettings: ${responseBody['message']}");
+        return null;
+      }
+
+      debugPrint(
+        "⚠️ updateSettings failed [${response.statusCode}]: ${response.body}",
+      );
+      return null;
+    } catch (e) {
+      debugPrint("❌ updateSettings exception: $e");
+      return null;
+    }
+  }
+
+  // ── Shared headers ─────────────────────────────────────────────────────────
+  Map<String, String> _headers(String token) => {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'Authorization': 'Bearer $token',
+  };
 }

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:path/path.dart';
 
 class ApiService {
@@ -25,10 +26,8 @@ class ApiService {
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
-    // serverClientId is required to get an idToken that the backend can verify.
-    // Get this from Firebase Console → your project → Authentication →
-    // Sign-in method → Google → Web SDK configuration → Web client ID.
-    // serverClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+    serverClientId:
+        '247352594282-ngifekbhv3s8q078tm6cofc29l2slvmo.apps.googleusercontent.com',
   );
 
   // ---------------------------------------------------------------------------
@@ -152,6 +151,8 @@ class ApiService {
       debugPrint("⚠️ Logout API call failed (ignored): $e");
     } finally {
       await _googleSignIn.signOut();
+      // Sign out of Facebook too if logged in
+      await FacebookAuth.instance.logOut();
       await clearToken(userType: userType);
     }
   }
@@ -166,13 +167,35 @@ class ApiService {
     userType: 'buyer',
   );
 
+  Future<http.Response> forgotPassword(String email) async => await post(
+    'auth/forgot-password',
+    {'email': email},
+    isProtected: false,
+    userType: 'buyer',
+  );
+
+  Future<http.Response> resetPassword({
+    required String token,
+    required String email,
+    required String password,
+    required String passwordConfirmation,
+  }) async => await post(
+    'auth/reset-password',
+    {
+      'token': token,
+      'email': email,
+      'password': password,
+      'password_confirmation': passwordConfirmation,
+    },
+    isProtected: false,
+    userType: 'buyer',
+  );
+
   // ---------------------------------------------------------------------------
   // SOCIAL AUTH
   // ---------------------------------------------------------------------------
 
-  /// Signs in with Google and posts the ID token to the backend.
-  /// [userType] — 'buyer' or 'vendor' — is sent to the backend so it knows
-  /// which role to assign to a newly created account.
+  /// Signs in with Google and posts the id_token to the backend.
   Future<http.Response?> signInWithGoogle({String userType = 'buyer'}) async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
@@ -181,12 +204,8 @@ class ApiService {
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      // Backend (SocialAuthController) validates id_token via Socialite.
-      // accessToken is a Google API token — NOT the same thing.
       final String? idToken = googleAuth.idToken;
       if (idToken == null) {
-        // idToken is null when serverClientId is missing from GoogleSignIn().
-        // Uncomment and set serverClientId at the top of this file.
         throw "Google idToken is null. Make sure serverClientId is set in GoogleSignIn().";
       }
 
@@ -197,18 +216,48 @@ class ApiService {
     }
   }
 
-  /// Posts the provider token to the backend and saves the returned token.
+  /// Signs in with Facebook and posts the access_token to the backend.
+  Future<http.Response?> signInWithFacebook({String userType = 'buyer'}) async {
+    try {
+      final LoginResult result = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+
+      if (result.status == LoginStatus.cancelled) return null; // user cancelled
+
+      if (result.status != LoginStatus.success) {
+        throw "Facebook login failed: ${result.message}";
+      }
+
+      final String? accessToken = result.accessToken?.tokenString;
+      if (accessToken == null) throw "Facebook access token is null.";
+
+      return await socialLogin('facebook', accessToken, userType: userType);
+    } catch (e) {
+      debugPrint("❌ Facebook Sign-In error: $e");
+      rethrow;
+    }
+  }
+
+  /// Posts the provider token to the backend and saves the returned Sanctum token.
+  /// Google  → backend expects key 'id_token'
+  /// Facebook → backend expects key 'access_token'
   Future<http.Response> socialLogin(
     String provider,
-    String idToken, {
+    String token, {
     String userType = 'buyer',
   }) async {
     try {
+      // ── KEY FIX: each provider uses a different body key ──────────────────
+      final String tokenKey = provider == 'google'
+          ? 'id_token'
+          : 'access_token';
+
       final response = await post(
         'auth/social/$provider',
         {
-          'id_token': idToken, // backend expects id_token
-          'user_type': userType, // backend requires user_type
+          tokenKey: token, // 'id_token' for google, 'access_token' for facebook
+          'user_type': userType,
         },
         isProtected: false,
         userType: userType,
@@ -216,12 +265,11 @@ class ApiService {
 
       final responseData = jsonDecode(response.body);
 
-      // Backend returns { status: true, data: { token, user } }
       if ((response.statusCode == 200 || response.statusCode == 201) &&
           responseData['status'] == true) {
-        final token = responseData['data']?['token']?.toString();
-        if (token != null) {
-          await saveToken(token, userType: userType);
+        final savedToken = responseData['data']?['token']?.toString();
+        if (savedToken != null) {
+          await saveToken(savedToken, userType: userType);
           debugPrint("🔐 Social login token saved for $userType.");
         }
         if (responseData['data']?['user'] != null) {
@@ -267,22 +315,20 @@ class ApiService {
   Future<http.Response> getFavorites() async =>
       await get('buyers/favorites', isProtected: true, userType: 'buyer');
 
-  /// Toggles favorite — adds if not favorited, removes if already favorited.
   Future<http.Response> toggleFavorite(int adId) async {
     debugPrint("⭐ Toggling favorite for ad ID: $adId");
     return await post(
-      'buyers/ads/$adId/favorite',
+      'ads/$adId/favorite',
       {},
       isProtected: true,
       userType: 'buyer',
     );
   }
 
-  /// Remove favorite — uses the same toggle endpoint.
   Future<http.Response> removeFavorite(int adId) async {
     debugPrint("🗑️ Removing favorite for ad ID: $adId");
     return await post(
-      'buyers/ads/$adId/favorite',
+      'ads/$adId/favorite',
       {},
       isProtected: true,
       userType: 'buyer',
@@ -574,6 +620,22 @@ class ApiService {
 
   Future<http.Response> getTranslations(String locale) async =>
       await get('translations/$locale', isProtected: false, userType: 'buyer');
+
+  // ---------------------------------------------------------------------------
+  // NOTIFICATION SETTINGS
+  // ---------------------------------------------------------------------------
+
+  Future<http.Response> getNotificationSettings() async =>
+      await get('settings/notifications', isProtected: true, userType: 'buyer');
+
+  Future<http.Response> updateNotificationSettings(
+    Map<String, dynamic> data,
+  ) async => await patch(
+    'settings/notifications',
+    data,
+    isProtected: true,
+    userType: 'buyer',
+  );
 
   // ---------------------------------------------------------------------------
   // CORE HTTP METHODS

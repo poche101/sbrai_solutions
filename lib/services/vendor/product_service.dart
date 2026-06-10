@@ -14,7 +14,12 @@ class ProductService {
 
   Future<List<Map<String, dynamic>>> getCategories() async {
     try {
-      final response = await _apiService.get('/categories', isProtected: false);
+      // ✅ Fixed: removed leading slash, added userType
+      final response = await _apiService.get(
+        'categories',
+        isProtected: false,
+        userType: 'buyer',
+      );
       final data = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (data['success'] == true && data['data'] is Map) {
@@ -51,14 +56,6 @@ class ProductService {
   // FAVORITES SECTION
   // ─────────────────────────────────────────────────────────────
 
-  // ─────────────────────────────────────────────────────────────
-  // FAVORITES SECTION
-  // ─────────────────────────────────────────────────────────────
-
-  // ─────────────────────────────────────────────────────────────
-  // FAVORITES SECTION
-  // ─────────────────────────────────────────────────────────────
-
   Future<void> toggleFavorite(int adId) async {
     try {
       final token = await _apiService.getToken();
@@ -67,9 +64,8 @@ class ProductService {
         throw Exception('No authentication token found. Please login again.');
       }
 
-      final url = Uri.parse(
-        'https://sbraisolutions.com/api/v1/buyers/ads/$adId/favorite',
-      );
+      // ✅ Fixed: removed leading slash (baseUrl already has no trailing slash)
+      final url = Uri.parse('${ApiService.baseUrl}/buyers/ads/$adId/favorite');
 
       final response = await http.post(
         url,
@@ -82,7 +78,6 @@ class ProductService {
 
       if (response.statusCode == 200) {
         debugPrint('✅ Favorite toggled successfully for ad #$adId');
-        // You can parse response if backend returns new status
       } else if (response.statusCode == 401) {
         throw Exception('Session expired. Please login again.');
       } else {
@@ -99,9 +94,11 @@ class ProductService {
 
   Future<Map<String, dynamic>> getFavorites() async {
     try {
+      // ✅ Fixed: removed leading slash, added userType
       final response = await _apiService.get(
-        '/buyers/favorites',
+        'buyers/favorites',
         isProtected: true,
+        userType: 'buyer',
       );
       return jsonDecode(response.body);
     } catch (e) {
@@ -125,7 +122,8 @@ class ProductService {
     List<File> images = const [],
   }) async {
     try {
-      final String urlPath = '/vendor/ads';
+      // ✅ Fixed: removed leading slash
+      const String urlPath = 'vendor/ads';
       final Map<String, String> fields = {
         'category_id': categoryId.toString(),
         'title': title,
@@ -144,10 +142,12 @@ class ProductService {
         );
       }
 
+      // ✅ Fixed: added userType
       final response = await _apiService.post(
         urlPath,
         fields,
         isProtected: true,
+        userType: 'vendor',
       );
       return jsonDecode(response.body);
     } catch (e) {
@@ -168,7 +168,8 @@ class ProductService {
     List<File>? newImages,
   }) async {
     try {
-      final String urlPath = '/vendor/ads/$id';
+      // ✅ Fixed: removed leading slash
+      final String urlPath = 'vendor/ads/$id';
       final Map<String, String> fields = {};
 
       if (categoryId != null) fields['category_id'] = categoryId.toString();
@@ -181,16 +182,17 @@ class ProductService {
       if (newImages != null && newImages.isNotEmpty) {
         return await _handleMultipartRequest(
           urlPath: urlPath,
-          method: 'POST', // Backend uses POST for updates with files
+          method: 'POST', // Backend accepts POST for multipart updates
           fields: fields,
           images: newImages,
         );
       } else {
-        // No new images → simple update
+        // ✅ Fixed: added userType
         final response = await _apiService.post(
           urlPath,
           fields,
           isProtected: true,
+          userType: 'vendor',
         );
         return jsonDecode(response.body);
       }
@@ -203,7 +205,13 @@ class ProductService {
   /// Delete an ad/listing
   Future<Map<String, dynamic>> deleteListing(int id) async {
     try {
-      final response = await _apiService.delete('/ads/$id', isProtected: true);
+      // ✅ Fixed: was '/ads/$id' (public route, no auth, no ownership check).
+      // Must use vendor route so the backend enforces ownership.
+      final response = await _apiService.delete(
+        'vendor/ads/$id',
+        isProtected: true,
+        userType: 'vendor',
+      );
       return jsonDecode(response.body);
     } catch (e) {
       debugPrint('❌ Delete listing error: $e');
@@ -227,13 +235,16 @@ class ProductService {
         'per_page': perPage.toString(),
       };
       if (search != null && search.isNotEmpty) queryParams['search'] = search;
-      if (categoryId != null)
+      if (categoryId != null) {
         queryParams['category_id'] = categoryId.toString();
+      }
 
       final queryString = Uri(queryParameters: queryParams).query;
+      // ✅ Fixed: removed leading slash, added userType
       final response = await _apiService.get(
-        '/ads?$queryString',
+        'ads?$queryString',
         isProtected: false,
+        userType: 'buyer',
       );
       return jsonDecode(response.body);
     } catch (e) {
@@ -244,7 +255,12 @@ class ProductService {
 
   Future<Map<String, dynamic>> getProduct(int id) async {
     try {
-      final response = await _apiService.get('/ads/$id', isProtected: false);
+      // ✅ Fixed: removed leading slash, added userType
+      final response = await _apiService.get(
+        'ads/$id',
+        isProtected: false,
+        userType: 'buyer',
+      );
       return jsonDecode(response.body);
     } catch (e) {
       debugPrint('❌ Get ad error: $e');
@@ -262,8 +278,9 @@ class ProductService {
     required Map<String, String> fields,
     required List<File> images,
   }) async {
-    final token = await _apiService.getToken();
-    final url = Uri.parse('${ApiService.baseUrl}$urlPath');
+    // Use vendor token for all listing management operations
+    final token = await _apiService.getToken(userType: 'vendor');
+    final url = Uri.parse('${ApiService.baseUrl}/$urlPath');
 
     final request = http.MultipartRequest(method, url);
     request.headers['Accept'] = 'application/json';
@@ -273,7 +290,7 @@ class ProductService {
 
     request.fields.addAll(fields);
 
-    // ✅ Backend expects 'images[]' (matches StoreAdRequest validation)
+    // Backend expects 'images[]' (matches StoreAdRequest validation)
     for (int i = 0; i < images.length && i < 5; i++) {
       final file = images[i];
       request.files.add(

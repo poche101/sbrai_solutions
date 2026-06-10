@@ -136,7 +136,7 @@ class _IdentityVerificationState extends State<IdentityVerification> {
   }
 
   Future<void> _pickDocument() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
     );

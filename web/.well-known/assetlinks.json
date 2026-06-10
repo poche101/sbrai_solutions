@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.web.sbrai_solutions.twa",
+        "sha256_cert_fingerprints": ["AC:6D:51:4A:53:BE:64:0C:BA:85:3D:B6:09:B6:D5:88:BC:20:30:D0:62:38:A2:3D:0D:71:12:BD:05:AA:92:D2"]
+      }
+    }]

@@ -5,26 +5,31 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 class ApiService {
   static const String baseUrl = "https://sbraisolutions.com/api/v1";
 
   // ── Token keys — one per user type ──────────────────────────────────────
   static const String _vendorTokenKey = 'vendor_auth_token';
-  static const String _buyerTokenKey = 'buyer_auth_token'; // ← NEW
+  static const String _buyerTokenKey = 'buyer_auth_token';
   static const String _userKey = 'vendor_user_data';
 
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
 
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+    serverClientId:
+        '247352594282-ngifekbhv3s8q078tm6cofc29l2slvmo.apps.googleusercontent.com',
+  );
+
   // ---------------------------------------------------------------------------
   // TOKEN MANAGEMENT
   // ---------------------------------------------------------------------------
 
-  /// Saves a token under the correct key for [userType].
-  /// Pass userType: 'buyer' from the buyer login flow,
-  /// or userType: 'vendor' (default) from the vendor login flow.
   Future<void> saveToken(String token, {String userType = 'vendor'}) async {
     final prefs = await SharedPreferences.getInstance();
     final key = userType == 'buyer' ? _buyerTokenKey : _vendorTokenKey;
@@ -32,20 +37,12 @@ class ApiService {
     debugPrint("🔐 Token saved for $userType");
   }
 
-  /// Returns whichever token is available.
-  /// Vendor token takes priority; falls back to buyer token.
-  /// Pass [userType] to read a specific token directly.
   Future<String?> getToken({String? userType}) async {
     final prefs = await SharedPreferences.getInstance();
 
-    if (userType == 'buyer') {
-      return prefs.getString(_buyerTokenKey);
-    }
-    if (userType == 'vendor') {
-      return prefs.getString(_vendorTokenKey);
-    }
+    if (userType == 'buyer') return prefs.getString(_buyerTokenKey);
+    if (userType == 'vendor') return prefs.getString(_vendorTokenKey);
 
-    // No userType specified — return whichever is present
     final vendorToken = prefs.getString(_vendorTokenKey);
     if (vendorToken != null && vendorToken.isNotEmpty) return vendorToken;
 
@@ -55,7 +52,6 @@ class ApiService {
     return null;
   }
 
-  /// Clears the token for a specific user type, or both if unspecified.
   Future<void> clearToken({String? userType}) async {
     final prefs = await SharedPreferences.getInstance();
     if (userType == 'vendor' || userType == null) {
@@ -88,6 +84,148 @@ class ApiService {
       return jsonDecode(raw) as Map<String, dynamic>;
     } catch (_) {
       return {};
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // AUTH ENDPOINTS
+  // ---------------------------------------------------------------------------
+
+  Future<http.Response> saveFcmToken(String fcmToken) async => await post(
+    'auth/fcm-token',
+    {'fcm_token': fcmToken},
+    isProtected: true,
+    userType: 'vendor',
+  );
+
+  Future<http.Response> forgotPassword(String email) async => await post(
+    'auth/forgot-password',
+    {'email': email},
+    isProtected: false,
+    userType: 'vendor',
+  );
+
+  Future<http.Response> resetPassword({
+    required String token,
+    required String email,
+    required String password,
+    required String passwordConfirmation,
+  }) async => await post(
+    'auth/reset-password',
+    {
+      'token': token,
+      'email': email,
+      'password': password,
+      'password_confirmation': passwordConfirmation,
+    },
+    isProtected: false,
+    userType: 'vendor',
+  );
+
+  // ---------------------------------------------------------------------------
+  // SOCIAL AUTH
+  // ---------------------------------------------------------------------------
+
+  /// Signs in with Google and posts the id_token to the backend.
+  Future<http.Response?> signInWithGoogle({String userType = 'vendor'}) async {
+    try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return null; // user cancelled
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      final String? idToken = googleAuth.idToken;
+      if (idToken == null) {
+        throw "Google idToken is null. Make sure serverClientId is set in GoogleSignIn().";
+      }
+
+      return await socialLogin('google', idToken, userType: userType);
+    } catch (e) {
+      debugPrint("❌ Google Sign-In error: $e");
+      rethrow;
+    }
+  }
+
+  /// Signs in with Facebook and posts the access_token to the backend.
+  Future<http.Response?> signInWithFacebook({
+    String userType = 'vendor',
+  }) async {
+    try {
+      final LoginResult result = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+
+      if (result.status == LoginStatus.cancelled) return null;
+
+      if (result.status != LoginStatus.success) {
+        throw "Facebook login failed: ${result.message}";
+      }
+
+      final String? accessToken = result.accessToken?.tokenString;
+      if (accessToken == null) throw "Facebook access token is null.";
+
+      return await socialLogin('facebook', accessToken, userType: userType);
+    } catch (e) {
+      debugPrint("❌ Facebook Sign-In error: $e");
+      rethrow;
+    }
+  }
+
+  /// Posts the provider token to the backend and saves the returned Sanctum token.
+  /// Google  → backend expects key 'id_token'
+  /// Facebook → backend expects key 'access_token'
+  Future<http.Response> socialLogin(
+    String provider,
+    String token, {
+    String userType = 'vendor',
+  }) async {
+    try {
+      final String tokenKey = provider == 'google'
+          ? 'id_token'
+          : 'access_token';
+
+      final response = await post(
+        'auth/social/$provider',
+        {tokenKey: token, 'user_type': userType},
+        isProtected: false,
+        userType: userType,
+      );
+
+      final responseData = jsonDecode(response.body);
+
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          responseData['status'] == true) {
+        final savedToken = responseData['data']?['token']?.toString();
+        if (savedToken != null) {
+          await saveToken(savedToken, userType: userType);
+          debugPrint("🔐 Social login token saved for $userType.");
+        }
+        if (responseData['data']?['user'] != null) {
+          await saveUserData(responseData['data']['user']);
+        }
+      }
+      return response;
+    } catch (e) {
+      debugPrint("❌ Social login error: $e");
+      rethrow;
+    }
+  }
+
+  Future<void> logout({String? userType}) async {
+    try {
+      await post(
+        'auth/logout',
+        {},
+        isProtected: true,
+        userType: userType ?? 'vendor',
+      ).timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint("⚠️ Logout API call failed (ignored): $e");
+    } finally {
+      await _googleSignIn.signOut();
+      await FacebookAuth.instance.logOut();
+      await clearToken(userType: userType);
     }
   }
 
@@ -287,7 +425,6 @@ class ApiService {
     }
 
     if (response.statusCode == 401) {
-      // Only clear the token for the relevant user type
       clearToken(userType: userType);
       throw ApiException("Session expired. Please login again.");
     }

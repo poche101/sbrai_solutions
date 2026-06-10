@@ -95,7 +95,7 @@ class _BusinessVerificationState extends State<BusinessVerification> {
 
   Future<void> _pickCACDocument() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
       );

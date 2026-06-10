@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:sbrai_solutions/models/settings_model.dart';
-import 'package:sbrai_solutions/buyer_service/settings_service.dart'; // Import the service
+import 'package:sbrai_solutions/buyer_service/settings_service.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/buyers_terms_page.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/privacy_policy_page.dart';
 import 'package:sbrai_solutions/buyer/screens/settings/help_support_page.dart';
@@ -17,9 +17,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final SettingsService _settingsService = SettingsService();
   SettingsModel _settings = SettingsModel();
   bool _isLoading = true;
-
-  // NOTE: Replace this with your actual token retrieval (e.g., from a Provider or Secure Storage)
-  final String _authToken = "YOUR_SESSION_TOKEN_HERE";
+  bool _isSyncing = false; // prevents overlapping PATCH calls
 
   @override
   void initState() {
@@ -27,34 +25,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadUserSettings();
   }
 
-  /// Initial Load from Laravel API
+  // ── Load settings from backend on screen open ──────────────────────────────
   Future<void> _loadUserSettings() async {
-    final remoteSettings = await _settingsService.fetchSettings(_authToken);
-    if (remoteSettings != null) {
+    final remoteSettings = await _settingsService.fetchSettings();
+    if (mounted) {
       setState(() {
-        _settings = remoteSettings;
+        if (remoteSettings != null) _settings = remoteSettings;
         _isLoading = false;
       });
-    } else {
-      setState(() => _isLoading = false);
     }
   }
 
-  /// Syncs a specific change to the backend
-  void _updateSetting(Function updateFn) async {
-    setState(() => updateFn());
+  // ── Optimistic update with rollback on failure ─────────────────────────────
+  void _updateSetting(SettingsModel optimistic) async {
+    if (_isSyncing) return; // ignore taps while a sync is in flight
 
-    // Sync to Laravel
-    bool success = await _settingsService.updateNotificationSettings(
-      _settings,
-      _authToken,
+    // 1. Snapshot current state in case we need to roll back
+    final previous = _settings;
+
+    // 2. Apply optimistically
+    setState(() {
+      _settings = optimistic;
+      _isSyncing = true;
+    });
+
+    // 3. Send to backend — returns server-confirmed model or null on failure
+    final confirmed = await _settingsService.updateNotificationSettings(
+      optimistic,
     );
 
-    if (!success && mounted) {
+    if (!mounted) return;
+
+    if (confirmed != null) {
+      // 4a. Sync UI with exactly what the server saved
+      setState(() {
+        _settings = confirmed;
+        _isSyncing = false;
+      });
+    } else {
+      // 4b. Roll back to previous state and notify user
+      setState(() {
+        _settings = previous;
+        _isSyncing = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Failed to sync settings. Please check connection."),
           backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
@@ -80,6 +98,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             fontSize: 18,
           ),
         ),
+        // Subtle syncing indicator in the AppBar — non-blocking
+        actions: [
+          if (_isSyncing)
+            const Padding(
+              padding: EdgeInsets.only(right: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFFFF7043),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       body: _isLoading
           ? const Center(
@@ -90,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   const SizedBox(height: 16),
 
-                  // Notifications Section
+                  // ── Notifications Section ──────────────────────────────────
                   _buildSection(
                     title: 'Notifications',
                     icon: Icons.notifications_none_outlined,
@@ -101,33 +136,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         'New Listings',
                         'Get notified about new items in your area',
                         _settings.newListings,
-                        (val) =>
-                            _updateSetting(() => _settings.newListings = val),
+                        (val) => _updateSetting(
+                          _settings.copyWith(newListings: val),
+                        ),
                       ),
                       _buildSwitchTile(
                         'Price Drops',
                         'Alert me when prices drop on favorited items',
                         _settings.priceDrops,
                         (val) =>
-                            _updateSetting(() => _settings.priceDrops = val),
+                            _updateSetting(_settings.copyWith(priceDrops: val)),
                       ),
                       _buildSwitchTile(
                         'Messages',
                         'Receive notifications for new messages',
                         _settings.messages,
-                        (val) => _updateSetting(() => _settings.messages = val),
+                        (val) =>
+                            _updateSetting(_settings.copyWith(messages: val)),
                       ),
                       _buildSwitchTile(
                         'Promotions',
                         'Receive promotional offers and deals',
                         _settings.promotions,
                         (val) =>
-                            _updateSetting(() => _settings.promotions = val),
+                            _updateSetting(_settings.copyWith(promotions: val)),
                       ),
                     ],
                   ),
 
-                  // Privacy & Security Section
+                  // ── Privacy & Security Section ─────────────────────────────
                   _buildSection(
                     title: 'Privacy & Security',
                     icon: Icons.shield_outlined,
@@ -139,7 +176,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         'Let others see when you\'re online',
                         _settings.showOnlineStatus,
                         (val) => _updateSetting(
-                          () => _settings.showOnlineStatus = val,
+                          _settings.copyWith(showOnlineStatus: val),
                         ),
                       ),
                       _buildSwitchTile(
@@ -147,15 +184,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         'Display phone number on profile',
                         _settings.showPhoneNumber,
                         (val) => _updateSetting(
-                          () => _settings.showPhoneNumber = val,
+                          _settings.copyWith(showPhoneNumber: val),
                         ),
                       ),
                       _buildSwitchTile(
                         'Allow Messages',
                         'Allow users to send you messages',
                         _settings.allowMessages,
-                        (val) =>
-                            _updateSetting(() => _settings.allowMessages = val),
+                        (val) => _updateSetting(
+                          _settings.copyWith(allowMessages: val),
+                        ),
                       ),
                       _buildActionTile(
                         'Change Password',
@@ -165,7 +203,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
 
-                  // Language & Region Section
+                  // ── Language & Region Section ──────────────────────────────
                   _buildSection(
                     title: 'Language & Region',
                     icon: Icons.language_outlined,
@@ -184,7 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
 
-                  // Legal Section
+                  // ── Legal Section ──────────────────────────────────────────
                   _buildSection(
                     children: [
                       _buildActionTile(
@@ -220,7 +258,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
 
-                  // Danger Zone
+                  // ── Danger Zone ────────────────────────────────────────────
                   _buildSection(
                     title: 'Danger Zone',
                     iconColor: Colors.redAccent,
@@ -255,7 +293,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // --- UI Helpers (Keep as provided in your original code) ---
+  // ── UI Helpers (unchanged) ─────────────────────────────────────────────────
 
   Widget _buildSection({
     String? title,
@@ -348,7 +386,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: CupertinoSwitch(
               value: val,
               activeColor: const Color(0xFFFF7043),
-              onChanged: onChg,
+              onChanged: _isSyncing ? null : onChg, // disabled during sync
             ),
           ),
         ],
